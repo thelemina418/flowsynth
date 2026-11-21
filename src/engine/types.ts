@@ -721,22 +721,8 @@ export interface GameState {
   notificationAsked: boolean;
   modules: ModuleInstance[];
   cells: Hex[];
-  // Total cells ever bought (§3): the geometric cell-price scaler counts
-  // purchases, never the current board size reshaping may rearrange. Row
-  // gates never advance it — gate nous is a premium on top, not a purchase
-  // the scaler counts (ADR-0022).
+  // Lifetime purchase count for feats and records, never used to price a cell.
   cellsBought: number;
-  // Octave rows whose one-time gate premium is already paid (ADR-0022): row
-  // indices relative to the start register. An explicit array, not a
-  // max-distance scalar, so purchase order never matters; lenient-defaults
-  // to [] at load.
-  gatedRows: number[];
-  // Octave rows the Row unlock has opened (ADR-0040 as amended by
-  // ADR-0044, issue #197): the one Arete row per side beyond the launch
-  // band. The purchase stands in the row gate too — the row also joins
-  // gatedRows — so cells inside buy with nous as usual. Persists through
-  // prestige; lenient-defaults to [] at load.
-  unlockedRows: number[];
   // Historical schema compatibility only (ADR-0087/#530): cleared on
   // load after version-gated historical refunds; never live purchase gates.
   catalogEntryOwned: boolean;

@@ -266,7 +266,7 @@ describe("the frozen baseline", () => {
     const frozen = JSON.parse(readFileSync(new URL("../docs/century-calibration-baseline.json", import.meta.url), "utf8"));
     // Source fingerprints identify recordings, not numeric balance. A
     // comment or measurement-only edit must not force a numeric re-freeze.
-    const { source: _source, ...compiled } = calibrationBaseline();
+    const compiled = calibrationBaseline();
     expect(Object.keys(compiled).length).toBeGreaterThan(0);
     for (const [key, value] of Object.entries(compiled)) {
       expect(value, `frozen ${key}: re-record and explicitly re-freeze before changing`).toEqual(frozen[key]);

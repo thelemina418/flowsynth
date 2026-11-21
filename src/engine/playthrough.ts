@@ -7,7 +7,6 @@ import {
   buyCell,
   buyChargeColumn,
   buyHoneRank,
-  buyRowUnlock,
   buyShelfModule,
   chooseRoll,
   dismissSummary,
@@ -28,12 +27,10 @@ import { isModuleCandidate } from "./types";
 import type { WorldEnemyDef } from "./constants";
 import { chargeLineCells } from "./playthrough-placement";
 import { affordableLevels, syncRates, wholeNous, levelsCost } from "./economy";
-import { rowUnlockCost, unlockableRows } from "./catalog";
 import { activeGoalOf, createGoal, rollGoalOccurrences } from "./goals";
 import { createHabit, selectHabit } from "./habits";
 import { adjacent, hexDistance, sameHex } from "./hex";
-import { cellNoteOf, octaveRowOf } from "./lattice";
-import { neighbors } from "./hex";
+import { cellNoteOf } from "./lattice";
 import { writeNote } from "./notes";
 import { SCENARIOS, scenarioOf } from "./scenarios";
 import { deserialize, serialize } from "./save";
@@ -89,7 +86,7 @@ import type { GameState, Hex, ModuleInstance, ModuleType, ResponseCurveId, Weapo
 // policies (issue #491) join both. The declared credited-flow stop
 // (issue #492) — a century walk's terminal and its banking gates — joins
 // them too.
-export const PLAYTHROUGH_RUNNER_VERSION = 15;
+export const PLAYTHROUGH_RUNNER_VERSION = 16;
 
 // The acceleration step (seconds): production is exact at any step; this
 // only coarsens crossing granularity. 60 matches the calibration walk.
@@ -116,7 +113,7 @@ export const PROMPT_POLICY: PlaythroughPolicy = {
   rules: [
     "Accept the first oscillator a roll offers, else a generator, else the first live candidate.",
     "Buy every unowned shelf module it can afford — generator, infusor, then forge.",
-    "Buy board cells while affordable, nearest first along the compact frontier; after the World's entry, a locked octave row the board reaches opens through the Catalog's Rack Extenders before the expansion continues (issue #492).",
+    "Buy for the collection plus up to two spare module seats, favoring a narrow pitch lane; when engaging World without a seat next to the first active enemy, buy toward it first.",
     "Place every tray module on the vacancy the authoritative preview scores highest.",
     "Buy every affordable Poly Expander, then sweep five-level upgrades over the deployed voices, cheapest first, while the bank covers the next gesture.",
     "Buy the discount and ceiling offerings when affordable; no entry purchase exists.",
@@ -740,8 +737,8 @@ export interface PlaythroughRecovery {
   readonly preResetRate: number;
   // The first bank's claim — zero at the eligibility door.
   readonly claim: number;
-  // The first lasting Arete purchase after the bank (the Catalog entry,
-  // a capacity offering, a Charge Column, a Hone rank) and what it was.
+  // The first lasting Arete purchase after the bank and what it was.
+  // Historical artifacts can name products no longer offered.
   readonly lastingPurchase: PlaythroughRecoveryMark | null;
   readonly lastingPurchaseLabel: string | null;
   // The starter weapon deployed beside a living discovered enemy.
@@ -768,7 +765,7 @@ export interface PlaythroughAreteSpent {
   readonly discounts: number;
   readonly ceilings: number;
   readonly columns: number;
-  readonly rowUnlocks: number;
+  readonly rowUnlocks: number; // historical artifacts only; live runs record zero
   readonly hone: Record<WeaponType, number>;
 }
 
@@ -1266,33 +1263,20 @@ function manage(ctx: RunContext, state: GameState): void {
     }
   }
 
-  // Board cells, nearest first along the compact frontier. A locked
-  // octave row the board reaches opens through the Catalog's Rack
-  // Extenders
-  // before the expansion continues (issue #492's calibration: the
-  // six-row cap is part of the board's production ceiling, so every
-  // policy reads the same expansion rule, declared here once). The
-  // expansion opens after the World's entry — the Catalog door outranks
-  // board space, and no row unlock ever spends the claim that would
-  // first bank the World's entry.
+  // ADR-0089: don't fill a ring just because several seats share a price.
+  // Buy for the collection and a small placement margin. The World leg's
+  // first living enemy can also justify going past that space budget.
+  const fight = state.world.unlocked && ctx.worldOrder !== "none"
+    ? WORLD_ENEMIES.find(def => state.world.enemies[def.key]?.discovered && !enemyDefeated(state, def.key))
+    : undefined;
   for (;;) {
-    const unlockRow = state.world.unlocked
-      ? unlockableRows(state).find((row) =>
-        state.cells.some((cell) => neighbors(cell).some((n) => octaveRowOf(n) === row)))
-      : undefined;
-    const unlockPrice = rowUnlockCost(state);
-    if (unlockRow !== undefined && unlockPrice !== null && state.arete >= unlockPrice) {
-      const result = buyRowUnlock(state, unlockRow);
-      record(ctx, { kind: "arete", label: `Rack Extenders — row ${unlockRow}`, ...outcome(result) });
-      if (!result.ok) {
-        decline(ctx, `row unlock ${unlockRow}`, result.reason ?? "declined");
-        break;
-      }
-      ctx.areteSpent.rowUnlocks++;
-      noteLastingPurchase(ctx, "Rack Extenders");
-      continue;
-    }
-    const pos = frontier(state, "compact")[0];
+    const approaching = fight && !state.cells.some(cell => adjacent(cell, fight.pos) && !enemyDefAt(cell));
+    if (!approaching && state.cells.length >= state.modules.length + 2) break;
+    const candidates = frontier(state, "compact");
+    const pos = approaching
+      ? candidates.reduce<Hex | undefined>((best, cell) =>
+          !best || hexDistance(cell, fight.pos) < hexDistance(best, fight.pos) ? cell : best, undefined)
+      : candidates[0];
     if (!pos) break;
     const result = buyCell(state, pos);
     record(ctx, { kind: "purchase", label: `Cell at ${pos.q},${pos.r}`, ...outcome(result) });

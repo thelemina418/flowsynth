@@ -10,7 +10,6 @@ import {
   buyCell,
   buyDraftUpgrade,
   buyMergeCapIncrease,
-  buyRowUnlock,
   buyShelfModule,
   buySpecialDraft,
   buyChargeColumn,
@@ -53,6 +52,7 @@ import { worldOccupantAt, worldPieceOf } from "../engine/world";
 import { worldPieceName } from "./world-combat";
 import type { WeaponType, ResponseCurveId } from "../engine/types";
 import { neighbors, hex, sameHex } from "../engine/hex";
+import { cellFrontier } from "../engine/footprint";
 import { preferredChordCue } from "../engine/chords";
 import { displayedRates, flowLive, deployedAt, syncRates, wholeNous } from "../engine/economy";
 import { worldEntered, refreshWorldPreview, worldBoardLive } from "./world";
@@ -119,6 +119,10 @@ import { HISTORY_PAGE_ROWS, META, CATEGORY_WORD, SPECIAL_DRAFT_NAME, tierWord, W
 import { browserChannels, type SignalChannels } from "./signals";
 import { suppressNextClick } from "./click";
 import { createInventoryState, type InventoryState } from "./inventory";
+
+function footprintRefundNote(arete: number): string {
+  return `Rack Extenders retired · ${arete} Arete returned. Your cells stay owned.`;
+}
 
 // The session modal surfaces (§5.5, §5.7): the session starts through the
 // Focus sheet's PLAN face (or instantly, per the session-start preference);
@@ -632,6 +636,7 @@ export class App {
     // same host and signal is idempotent.
     wireTooltips(document.getElementById("console-session") ?? document.body, this.signal);
     if (!resumingBreather || this.state.mode === "breather") this.greet();
+    if (loaded?.footprintMigration?.areteRefunded) this.say(footprintRefundNote(loaded.footprintMigration.areteRefunded));
     this.render();
     this.save();
   }
@@ -926,6 +931,7 @@ export class App {
         ? "Save imported while a session was running — the honesty report is waiting."
         : "Save imported.",
     );
+    if (parsed.footprintMigration?.areteRefunded) this.say(footprintRefundNote(parsed.footprintMigration.areteRefunded));
     this.save(Date.now(), true);
     this.render();
     // The import's dismissal returns focus to the walk's opener — unless
@@ -1594,10 +1600,6 @@ export class App {
     this.act(this.gameAction("joinRollPool", () => joinRollPool(this.state)), "The Mutator Forge joined the module roll pool.");
   }
 
-  buyRowUnlockAction(row: number): void {
-    this.act(this.gameAction("buyRowUnlock", () => buyRowUnlock(this.state, row)), "Octave row unlocked — its cells now buy with nous.");
-  }
-
   // The harmonic-capacity ladder's landings (issue #259): the nous rung
   // and the two Arete offerings, each through the shared act() shape.
   buyCapacityAction(): void {
@@ -1814,11 +1816,8 @@ export class App {
     if (this.ui.modal === null) this.restoreModalInvoker();
   }
 
-  // Cell purchase (ADR-0013): armed from the toolbar's cell icon (or the
-  // catalog row), resolved by clicking a frontier hex. The buy only lands
-  // when a frontier cell is clicked; the icon toggles, Esc and right-click
-  // cancel. On the World face the Add walks to Modules first — the
-  // purchase's pulsing frontier lives there.
+  // Add (ADR-0089) quotes each connected destination on the Modules face.
+  // The icon toggles; a destination commits; Esc and right-click cancel.
   armCellPurchase(): void {
     if (this.state.mode !== "upgrade") {
       this.say("Purchases happen between sessions.");
@@ -2370,8 +2369,7 @@ export class App {
     if (ui.buyingCell) {
       if (state.mode !== "upgrade") return;
       // The arm persists across buys: sweep several cells, then back out
-      // yourself via the banner's Cancel (or Esc). act() re-renders each
-      // time, so the banner hint and hex prices step to the next scaler rung.
+      // yourself via Cancel (or Esc). Each render quotes the new frontier.
       this.act(this.gameAction("buyCell", () => buyCell(state, pos)), "Cell bought.");
       return;
     }
@@ -2893,6 +2891,7 @@ export class App {
     this.ui.importError = null;
     this.resumeFromSave(parsed);
     this.say("Save recovered — the economy opens calibrated; your practice record stands.");
+    if (parsed.footprintMigration?.areteRefunded) this.say(footprintRefundNote(parsed.footprintMigration.areteRefunded));
     this.save(Date.now(), true);
     this.render();
     if (this.ui.modal === null) this.restoreModalInvoker();
@@ -4075,15 +4074,7 @@ export class App {
   }
 
   frontierCells(): Hex[] {
-    const { state } = this;
-    const out: Hex[] = [];
-    const seen = (h: Hex) => state.cells.some((c) => sameHex(c, h)) || out.some((c) => sameHex(c, h));
-    for (const cell of state.cells) {
-      for (const n of neighbors(cell)) {
-        if (!seen(n)) out.push(n);
-      }
-    }
-    return out;
+    return cellFrontier(this.state);
   }
 
   // The global mute toggle (§5): one switch in PREFERENCES gating every

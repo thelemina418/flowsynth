@@ -34,7 +34,7 @@ An available encyclopedia entry the player has not opened. Opening makes it seen
 The hex grid of modules where all nous production and charge production happen; sessions run it automatically. The board may read focus state as inputs to module effects, but no console resource ever crosses onto it.
 
 **Cell**:
-One hexagonal place on the board. Cells are bought with nous on a geometric scaler over total cells bought, then placed and reshaped in upgrade mode on a connected board.
+One hexagonal place in the shared Modules/World footprint. The three starter cells are granted; each subsequent connected frontier cell costs nous by hex distance from the fixed `(0,0)` origin (ADR-0089). Add quotes the destination on the board. Free reshaping preserves the count in each distance band, connectivity, and occupied coordinates. Moving occupants between owned cells is free.
 
 **Module**:
 A unit occupying one cell on the board, with gameplay effects derived from its category and, in many cases, a connection to a real-life practice or supporting interaction.
@@ -77,7 +77,7 @@ _Avoid_: capacity rung, capacity upgrade, chord slot
 
 **Expansion Bays**:
 The Arete Catalog's capacity-ceiling product — one entry bought twice at a rising price. Each bay raises the Harmonic capacity ceiling one rung; the purchase is memorized.
-_Avoid_: ceiling unlock, first/second ceiling, capacity four/five, Rack Extenders (the octave rows' name)
+_Avoid_: ceiling unlock, first/second ceiling, capacity four/five
 
 **Chord Catalysts**:
 The Arete Catalog's discount product — one entry bought twice at a rising price. Each catalyst takes 20% off every capacity price; the purchase is memorized.
@@ -125,10 +125,10 @@ A charge conduit that re-broadcasts received charge to its other neighbors at re
 One register of the board: the band of cells whose pitches sit in the same octave, presented approximately horizontally across the board.
 
 **Start register**:
-The octave row the opening board begins on; rows are finite, generous, and symmetric around it.
+The opening pitch register, anchored on C4. It determines pitch, not which coordinates can be bought.
 
-**Row gate**:
-The one-time premium paid on the first purchase into each new octave row. It taxes acquisition only — moving owned cells between rows is free — and does not advance the cell purchase scaler.
+**Distance band**:
+Cells at the same axial hex distance from the fixed origin. Distance one costs 30 ν, distance two 90 ν, and each farther band costs four times the previous band. Cost is independent of octave and purchase order. The twelve fifths columns still span the note names once.
 
 **Expanded face**:
 Retired vocabulary — the module bloom's face, superseded by the **Hex detail** (issue #295): the module's editing surface is the detail's Modules face now, and the only expanded presentation left is the detail's own module face.
@@ -147,7 +147,7 @@ The ruled column beside the hex detail's stack holding the opened voice's standi
 _Avoid_: sidebar, info panel, chord column (the #388 predecessor)
 
 **Context map**:
-The miniature of the whole in-range board heading the details column — the opened hex in the selected marker, its active chords drawn in their chord hues as links between their voices. It answers where the voice sits in the formation, and its owned cells navigate, opening that coordinate's Hex detail. Activating the miniature opens an expanded overview with pan and pinch zoom. Owned cells navigate by click or keyboard; a list of owned-cell buttons provides reliable touch-sized destinations without the former Open hex dropdown. Choosing a cell closes the overview and retains the focused layer; Close and Escape dismiss it.
+The miniature of the owned board and immediate frontier heading the details column — the opened hex in the selected marker, its active chords drawn in their chord hues as links between their voices. It answers where the voice sits in the formation, and its owned cells navigate, opening that coordinate's Hex detail. Activating the miniature opens an expanded overview with pan and pinch zoom. Owned cells navigate by click or keyboard; a list of owned-cell buttons provides reliable touch-sized destinations without the former Open hex dropdown. Choosing a cell closes the overview and retains the focused layer; Close and Escape dismiss it.
 _Avoid_: minigrid, minimap
 
 **Action rail**:
@@ -732,7 +732,7 @@ _Retired_. Entry and pool ownership flags clear on load. Their compatibility act
 _Avoid_: enhancement tree, gem tree
 
 **Rack Extenders**:
-The board-side Arete purchase that opens one octave row beyond the launch band — one row above and one below this phase, sold in either order at escalating Arete as one entry bought twice. It renders in add-cell mode as the shaded next row behind a single unlock banner per side, one click buying outright, and its purchase stands in the row gate for the row it opens — cells inside then buy with nous as usual. The board caps at six octave rows this phase.
+_Retired_ (ADR-0089). The former Arete purchase opened an octave row. v14 returns the paid Arete once, drops the former row fields, and preserves every owned coordinate. The ordinary nous row premiums are not refunded, and the former feat remains only as earned history.
 _Avoid_: Row unlock, Octave tree (retired), row expansion, vertical unlock
 
 **Arete accumulator**:

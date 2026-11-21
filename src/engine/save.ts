@@ -29,6 +29,7 @@ export interface LoadResult {
   // this load performed the v12 → v13 conversion — the one-time fact the
   // save/import flow explains. A v13 save reloads without it.
   migration?: MigrationReport;
+  footprintMigration?: { areteRefunded: number };
   // The explicit lost-money recovery (issue #494): present exactly when
   // this load repaired unreadable monetary state. The choice was the
   // player's at the save/import destination; this report names what was
@@ -255,15 +256,12 @@ function readSave(text: string, rng: Rng, recovery: boolean): LoadResult {
   if (recovery && isRecord(raw.session) && !isRecord(raw.session.accounting)) {
     return { error: "The session's practice accounting is incomplete; recovery cannot reconstruct it. The original save is unchanged." };
   }
-  // Lost money refuses before normalization, older refunds, or lenient
-  // defaults can hide the loss — at the pre-v13 boundary the gate
-  // converts. The refusal names the paths and carries them structurally;
-  // the explicit recovery choice (issue #494) owns what happens next.
-  // The recovery door itself reads any supported version's bytes — a v13
-  // source has no boundary conversion, and its repair rides the recovery
-  // alone. Detection and repair are one walk: with the merged state
-  // passed, the lost figures repair as they are found.
-  const lost = parsed.version < 13 || recovery
+  // Inspect before a calibrated reset or a Rack Extender refund can
+  // hide lost figures. An ordinary load otherwise keeps the established
+  // lenient handling. Explicit recovery reads any supported version and
+  // repairs the named losses in this same walk, before the refund.
+  const areteRefunded = parsed.version < 14 ? rackExtenderRefund(raw.unlockedRows) : 0;
+  const lost = parsed.version < 13 || recovery || areteRefunded > 0
     ? lostMonetaryFigures(raw, recovery ? merged : undefined)
     : [];
   if (lost.length && !recovery) {
@@ -273,19 +271,7 @@ function readSave(text: string, rng: Rng, recovery: boolean): LoadResult {
       lost,
     };
   }
-  // The octave-row gate ledger (ADR-0022): lenient default — a save written
-  // before it exists owes no gates it can't know about. The check reads the
-  // raw save, not the merge: a fresh state's granted opening rows must not
-  // masquerade as a ledger the save carried.
-  if (!Array.isArray(raw.gatedRows)) {
-    merged.gatedRows = [];
-  }
-  // The Row unlock's ledger and the Mutator tree's sheet purchases
-  // (issue #197) lenient-default the same way: absent means never unlocked,
-  // never bought — which is also exactly what a pre-Catalog save owes.
-  if (!Array.isArray(raw.unlockedRows)) {
-    merged.unlockedRows = [];
-  }
+  // The retired Mutator entry's flags still feed the historical v10 refund.
   if (typeof raw.catalogEntryOwned !== "boolean") {
     merged.catalogEntryOwned = false;
   }
@@ -565,8 +551,23 @@ function readSave(text: string, rng: Rng, recovery: boolean): LoadResult {
   merged.rollPoolJoined = false;
   merged.modules = merged.modules.filter(module => module.type !== "mutatorForge");
   normalizeEncyclopedia(merged, raw.encyclopedia, raw.encyclopediaRevision);
-  if (recovered) return { state: merged, recovered };
-  return migration ? { state: merged, migration } : { state: merged };
+  // ADR-0089: keep exactly the owned coordinates; their distance bands are
+  // the ownership record. Old nous premiums mixed grants and payments and
+  // are not refunded. Rack Extenders have an exact, separate Arete ledger.
+  delete (merged as unknown as Record<string, unknown>).gatedRows;
+  delete (merged as unknown as Record<string, unknown>).unlockedRows;
+  const footprintMigration = parsed.version < 14 ? { areteRefunded } : undefined;
+  if (areteRefunded > 0) merged.arete += areteRefunded;
+  return { state: merged, ...(footprintMigration && { footprintMigration }),
+    ...(recovered ? { recovered } : migration ? { migration } : {}) };
+}
+
+function rackExtenderRefund(rows: unknown): number {
+  if (!Array.isArray(rows)) return 0;
+  // The retired product sold rows +3 and −2 only, in either order: 1, then 2.
+  // Ignore unknown entries and duplicates; gatedRows is not purchase proof.
+  const owned = Number(rows.includes(3)) + Number(rows.includes(-2));
+  return [0, 1, 3][owned]!;
 }
 
 // ── The v10 → v11 migration (issue #427, ADR-0017's one step) ───────────
@@ -839,3 +840,4 @@ export const ORIGINAL_SAVE_KEY = "flowsynth.save.original.v1";
 // Preserve a lineage's earlier backup when v13 retains the exact bytes
 // it is about to convert as the downloadable original.
 export const PRE_V13_ORIGINAL_SAVE_KEY = "flowsynth.save.original.pre-v13";
+export const PRE_V14_ORIGINAL_SAVE_KEY = "flowsynth.save.original.pre-v14";

@@ -209,7 +209,6 @@ describe("opening the cross-section (issue #295)", () => {
       disconnect = disconnect;
     });
     if (tall) {
-      app.state.unlockedRows.push(30);
       app.state.cells.push(hex(0, 30));
     }
     app.render(); clickCell(0, 0);

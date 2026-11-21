@@ -20,8 +20,9 @@ import { CATEGORY_OF, isOscillatorType } from "./constants";
 import { allocateRates, levelCost, wholeNous } from "./economy";
 import { createHabit, selectHabit } from "./habits";
 import { createGoal, deleteGoal } from "./goals";
-import { neighbors, sameHex } from "./hex";
-import { octaveRowOf, positionInRange } from "./lattice";
+import { sameHex } from "./hex";
+import { cellBand, cellFrontier } from "./footprint";
+import { octaveRowOf } from "./lattice";
 import { writeNote } from "./notes";
 import { createInitialState } from "./state";
 import { isModuleCandidate, type GameState, type Hex } from "./types";
@@ -95,18 +96,13 @@ export function seededRng(seed: number): () => number {
   };
 }
 
-// The expansion frontier — compact hugs the start register; fifths chases
-// the circle of fifths across octave rows.
+// Compact keeps a narrow pitch lane. Fifths retains its pitch preference.
 export function frontier(state: GameState, shape: CalibrationShape): Hex[] {
-  const unique = new Map<string, Hex>();
-  for (const cell of state.cells) for (const pos of neighbors(cell)) {
-    if (positionInRange(state, pos) && !state.cells.some((c) => sameHex(c, pos))) unique.set(`${pos.q},${pos.r}`, pos);
-  }
-  return [...unique.values()].sort((a, b) => {
+  return cellFrontier(state).sort((a, b) => {
     const score = (p: Hex) => shape === "compact"
       ? Math.abs(p.q) * 4 + Math.abs(octaveRowOf(p))
       : Math.abs(octaveRowOf(p)) * 12 + Math.abs(p.q);
-    return score(a) - score(b) || a.q - b.q || a.r - b.r;
+    return score(a) - score(b) || cellBand(a) - cellBand(b) || a.q - b.q || a.r - b.r;
   });
 }
 
@@ -195,7 +191,7 @@ function manage(state: GameState, policy: CalibrationPolicy, minute: number): Ca
     }
   }
   const cellsPerBreak = policy.expansion === "modest" ? 2 : Infinity;
-  for (let i = 0; i < cellsPerBreak; i++) {
+  for (let i = 0; i < cellsPerBreak && state.cells.length < state.modules.length + 2; i++) {
     const pos = frontier(state, policy.shape)[0];
     if (!pos || !buyCell(state, pos).ok) break;
   }

@@ -7,7 +7,7 @@
 // (+7 semitones); one step along the (0, ±1) direction stacks an octave
 // (±12 semitones). Columns (constant q mod 12) therefore read as one note
 // name top to bottom, each note appearing exactly once per octave row, and
-// the octave-row bands (the register the gate economy prices) run as
+// the octave-row bands (register, not a build permission) run as
 // r + floor(7q / 12) — relative to the start register, which is row 0.
 //
 // The difficulty ladder falls out of the geometry: a ♭7 sits two fifths
@@ -15,7 +15,7 @@
 // M3/m6 four steps (three) — harder chords literally cost more board
 // (board-redesign spec §3).
 import { BALANCE } from "./constants";
-import type { GameState, Hex } from "./types";
+import type { Hex } from "./types";
 
 // The start register's anchor: the opening synthesizer sits at C4 (MIDI 60)
 // on the origin cell.
@@ -33,28 +33,13 @@ export function pitchClassOf(pos: Hex): number {
 }
 
 // The octave row a cell sits in, counted from the start register (row 0):
-// the band of cells whose pitches sit in the same octave. Rows are finite
-// and bounded around the start register (ADR-0022); the fifths axis is
-// ungated.
+// the band of cells whose pitches sit in the same octave.
 export function octaveRowOf(pos: Hex): number {
   return pos.r + Math.floor((7 * pos.q) / 12);
 }
 
-// Whether a position sits inside the board's finite patch. Rows are finite
-// and bounded this phase (ADR-0022 as bounded by ADR-0040/0044): the launch
-// band around the start register, plus whichever octave row per side the
-// Row unlock has opened — six rows at most, so a row beyond the cap is
-// never purchasable at any spend. Columns span the circle of fifths once —
-// twelve names, ending just past the tritone — because the pitch kernel
-// repeats every twelve columns ((q+12, r−7) sounds exactly what (q, r)
-// does). Bounding them is what keeps each note appearing exactly once per
-// octave row. The fifths axis stays ungated: no premium, only the ordinary
-// cell scaler.
-export function rowInRange(state: GameState, row: number): boolean {
-  if (row >= -BALANCE.launchRowsBelow && row <= BALANCE.launchRowsAbove) return true;
-  return state.unlockedRows.includes(row);
-}
-
+// Columns span the circle of fifths once: (q+12, r−7) would duplicate
+// the pitch at (q, r). Registers now have no purchase gate (ADR-0089).
 // The column window: the twelve fifths steps starting five left of the
 // start column — C sits near the middle, the tritone (F♯/G♭) at one edge.
 const COLUMNS_BEFORE = 5;
@@ -63,8 +48,9 @@ export function columnInRange(pos: Hex): boolean {
   return pos.q >= -COLUMNS_BEFORE && pos.q <= -COLUMNS_BEFORE + (BALANCE.fifthsColumns - 1);
 }
 
-export function positionInRange(state: GameState, pos: Hex): boolean {
-  return rowInRange(state, octaveRowOf(pos)) && columnInRange(pos);
+export function positionInRange(pos: Hex): boolean {
+  return Number.isSafeInteger(pos.q) && Number.isSafeInteger(pos.r) &&
+    columnInRange(pos) && Number.isSafeInteger(pitchOf(pos));
 }
 
 // Chromatic note names indexed by pitch class (C = 0), sharp spellings

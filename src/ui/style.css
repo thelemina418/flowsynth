@@ -1807,28 +1807,12 @@ button.tree-node:hover { background: var(--hover-bg); border-color: var(--line);
 .lead-tip-dim { fill: var(--charge); opacity: 0.5; }
 .highlight-ring { fill: none; stroke: var(--charge); stroke-width: 1.5; opacity: 0.8; pointer-events: none; }
 
-/* The Row unlock's shaded rows (§7, issue #197): the still-locked octave
-   row past the launch band shades violet behind one banner per side while
-   add-cell mode stands — the Arete register's tint at rest, and the banner
-   the one live target. Locked (unaffordable) dims the label; the click
-   still asks the engine, which answers plainly. */
-.row-band-hex { fill: var(--arete-tint); stroke: var(--arete-line); stroke-width: 1; stroke-dasharray: 5 4; }
-.row-unlock { cursor: pointer; }
-.row-unlock-label {
-  font: 500 13px var(--mono);
-  letter-spacing: 0.04em;
-  text-anchor: middle;
-  dominant-baseline: middle;
-  fill: var(--arete);
-  paint-order: stroke;
-  stroke: var(--panel-deep);
-  stroke-width: 4px;
-  stroke-linejoin: round;
-  transition: fill 0.2s;
-}
-.row-unlock:hover .row-unlock-label,
-.row-unlock:focus-visible .row-unlock-label { fill: var(--ink); }
-.row-unlock.locked .row-unlock-label { fill: var(--muted); }
+/* Add marks each destination, not an octave or a second purchase surface. */
+.cell-offer .hex.future { fill: var(--panel-deep); }
+.cell-offer[aria-disabled="true"] { cursor: not-allowed; }
+.cell-price, .cell-price-state { text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.cell-price { fill: var(--ink); font: 600 17px var(--mono); font-variant-numeric: tabular-nums; }
+.cell-price-state { fill: var(--muted); font: 600 13px var(--display); }
 
 /* The chord annotation (§6, #137) — the dense-board language (#174, #201):
    two-voice chords seal the shared edge with bracket twins; chords whose
@@ -3759,7 +3743,6 @@ body.hex-detail-open .upgrade-all {
   .layer-legend { left: 8px; top: 50%; bottom: auto; transform: translateY(-50%); }
   .world-tray { padding: 8px; }
   .world-place-pill { top: 46px; }
-  .cell-arm-pill { top: 46px; }
   /* The arc card rides above the board's lower lanes (issue #350): the
      horizon bar's (64 + 46) and, above it, the zoom cluster's — three
      44px coarse-floor targets over bottom 64 reach 208, so the card
@@ -3898,9 +3881,7 @@ body.cell-arming #grid .cell-node:has(.hex.empty) {
 body.cell-arming #grid .cell-node:has(.buy-here) { filter: none; opacity: 1; pointer-events: auto; }
 body.cell-arming #grid .hex.buy-here { stroke-width: 2.5; stroke-dasharray: none; }
 
-/* The add-cell pill (#201): the armed purchase's one cost spot over the
-   board's top edge — "Add · <price> ν — Cancel · Esc" — and the pill
-   itself is the cancel. */
+/* Add's exit is separate from the destination prices. */
 .cell-arm-pill {
   max-width: calc(100% - 24px);
   flex-wrap: wrap;
@@ -3912,10 +3893,10 @@ body.cell-arming #grid .hex.buy-here { stroke-width: 2.5; stroke-dasharray: none
   z-index: 24;
   display: flex;
   align-items: center;
-  gap: 8px;
   padding: 8px 14px;
+  min-height: 44px;
   cursor: pointer;
-  background: color-mix(in srgb, var(--panel-soft) 94%, transparent);
+  background: var(--panel-soft);
   border: 1px solid var(--danger);
   color: var(--ink);
   font: 600 11px/1.3 var(--font-condensed);
@@ -3923,12 +3904,11 @@ body.cell-arming #grid .hex.buy-here { stroke-width: 2.5; stroke-dasharray: none
 }
 .cell-arm-pill[hidden] { display: none; }
 .cell-arm-pill:hover { background: color-mix(in srgb, var(--danger) 20%, transparent); }
-.cell-arm-pill .mono { color: var(--accent); }
-.cell-arm-pill .pill-esc {
-  padding: 2px 6px;
-  border: 1px solid var(--line-strong);
-  font: 600 9px/1 var(--font-condensed);
-  color: var(--muted);
+@container app (max-width: 600px) {
+  /* The left end of the zoom lane stays clear of the ledger and the priced
+     cells. The layer selector returns when Add yields the board. */
+  .cell-arm-pill { top: auto; bottom: 64px; left: 8px; transform: none; }
+  .board-space:has(.cell-arm-pill:not([hidden])) .layer-legend { visibility: hidden; }
 }
 .cell-node:hover .hex { stroke-width: 2; }
 .cell-node:focus-visible { outline: none; }

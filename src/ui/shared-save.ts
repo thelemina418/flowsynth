@@ -1,4 +1,4 @@
-import { deserialize, recoverLostSave, serialize, STORAGE_KEY, ORIGINAL_SAVE_KEY, PRE_V13_ORIGINAL_SAVE_KEY, type MigrationReport, type RecoveryReport } from "../engine/save";
+import { deserialize, recoverLostSave, serialize, STORAGE_KEY, ORIGINAL_SAVE_KEY, PRE_V13_ORIGINAL_SAVE_KEY, PRE_V14_ORIGINAL_SAVE_KEY, type MigrationReport, type RecoveryReport } from "../engine/save";
 import type { GameState } from "../engine/types";
 
 export interface LoadedSave {
@@ -8,6 +8,7 @@ export interface LoadedSave {
   // this parse performed the one-time conversion — the fact the flow
   // explains at the save/import destination.
   migration?: MigrationReport;
+  footprintMigration?: { areteRefunded: number };
   // The explicit lost-money recovery (issue #494): present exactly when
   // this parse performed the player's chosen recovery — the choice was
   // explained before it applied, so this rides without a second surface.
@@ -69,9 +70,8 @@ export class SharedSave {
         ? { error: result.error ?? "Explicit recovery required.", recoveryRequired: true, lost: result.lost ?? [] }
         : { error: result.error ?? "unknown error" };
     }
-    return result.migration
-      ? { state: result.state, savedAt: savedAtOf(text) ?? this.now(), migration: result.migration }
-      : { state: result.state, savedAt: savedAtOf(text) ?? this.now() };
+    const { state, migration, footprintMigration } = result;
+    return { state, savedAt: savedAtOf(text) ?? this.now(), ...(migration && { migration }), ...(footprintMigration && { footprintMigration }) };
   }
 
   // The recovery choice's parse (issue #494): the same bytes through the
@@ -84,6 +84,7 @@ export class SharedSave {
       state: result.state,
       savedAt: savedAtOf(text) ?? this.now(),
       ...(result.recovered ? { recovered: result.recovered } : {}),
+      ...(result.footprintMigration && { footprintMigration: result.footprintMigration }),
     };
   }
 
@@ -100,16 +101,17 @@ export class SharedSave {
         return { ...parsed, raw, lost: parsed.lost ?? [] };
       }
       this.sourceProtected = false;
-      if ("migration" in parsed && parsed.migration) {
+      if ("state" in parsed && (parsed.migration || parsed.footprintMigration)) {
         try {
-          // This boundary needs today's exact bytes, not a first-seen
-          // snapshot from an earlier release. Archive that older original
-          // before replacing the download slot, then permit adoption.
-          const earlier = this.storage.getItem(ORIGINAL_SAVE_KEY);
-          if (earlier !== null && earlier !== raw) {
-            this.storage.setItem(PRE_V13_ORIGINAL_SAVE_KEY, earlier);
+          if (parsed.migration) {
+            const earlier = this.storage.getItem(ORIGINAL_SAVE_KEY);
+            if (earlier !== null && earlier !== raw) this.storage.setItem(PRE_V13_ORIGINAL_SAVE_KEY, earlier);
+            this.storage.setItem(ORIGINAL_SAVE_KEY, raw);
+          } else {
+            // Keep this source without displacing the v13 translation's original.
+            this.storage.setItem(PRE_V14_ORIGINAL_SAVE_KEY, raw);
+            this.retainOnce(raw);
           }
-          this.storage.setItem(ORIGINAL_SAVE_KEY, raw);
         } catch {
           this.sourceProtected = true;
           return { error: "The pre-migration save could not be retained. The stored save is unchanged; retry after making storage available." };

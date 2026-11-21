@@ -102,16 +102,14 @@ describe("the prestige action", () => {
     expect(s.modules.every((m) => m.reserve === 0)).toBe(true);
   });
 
-  it("persists the board: cells, placement, cellsBought, and the paid row gates", () => {
+  it("persists the board: paid coordinates, placement, and cellsBought", () => {
     const s = atHorizon();
     s.cells.push(hex(2, 0), hex(-1, -1));
     s.cellsBought = 5;
-    s.gatedRows = [0, 1, -1, 2];
     prestige(s);
     expect(s.cells.map((c) => `${c.q},${c.r}`)).toContain("2,0");
     expect(s.cells).toHaveLength(5);
     expect(s.cellsBought).toBe(5);
-    expect(s.gatedRows).toEqual([0, 1, -1, 2]);
   });
 
   it("persists banked rolls, Forge progress, and the shelf's purchased flags", () => {

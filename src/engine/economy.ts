@@ -9,7 +9,6 @@ import { discoveryBoostOf, discoveryCount, syncChordDiscoveries } from "./librar
 import { summaryTermsOf } from "./allocation";
 import { worldFactorOf, enemyDepthOf } from "./world";
 import { adjacent } from "./hex";
-import { octaveRowOf } from "./lattice";
 import type { Contribution, DeployedModule, GameState, Hex, ModuleInstance, ModuleType, MutatorFamily, MutatorInstance, Rarity, RateSnapshot } from "./types";
 
 export function chargedFactor(strength: number): number {
@@ -163,50 +162,12 @@ export function affordableLevels(nous: number, fromLevel: number): number {
 }
 
 // The shared pricing shape (ADR-0013): a geometric scaler charged in whole
-// nous, ceiling-exact like level costs — the cell scaler, the activation
-// ladder, and the console long goals all ride this one curve.
+// nous, ceiling-exact like level costs.
 function geometricCeilCost(firstCost: number, numerator: bigint, denominator: bigint, steps: number): number {
   const n = BigInt(steps);
   const num = BigInt(firstCost) * numerator ** n;
   const den = denominator ** n;
   return Number((num + den - 1n) / den);
-}
-
-// The cell price (ADR-0013): a steep geometric scaler over total cells
-// bought — always charged in whole nous, ceiling-exact like level costs.
-export function cellCost(cellsBought: number): number {
-  if (cellsBought < 0) throw new Error("cellsBought must be non-negative");
-  return geometricCeilCost(BALANCE.cellFirstCost, BALANCE.cellCostGrowthNumerator, BALANCE.cellCostGrowthDenominator, cellsBought);
-}
-
-// The octave-row gate premium (ADR-0022): a one-time cost on the first
-// purchase into each new octave row, escalating with the row's distance
-// from the start register. Charged on top of the cell price; it never
-// advances the purchase scaler, and reshaping between rows never meets it.
-export function rowGateCost(row: number): number {
-  const distance = Math.abs(row);
-  if (distance < 1) return 0;
-  return geometricCeilCost(BALANCE.rowGateFirstCost, BALANCE.rowGateGrowthNumerator, BALANCE.rowGateGrowthDenominator, distance - 1);
-}
-
-// Whether a purchase into `row` still owes its one-time gate: the ledger
-// holds every row whose premium is paid — the opening's rows by grant, the
-// rest by purchase. Movement never consults this (ADR-0022: gates tax
-// acquisition only), which is exactly why the ledger, not the board's
-// current shape, is the truth.
-export function rowGateOwed(state: GameState, row: number): boolean {
-  return !state.gatedRows.includes(row);
-}
-
-// The one price for a new cell at `pos` (ADR-0013 + ADR-0022): the scaler
-// price plus the row's one-time gate premium when still owed. The single
-// seam — the buy action charges exactly this and the board's frontier hexes
-// quote exactly this, so the displayed price cannot drift from the charged
-// one.
-export function cellPurchasePrice(state: GameState, pos: { q: number; r: number }): number {
-  const row = octaveRowOf(pos);
-  const gate = rowGateOwed(state, row) ? rowGateCost(row) : 0;
-  return cellCost(state.cellsBought) + gate;
 }
 
 // Console long goals (ADR-0012): each purchase of a named beat prices the

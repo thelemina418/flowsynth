@@ -1,7 +1,6 @@
-import { BALANCE, SAVE_VERSION, WORLD_ENEMIES } from "../src/engine/constants";
+import { BALANCE, WORLD_ENEMIES } from "../src/engine/constants";
 import { ARETE_HORIZON } from "../src/engine/accumulator";
 import {
-  PLAYTHROUGH_RUNNER_VERSION,
   completeSnapshotsOf,
   composePlaythroughRecipe,
   continuePlaythrough,
@@ -35,11 +34,11 @@ import {
 } from "./evaluation-declaration";
 import { createInitialState } from "../src/engine/state";
 import { investment } from "../src/engine/economy";
-import { frontier as boardFrontier } from "../src/engine/capacity-calibration";
+import { hex } from "../src/engine/hex";
+import { V13_CELL_ECONOMY } from "../src/engine/historical-footprint";
 import { ALLOCATION_MEMO_MAX_ENTRIES, allocationMemoStats } from "../src/engine/economy";
 import { allocationBudgetStats } from "../src/engine/allocation";
-import { enemyDefAt } from "../src/engine/world";
-import type { GameState, Hex, ModuleType } from "../src/engine/types";
+import type { GameState, ModuleType } from "../src/engine/types";
 
 // The recording tier's shared surface (issue #509's profiler rides the
 // same compiled module the recorders certify): the runner and its reads,
@@ -867,27 +866,21 @@ export function suppliedBoardState(): GameState {
   const state = createInitialState();
   state.prestiges = 1;
   state.catalogEntryOwned = true;
-  // The retained development's row unlocks: the launch band's six-row cap
-  // open both sides — 35 owned modules cannot fit inside the four-row
-  // launch band beside the nine enemy cells, so the reported position
-  // carries both Rack Extenders purchases, and the fixture declares them.
-  state.unlockedRows = [-2, 3];
   // Finite, mature-board balances consistent with the reported aggregate
   // history — never the lost nulls, and never invented history beyond the
   // documented aggregates.
   state.totalEarned = 4.5e11;
   state.nous = 8.2e9;
-  // The reported board's placement footprint: the engine's own compact
-  // frontier ordering over the launch band, enemy-reserved cells excluded
-  // — real board geometry, synthetic provenance. Each chosen seat is
-  // owned before the next is read, so the frontier walks outward.
-  const seats: Hex[] = [];
-  while (seats.length < SUPPLIED_BOARD_MODULE_COUNT) {
-    const next = boardFrontier(state, "compact").find((pos) => !enemyDefAt(pos));
-    if (!next) throw new Error("Supplied-board fixture: the compact frontier ran out of seats.");
-    seats.push(next);
-    state.cells.push({ ...next });
-  }
+  // The historical synthetic topology, captured from the old frontier
+  // order at 7da4007. Never regenerate it with a live expansion policy.
+  const seats = [
+    [0, -1], [0, -2], [-1, 1], [1, -1], [-1, -1], [1, -2], [-2, 2],
+    [-2, 1], [-2, 3], [-1, 3], [0, 3], [-1, 4], [1, 3], [2, -2], [2, 0],
+    [-2, 0], [-2, 4], [2, -3], [-2, 5], [2, 2], [-3, 2], [-3, 1], [-3, 3],
+    [3, 0], [-3, 0], [-3, 4], [3, -3], [3, 1], [-3, 5], [3, 2], [-4, 3],
+    [-4, 2], [-4, 4], [4, -3], [4, -2],
+  ].map(([q, r]) => hex(q!, r!));
+  state.cells.push(...seats);
   const created = SUPPLIED_BOARD_MIX.slice(0, SUPPLIED_BOARD_MODULE_COUNT).map((entry, index) =>
     state.modules[state.modules.push({
       id: `supplied-${index}`,
@@ -972,13 +965,12 @@ export function suppliedBoardRow(variant: SuppliedBoardVariant): CenturyRow {
 // calibrated curve and entitlement figures a save translation reads — the
 // claim curve, the enemy ladder, the World purchase ladders, the capacity
 // ladder, the level prices, the response-support shape, and the runner's
-// identity. Compiled from the shipped constants, so the baseline cannot
-// drift from the engine without this read changing.
+// identity. The v13/runner-15 footprint and identity are pinned; the
+// remaining figures still guard the live arithmetic that translation uses.
 export function calibrationBaseline(): Record<string, unknown> {
   return {
-    saveVersion: SAVE_VERSION,
-    runnerVersion: PLAYTHROUGH_RUNNER_VERSION,
-    source: playthroughSource(),
+    saveVersion: 13, // historical v12 → v13 translation target, not the live writer
+    runnerVersion: 15,
     openingGrant: BALANCE.openingGrant,
     claimGrant: {
       base: BALANCE.prestigeGrantBase,
@@ -1017,9 +1009,6 @@ export function calibrationBaseline(): Record<string, unknown> {
       share: BALANCE.responseShare,
       saturation: BALANCE.responseSaturation,
     },
-    cellEconomy: {
-      firstCost: BALANCE.cellFirstCost,
-      growth: `${BALANCE.cellCostGrowthNumerator}/${BALANCE.cellCostGrowthDenominator}`,
-    },
+    cellEconomy: V13_CELL_ECONOMY,
   };
 }

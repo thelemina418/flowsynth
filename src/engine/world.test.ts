@@ -24,7 +24,7 @@ import { createInitialState, createWeapon } from "./state";
 import { fresh, give } from "./fixtures";
 import { serialize, deserialize } from "./save";
 import { adjacent, hex, neighbors } from "./hex";
-import { octaveRowOf, positionInRange } from "./lattice";
+import { positionInRange } from "./lattice";
 import { resolveHonestyReport } from "./trust";
 import type { GameState, Hex, WeaponCopy } from "./types";
 
@@ -268,18 +268,10 @@ describe("the first World-eligible claim (issue #425, priority 2)", () => {
 });
 
 describe("the authored roster and its reachability invariant (issue #425, priority 3)", () => {
-  it("every enemy sits within the available octave rows and beside an obtainable cell", () => {
-    // "Obtainable through ordinary expansion" reads the authoritative
-    // purchasable predicate at the board's six-row cap — both Row unlocks
-    // owned, the furthest state ordinary expansion can reach.
-    const maxed = fresh();
-    maxed.unlockedRows = [-BALANCE.launchRowsBelow - 1, BALANCE.launchRowsAbove + 1];
+  it("every enemy lies on the musical lattice beside an obtainable cell", () => {
     for (const def of WORLD_ENEMIES) {
-      const row = octaveRowOf(def.pos);
-      expect(row).toBeGreaterThanOrEqual(-BALANCE.launchRowsBelow - 1);
-      expect(row).toBeLessThanOrEqual(BALANCE.launchRowsAbove + 1);
-      const reachable = neighbors(def.pos).some((n) => positionInRange(maxed, n));
-      expect(reachable).toBe(true);
+      expect(positionInRange(def.pos)).toBe(true);
+      expect(neighbors(def.pos).some(positionInRange)).toBe(true);
     }
   });
 

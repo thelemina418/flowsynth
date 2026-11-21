@@ -358,7 +358,7 @@ describe("the lost-money recovery's adoption (issue #494)", () => {
     expect(owner.adoptRecovered(raw, createInitialState(), 1000)).toBe(true);
     expect(storage.getItem(ORIGINAL_SAVE_KEY)).toBe(raw);
     expect(owner.isNewer()).toBe(false);
-    expect(JSON.parse(storage.getItem(STORAGE_KEY)!).version).toBe(13);
+    expect(JSON.parse(storage.getItem(STORAGE_KEY)!).version).toBe(SAVE_VERSION);
   });
 
   it("recovery serialization denial changes no slot and retains protection", () => {

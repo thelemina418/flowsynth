@@ -6,13 +6,11 @@ import {
   endSession,
   pauseSession,
   placeModule,
-  reshapeCells,
-  returnModule,
   startSession,
   upgradeModule,
 } from "./actions";
 import { BALANCE, MODULE_TYPES, SAVE_VERSION, SHELF_TYPES } from "./constants";
-import { cellCost, computeRates, levelCost, longGoalCost, rowGateCost } from "./economy";
+import { computeRates, levelCost, longGoalCost } from "./economy";
 import { fresh } from "./fixtures";
 import { adjacent, hex } from "./hex";
 import { cellNoteOf } from "./lattice";
@@ -107,7 +105,7 @@ describe("the carrierless opening board", () => {
     expect(restored.modules).toHaveLength(1);
     expect(restored.modules[0]!.pos).toEqual(hex(0, 0));
     expect(restored.nous).toBe(BALANCE.openingGrant);
-    expect(SAVE_VERSION).toBe(13);
+    expect(SAVE_VERSION).toBe(14);
   });
 });
 
@@ -155,8 +153,7 @@ describe("the opening economy", () => {
     }
     // The grant reaches nothing past the first upgrade, whatever the
     // balance (ADR-0019: the apps were always free).
-    expect(cellCost(0)).toBeGreaterThan(grant);
-    expect(buyCell(s, hex(2, 0)).ok).toBe(false);
+    expect(buyCell(s, hex(1, -1)).ok).toBe(false);
     expect(longGoalCost(0)).toBeGreaterThan(grant);
     expect(buyDraftUpgrade(s).ok).toBe(false);
     expect(s.nous).toBe(grant);
@@ -179,142 +176,13 @@ describe("the opening economy", () => {
     expect(buyShelfModule(s, "spacer" as ShelfType).ok).toBe(false);
   });
 
-  it("each scaler counts only its own purchases", () => {
+  it("buying space and buying shelf modules record distinct purchases", () => {
     const s = fresh();
     s.nous = 1e6;
     buyCell(s, hex(2, 0));
     buyCell(s, hex(1, 1));
     buyShelfModule(s, "generator");
-    // Cells ride the cell scaler…
-    expect(cellCost(s.cellsBought)).toBe(cellCost(2));
-    // …and the shelf hides exactly what was acquired.
+    expect(s.cellsBought).toBe(2);
     expect(SHELF_TYPES.filter((type) => !s.purchased[type])).toEqual(["infusor", "forge"]);
-  });
-});
-
-describe("the octave-row gate (ADR-0022)", () => {
-  it("the opening's rows are gate-paid by the same grant that places the cells", () => {
-    const s = fresh();
-    expect(s.gatedRows).toEqual([0, 1]);
-    s.nous = 1e6;
-    // (1,1) is G5 — octave row 1, an opening row: cell price only.
-    expect(buyCell(s, hex(1, 1)).ok).toBe(true);
-    expect(s.nous).toBeCloseTo(1e6 - cellCost(0), 6);
-    expect(s.gatedRows).toEqual([0, 1]);
-  });
-
-  it("the first purchase into each new octave row pays a one-time premium on top", () => {
-    const s = fresh();
-    s.nous = 1e6;
-    // (0,2) is C6 — row 2, a new register: cell price plus the row-2 gate.
-    const price = cellCost(0) + rowGateCost(2);
-    expect(buyCell(s, hex(0, 2)).ok).toBe(true);
-    expect(s.nous).toBeCloseTo(1e6 - price, 6);
-    expect(s.gatedRows).toEqual([0, 1, 2]);
-  });
-
-  it("the gate is one-time per row: later purchases in a paid row pay cell price only", () => {
-    const s = fresh();
-    s.nous = 1e6;
-    buyCell(s, hex(0, 2)); // row 2 — gate paid
-    buyCell(s, hex(1, 2)); // row 2 again — no gate
-    expect(s.nous).toBeCloseTo(1e6 - cellCost(0) - rowGateCost(2) - cellCost(1), 6);
-    expect(s.gatedRows).toEqual([0, 1, 2]);
-  });
-
-  it("gate spend never advances the cell purchase scaler", () => {
-    const gated = fresh();
-    gated.nous = 1e6;
-    buyCell(gated, hex(0, 2)); // row 2: gate + cell
-    const plain = fresh();
-    plain.nous = 1e6;
-    buyCell(plain, hex(1, 1)); // row 1: cell only
-    // The scaler counts purchases, not nous: both boards sit on rung 1.
-    expect(cellCost(gated.cellsBought)).toBe(cellCost(plain.cellsBought));
-    expect(gated.cellsBought).toBe(1);
-  });
-
-  it("the gate keys on the ledger, not the board's shape — reshaping cannot waive it", () => {
-    const s = fresh();
-    s.nous = 1e6;
-    // Move the whole opening up first (free, ungated): row 2 now sits on
-    // the board without ever being paid for…
-    expect(returnModule(s, s.modules[0]!.id).ok).toBe(true);
-    expect(reshapeCells(s, [hex(0, 1), hex(1, 1), hex(0, 2)]).ok).toBe(true);
-    // …but acquisition is what gates: the first purchase into row 2 pays
-    // its premium however the board is shaped.
-    expect(buyCell(s, hex(1, 2)).ok).toBe(true);
-    expect(s.nous).toBeCloseTo(1e6 - cellCost(0) - rowGateCost(2), 6);
-    expect(s.gatedRows).toEqual([0, 1, 2]);
-  });
-
-  it("moving owned cells between rows is free and ungated — even past every gate", () => {
-    const s = fresh();
-    s.nous = 1e6;
-    buyCell(s, hex(0, 2)); // row 2 exists on the board now
-    // Nothing is pinned (ADR-0021): the opening synth returns to the tray
-    // so the reshape owns every cell it keeps.
-    expect(returnModule(s, s.modules[0]!.id).ok).toBe(true);
-    // Reshape the board across the band, row −1 included — a row whose
-    // gate was never paid: no gate, no charge — gates tax acquisition
-    // only, never movement.
-    const next = [hex(0, -1), hex(0, 0), hex(0, 1), hex(0, 2)];
-    const nousBefore = s.nous;
-    expect(s.cells.length).toBe(next.length);
-    expect(reshapeCells(s, next).ok).toBe(true);
-    expect(s.nous).toBe(nousBefore);
-    expect(s.gatedRows).toEqual([0, 1, 2]); // unchanged — nothing new was gated
-  });
-
-  it("rows are finite: purchases beyond the band are refused", () => {
-    const s = fresh();
-    s.nous = 1e9;
-    for (const pos of [hex(0, 2), hex(0, -1)]) {
-      expect(buyCell(s, pos).ok, `${pos.q},${pos.r}`).toBe(true);
-    }
-    expect(buyCell(s, hex(0, 3)).ok).toBe(false); // row 3 — the Row unlock's to sell
-    expect(buyCell(s, hex(0, 4)).ok).toBe(false); // row 4 — beyond the six-row cap
-    // Columns stop at the circle of fifths too: twelve names, no aliases.
-    // The probes walk row 0 — along the band r follows floor(7q/12), and
-    // each step touches the last.
-    for (const pos of [hex(2, -1), hex(3, -1), hex(4, -2), hex(5, -2), hex(6, -3)]) {
-      expect(buyCell(s, pos).ok, `${pos.q},${pos.r}`).toBe(true);
-    }
-    expect(buyCell(s, hex(7, -4)).ok).toBe(false); // column 7 — past F♯
-  });
-
-  it("the fifths axis is ungated: reached-row columns walk free, however far", () => {
-    const s = fresh();
-    s.nous = 1e6;
-    // Walk left along the row-0 band: F4, B♭4, E♭4, A♭4 — new pitch
-    // classes every step, implicit chord-vocabulary access, and no gate
-    // ever (the register never changes).
-    for (const pos of [hex(-1, 1), hex(-2, 2), hex(-3, 2), hex(-4, 3)]) {
-      expect(buyCell(s, pos).ok, `${pos.q},${pos.r}`).toBe(true);
-    }
-    expect(s.gatedRows).toEqual([0, 1]);
-    expect(s.nous).toBeCloseTo(1e6 - cellCost(0) - cellCost(1) - cellCost(2) - cellCost(3), 6);
-    // Climbing into a new register is what gates — never the column walk
-    // itself: row 2's gate applies wherever its cell sits.
-    expect(buyCell(s, hex(0, 2)).ok).toBe(true);
-    expect(s.gatedRows).toEqual([0, 1, 2]);
-  });
-
-  it("gatedRows persists across a save round-trip and lenient-defaults", () => {
-    const s = fresh();
-    s.nous = 1e6;
-    buyCell(s, hex(0, 2));
-    const restored = deserialize(serialize(s, 1_000)).state!;
-    expect(restored.gatedRows).toEqual([0, 1, 2]);
-    // Absent on a v6 save, the ledger defaults empty — a save written
-    // before it exists owes no gates it can't know about; a corrupt value
-    // falls back to the empty ledger too.
-    const file = JSON.parse(serialize(fresh()));
-    delete file.state.gatedRows;
-    const absent = deserialize(JSON.stringify(file)).state!;
-    expect(absent.gatedRows).toEqual([]);
-    file.state.gatedRows = null;
-    const corrupt = deserialize(JSON.stringify(file)).state!;
-    expect(corrupt.gatedRows).toEqual([]);
   });
 });

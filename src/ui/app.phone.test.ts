@@ -64,7 +64,7 @@ describe("the thumb bar (§7, portrait phone)", () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]!.querySelector("svg")).not.toBeNull();
     expect(rows[0]!.textContent).toContain("Feats");
-    expect(rows[0]!.textContent).toContain("1/22");
+    expect(rows[0]!.textContent).toContain("1/21");
     expect(rows[1]!.textContent).toContain("Chords");
     expect(rows[1]!.textContent).toContain("0/11");
     // The feats row opens the feats sheet, and the sheet carries the
@@ -203,16 +203,14 @@ describe("the thumb bar (§7, portrait phone)", () => {
     }
   });
 
-  it("Add arms the mode's action — the cell in module mode, the slot unlock in mutator mode", () => {
+  it("Add opens the shared purchase frontier on Modules and from World", () => {
     const s = app.state;
     s.mode = "upgrade";
     s.catalogEntryOwned = true;
     s.mutatorSlots = [hex(0, 0)];
     s.mutators = [{ id: "mu1", family: "power", rarity: "common", pos: hex(0, 0) }];
     app.render();
-    // Module mode: the cell purchase (the icon prices at zero ν, so grant
-    // the first cell's cost — the same affordably-armed shape as desktop).
-    app.state.nous = BALANCE.cellFirstCost;
+    // Even the opening balance can inspect the purchase frontier.
     app.render();
     document.querySelector<HTMLButtonElement>('#board-tools [data-op="cell"]')!.click();
     expect(app.ui.buyingCell).toBe(true);

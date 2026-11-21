@@ -216,7 +216,6 @@ export function renderHexDetail(app: App, live: RateSnapshot, projected: RateSna
     worldEnemy && enemyStateOf(state, worldEnemy.key),
     state.world.proof && [state.world.proof.creature, state.world.proof.spell, state.world.proof.conduit],
     state.cells.length,
-    state.unlockedRows.join(","),
     // The open inventory (issue #296) and what waits in it: a placement
     // changes both, so the tray and its tiles can never show stale stock.
     state.modules.filter((m) => m.pos === null).map((m) => `${m.id}:${m.type}:${m.level}:${m.tier}`),

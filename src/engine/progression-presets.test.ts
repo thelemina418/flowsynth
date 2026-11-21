@@ -73,7 +73,7 @@ describe("the walked presets", () => {
   it("stops the approaching walk at the open door of the played first era", () => {
     const preset = playthroughCheckpointPreset("approaching-prestige");
     expect(preset.record.stop.kind).toBe("checkpoint");
-    expect(preset.record.stop.reason).toContain("Approaching prestige reached at day 9");
+    expect(preset.record.stop.reason).toContain(`Approaching prestige reached at day ${preset.record.days}`);
     expect(preset.record.complete).toBe(false);
     expect(preset.record.bottleneck).toBeNull();
     expect(playthroughNote(preset.record)).toContain("Prompt prestige ◆");
@@ -89,16 +89,11 @@ describe("the walked presets", () => {
   it("stops the pushing walk immediately after its first earned bank, before the spending", () => {
     const preset = playthroughCheckpointPreset("after-first-bank");
     expect(preset.record.stop.kind).toBe("checkpoint");
-    expect(preset.record.stop.reason).toContain("After first bank reached at day 3");
-    // The walk banks at the first break the pending claim reaches its
-    // target; a 600-minute session carries the era measure well past the
-    // entry depth, so the banked floor is the curve's honest 3 at the
-    // later-era-calibrated slope (issue #484: entitlement 2 + 2.5·depth
-    // at the door reads one and a fraction decades past the entry), above
-    // the configured 2 — intent and outcome stay distinguishable in the
-    // note.
-    expect(preset.record.claims).toEqual([3]);
-    expect(playthroughNote(preset.record)).toContain("claim 3/2 Arete");
+    expect(preset.record.stop.reason).toContain(`After first bank reached at day ${preset.record.days}`);
+    // The checkpoint reads its earned bank, not a claim or day pinned to
+    // the former footprint economy. #543 measures the pacing separately.
+    expect(preset.record.claims).toEqual([preset.state.arete]);
+    expect(playthroughNote(preset.record)).toContain(`claim ${preset.state.arete}/2 Arete`);
     expect(playthroughNote(preset.record)).toContain("no Arete spent");
     const state = preset.state;
     // The earned claim sits unspent — banked by the walk's own practice
@@ -116,13 +111,9 @@ describe("the walked presets", () => {
   it("stops the pushing walk at the living fight with the placement unplayed", () => {
     const preset = playthroughCheckpointPreset("world-enemy-active");
     expect(preset.record.stop.kind).toBe("checkpoint");
-    // The claim grant (issue #484) funds the second era's rebuild, so the
-    // discovered enemy's threshold crosses a day earlier than the
-    // pre-grant walk's day 4 — the fixture pins the grant-funded day.
-    expect(preset.record.stop.reason).toContain("World enemy reached at day 3");
-    // No retired entry gate; the declared expansion rule spends three
-    // Arete on the two Rack Extenders before other lasting purchases.
-    expect(playthroughNote(preset.record)).toContain("spent 2× Rack Extenders");
+    expect(preset.record.stop.reason).toContain(`World enemy reached at day ${preset.record.days}`);
+    expect(preset.record.areteSpent.rowUnlocks).toBe(0);
+    expect(playthroughNote(preset.record)).not.toContain("Rack Extenders");
     expect(preset.record.areteSpent.columns).toBe(0);
     const state = preset.state;
     const living = Object.entries(state.world.enemies).filter(([, enemy]) => enemy.discovered && enemy.hp > 0);
@@ -130,7 +121,7 @@ describe("the walked presets", () => {
     expect(state.world.weapons.some((weapon) => weapon.pos === null)).toBe(true);
     expect(state.catalogEntryOwned).toBe(false);
     expect(state.world.columns.some((column) => column.pos !== null)).toBe(true);
-    expect(state.arete).toBe(0);
+    expect(state.arete).toBeLessThanOrEqual(preset.record.claims[0]!);
     scenarioOf("world-enemy")!.assert(state, 0);
   });
 

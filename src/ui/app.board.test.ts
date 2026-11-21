@@ -6,7 +6,7 @@ import { createHabit } from "../engine/habits";
 import type { Habit } from "../engine/types";
 import { BALANCE } from "../engine/constants";
 import { ARETE_HORIZON } from "../engine/accumulator";
-import { displayedRates, allocateRates, cellCost, cellPurchasePrice, affordableLevels, levelCost, levelsCost } from "../engine/economy";
+import { displayedRates, allocateRates, affordableLevels, levelCost, levelsCost } from "../engine/economy";
 import { startSession, endSession } from "../engine/actions";
 import { advance } from "../engine/advance";
 import { give } from "../engine/fixtures";
@@ -112,7 +112,7 @@ describe("the board ledger (§7, issue #270)", () => {
     // The hairline, then the paired chips: icon + count.
     expect(ledger.querySelectorAll(".ledger-overview button")).toHaveLength(0);
     expect(ledger.querySelectorAll("button.ledger-overview")).toHaveLength(1);
-    expect(document.getElementById("feats-chip")!.textContent).toContain("0/22");
+    expect(document.getElementById("feats-chip")!.textContent).toContain("0/21");
     expect(document.getElementById("feats-chip")!.querySelector("svg")).not.toBeNull();
     expect(document.getElementById("library-chip")!.textContent).toContain("0/11");
     // The chips open their sheets.
@@ -736,7 +736,7 @@ describe("the action row (§7)", () => {
     expect(app.state.bankedRolls).toHaveLength(1);
   });
 
-  it("the cell tool shows the price and arms the frontier pick", () => {
+  it("the cell tool opens the priced frontier pick", () => {
     app.state.nous = BALANCE.cellFirstCost;
     app.render();
     document.querySelector<HTMLButtonElement>('#board-tools [data-op="cell"]')!.click();
@@ -754,7 +754,7 @@ describe("the action row (§7)", () => {
   it("flow locks the dock's three tools, and the tray column hides with the board (#272)", () => {
     app.render();
     const dockOps = () => [...document.querySelectorAll<HTMLButtonElement>('#board-tools [data-op]')];
-    // Catalog and Forge stand open in upgrade mode; Add is price-gated.
+    // Catalog, Forge, and Add stand open in upgrade mode.
     expect(dockOps()[0]!.getAttribute("aria-disabled")).toBe("false");
     expect(dockOps()[1]!.getAttribute("aria-disabled")).toBe("false");
     expect(document.getElementById("inventory-zone")!.classList.contains("off")).toBe(false);
@@ -789,18 +789,6 @@ describe("the action row (§7)", () => {
     expect(app.ui.modal).toBeNull();
     touch();
     expect(app.ui.modal).toBe("catalog");
-  });
-
-  it("unaffordable Add stays focusable but refuses activation", () => {
-    app.state.nous = 0;
-    app.render();
-    const add = document.querySelector<HTMLButtonElement>('#board-tools [data-op="cell"]')!;
-    expect(add.getAttribute("aria-disabled")).toBe("true");
-    add.focus();
-    expect(document.activeElement).toBe(add);
-    expect(add.querySelector<HTMLElement>(".tool-detail")!.hidden).toBe(false);
-    add.click();
-    expect(app.ui.buyingCell).toBe(false);
   });
 
   it("every tool icon's extended description rides the tooltip layer, never title= (issue #354)", () => {
@@ -1074,39 +1062,34 @@ describe("the always-live board (§5)", () => {
     expect(grid.querySelector('.module-node:not([data-type="spacer"]) .face-level')!.textContent).toBe("Lv. 0");
   });
 
-  it("the armed frontier wears one cost spot: the pill carries the price, the hexes rest bare (#201)", () => {
-    app.state.nous = BALANCE.cellFirstCost;
-    app.render();
-    document.querySelector<HTMLButtonElement>('#board-tools [data-op="cell"]')!.click();
-    expect(app.ui.buyingCell).toBe(true);
+  it("Add opens at any balance and shows the price and refusal on each destination", () => {
+    const button = document.querySelector<HTMLButtonElement>('#board-tools [data-op="cell"]')!;
+    expect(button.getAttribute("aria-disabled")).toBe("false");
+    button.click();
     const grid = document.getElementById("grid")!;
-    // Per-hex price stamps retire: no NEW CELL label, no stamped figure,
-    // no plus — the frontier hex keeps only its accent outline.
-    expect(grid.querySelector(".hex-sub")).toBeNull();
-    const armed = [...grid.querySelectorAll(".hex.buy-here")];
-    expect(armed.length).toBeGreaterThan(0);
-    // The pill over the board's top edge carries the single cost spot.
+    const inner = grid.querySelector('[data-cell="1,-1"]')!;
+    const outer = grid.querySelector('[data-cell="2,0"]')!;
+    expect(inner.querySelector(".cell-price")?.textContent).toBe("30 ν");
+    expect(outer.querySelector(".cell-price")?.textContent).toBe("90 ν");
+    expect(inner.getAttribute("aria-disabled")).toBe("true");
+    expect(inner.getAttribute("aria-label")).toContain("Not enough whole nous");
+    expect(inner.textContent).toContain("Short on ν");
+    const originalCells = app.state.cells.length;
+    inner.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(app.state.cells).toHaveLength(originalCells);
+    app.state.nous = 32;
+    app.render();
+    expect(inner.getAttribute("aria-disabled")).toBe("false");
+    expect(outer.getAttribute("aria-disabled")).toBe("true");
+    grid.querySelector('[data-cell="1,-1"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(app.state.nous).toBe(2);
+    expect(app.state.cells).toContainEqual(hex(1, -1));
+    expect(app.ui.buyingCell).toBe(true);
     const pill = document.getElementById("cell-arm-pill")!;
-    expect(pill.hidden).toBe(false);
-    expect(pill.textContent).toContain("Add");
-    expect(pill.textContent).toContain(`${formatInt(BALANCE.cellFirstCost)} ν`);
-    expect(pill.textContent).toContain("Cancel · Esc");
-    // The pill is the cancel: one click backs out and the pill rests.
+    expect(pill.textContent).toBe("Cancel Add");
     pill.click();
     expect(app.ui.buyingCell).toBe(false);
-    expect(document.getElementById("cell-arm-pill")!.hidden).toBe(true);
-  });
-
-  it("the cell pill discloses unpaid frontier row premiums", () => {
-    app.state.nous = 1e6;
-    app.armCellPurchase();
-    const base = cellCost(app.state.cellsBought);
-    const premium = Math.max(...app.frontierCells().map((pos) => cellPurchasePrice(app.state, pos) - base));
-    expect(premium).toBeGreaterThan(0);
-    expect(document.getElementById("cell-arm-pill")!.textContent).toContain(`+ up to ${formatInt(premium)} ν row premium`);
-    app.state.gatedRows = [-1, 0, 1, 2];
-    app.render();
-    expect(document.getElementById("cell-arm-pill")!.textContent).not.toContain("row premium");
+    expect(pill.hidden).toBe(true);
   });
 
   it("face upgrades cannot spend nous while cell purchase is armed", () => {

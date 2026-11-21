@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import type { App } from "./app";
-import { ORIGINAL_SAVE_KEY, PRE_V13_ORIGINAL_SAVE_KEY, STORAGE_KEY, serialize } from "../engine/save";
+import { ORIGINAL_SAVE_KEY, PRE_V13_ORIGINAL_SAVE_KEY, PRE_V14_ORIGINAL_SAVE_KEY, STORAGE_KEY, serialize } from "../engine/save";
 import { startSession } from "../engine/actions";
 import { advance } from "../engine/advance";
 import { bankableClaimOf } from "../engine/accumulator";
@@ -50,6 +50,51 @@ function mapStorage(files: Map<string, string>): SaveStorage {
   };
 }
 
+function priorFootprint(): string {
+  const file = JSON.parse(serialize(createInitialState(), 750));
+  file.version = 13;
+  file.state.cells.push({ q: 0, r: 2 }, { q: 0, r: 3 });
+  file.state.cellsBought = 2;
+  file.state.modules[0].pos = { q: 0, r: 3 };
+  file.state.unlockedRows = [3, -2];
+  file.state.gatedRows = [0, 1, 2, 3, -2];
+  return JSON.stringify(file);
+}
+
+describe("distance pricing at the save boundary (issue #543)", () => {
+  it("retains the exact v13 source beside both earlier originals and explains its refund once", () => {
+    const raw = priorFootprint();
+    const files = new Map([[STORAGE_KEY, raw], [ORIGINAL_SAVE_KEY, "earlier"], [PRE_V13_ORIGINAL_SAVE_KEY, "archived"]]);
+    const storage = mapStorage(files);
+    app = boot(undefined, false, new SharedSave(storage));
+    expect(document.getElementById("status")!.textContent).toContain("3 Arete returned");
+    expect(app.state.modules[0]!.pos).toEqual({ q: 0, r: 3 });
+    expect(app.state.arete).toBe(3);
+    expect(files.get(PRE_V14_ORIGINAL_SAVE_KEY)).toBe(raw);
+    expect(files.get(ORIGINAL_SAVE_KEY)).toBe("earlier");
+    expect(files.get(PRE_V13_ORIGINAL_SAVE_KEY)).toBe("archived");
+    expect(JSON.parse(files.get(STORAGE_KEY)!).version).toBe(14);
+    app = boot(undefined, false, new SharedSave(storage));
+    expect(document.getElementById("status")!.textContent).not.toContain("Arete returned");
+    expect(app.state.arete).toBe(3);
+  });
+
+  it("protects the v13 source from ordinary and forced writes if backup is denied", () => {
+    const raw = priorFootprint();
+    const files = new Map([[STORAGE_KEY, raw], [ORIGINAL_SAVE_KEY, "earlier"], [PRE_V13_ORIGINAL_SAVE_KEY, "archived"]]);
+    app = boot(undefined, false, new SharedSave({ ...mapStorage(files), setItem(key, value) {
+      if (key === PRE_V14_ORIGINAL_SAVE_KEY) throw new Error("quota exceeded");
+      files.set(key, value);
+    } }));
+    expect(app.state.arete).toBe(0);
+    app.save();
+    app.save(Date.now(), true);
+    expect(files.get(STORAGE_KEY)).toBe(raw);
+    expect(files.get(ORIGINAL_SAVE_KEY)).toBe("earlier");
+    expect(files.get(PRE_V13_ORIGINAL_SAVE_KEY)).toBe("archived");
+  });
+});
+
 describe("the calibrated migration's flow (issue #493)", () => {
   it("booting a stored v12 save explains the migration, retains the original bytes, and lands calibrated", () => {
     const source = overpoweredV12();
@@ -62,7 +107,7 @@ describe("the calibrated migration's flow (issue #493)", () => {
     // the slot with the converted v13 file.
     expect(files.get(ORIGINAL_SAVE_KEY)).toBe(source);
     const stored = JSON.parse(files.get(STORAGE_KEY)!);
-    expect(stored.version).toBe(13);
+    expect(stored.version).toBe(14);
     expect(stored.state.nous).toBe(BALANCE.openingGrant);
     expect(stored.state.eraEarned).toBe(0);
     expect(stored.state.world.frontier).toBe(0);
@@ -76,7 +121,7 @@ describe("the calibrated migration's flow (issue #493)", () => {
     app = boot(undefined, false, new SharedSave(mapStorage(files)));
     expect(app.retainedOriginal()).toBe(source);
     expect(files.get(PRE_V13_ORIGINAL_SAVE_KEY)).toBe(earlier);
-    expect(JSON.parse(files.get(STORAGE_KEY)!).version).toBe(13);
+    expect(JSON.parse(files.get(STORAGE_KEY)!).version).toBe(14);
     app.closeModal();
     app = boot(undefined, false, new SharedSave(mapStorage(files)));
     expect(app.retainedOriginal()).toBe(source);

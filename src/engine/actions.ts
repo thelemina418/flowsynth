@@ -1,14 +1,15 @@
 import { BALANCE, BREATHER, CATEGORY_OF, EPS, isOscillatorType, REFLECTION_SLIDER_MIN, REFLECTION_SLIDER_NEUTRAL, REFLECTION_SLIDER_POSITIONS, ROLL_POOL, SHELF_MODULE, SHELF_TYPES, typeRarityOf, WORLD_ENEMIES } from "./constants";
 import { bankableClaimOf, horizonReached } from "./accumulator";
-import { rowUnlockCost, unlockableRows, unlockedMergeCap, mergeCapIncreaseCost } from "./catalog";
+import { unlockedMergeCap, mergeCapIncreaseCost } from "./catalog";
 import { nextCapacityPrice, nextCeilingPrice, nextDiscountPrice } from "./capacity";
-import { affordableLevels, cellPurchasePrice, chargeDelivered, maxChordFactorOf, deployedAt, findModule, isPriceableLevel, isResponseSupport, levelCost, levelsCost, modulePower, responseSupportPowerOf, rowGateOwed, syncRates, wholeNous } from "./economy";
-import { honeCostOf, syncWorldDiscoveries, worldCellReserved, worldOccupantAt, worldPieceOf } from "./world";
+import { affordableLevels, chargeDelivered, maxChordFactorOf, deployedAt, findModule, isPriceableLevel, isResponseSupport, levelCost, levelsCost, modulePower, responseSupportPowerOf, syncRates, wholeNous } from "./economy";
+import { honeCostOf, syncWorldDiscoveries, worldCellReserved, worldOccupantAt, worldPieceOf, worldPiecesOf } from "./world";
 import { resetProofDuel } from "./world-combat";
 import { summaryTermsOf } from "./allocation";
 import { arcCardDue } from "./arc";
-import { DIRECTIONS, adjacent, hexKey, isConnected, neighbors, sameHex } from "./hex";
-import { octaveRowOf, positionInRange } from "./lattice";
+import { DIRECTIONS, hexKey, isConnected, sameHex } from "./hex";
+import { positionInRange } from "./lattice";
+import { cellBand, cellPurchaseQuote } from "./footprint";
 import { createModule, createWeapon, createWorldColumn, eraStartGrantOf, freshEnemyStates, openingGrant } from "./state";
 import { logSessionPractice } from "./habits";
 import { plannedTargetHit } from "./records";
@@ -357,29 +358,13 @@ export function buyShelfModule(state: GameState, type: ShelfType): ActionResult 
   return { ok: true, unlocked: checkUnlocks(state) };
 }
 
-// Cells (ADR-0013, amended by ADR-0022): direct nous purchases, bought and
-// placed in upgrade mode. A new cell must extend the connected frontier, so
-// the board grows without ever disconnecting; reshaping stays the
-// count-preserving rule. The first purchase into each new octave row pays a
-// one-time gate premium on top of the cell price — escalating with row
-// distance from the start register, never advancing the purchase scaler,
-// and never owed twice (the gatedRows ledger records every paid row,
-// including the opening's, which the grant paid). Movement between rows is
-// a different action entirely and never meets a gate. The fifths axis is
-// ungated; the row range is finite and symmetric around the start register.
+// The paid frontier extends the shared footprint in upgrade mode (ADR-0089).
 export function buyCell(state: GameState, pos: Hex): ActionResult {
-  if (state.mode !== "upgrade") return fail("Purchases happen between sessions.");
-  if (state.cells.some((c) => sameHex(c, pos))) return fail("That cell is already part of the board.");
-  if (!state.cells.some((c) => adjacent(c, pos))) return fail("New cells must touch the board.");
-  if (!positionInRange(state, pos)) return fail("That cell lies outside the board's lattice.");
-  const row = octaveRowOf(pos);
-  const gateOwed = rowGateOwed(state, row);
-  const price = cellPurchasePrice(state, pos);
-  if (wholeNous(state) < price) return fail("Not enough whole nous.");
-  state.nous -= price;
-  state.cells.push(pos);
+  const quote = cellPurchaseQuote(state, pos);
+  if (quote.reason !== null || quote.price === null) return fail(quote.reason ?? "No cell price.");
+  state.nous -= quote.price;
+  state.cells.push({ ...pos });
   state.cellsBought++;
-  if (gateOwed) state.gatedRows.push(row);
   return { ok: true, unlocked: checkUnlocks(state) };
 }
 
@@ -799,8 +784,7 @@ export function returnModule(state: GameState, id: string): ActionResult {
   return { ok: true, unlocked: checkUnlocks(state) };
 }
 
-// Reshaping moves owned cells anywhere within the finite row band — always
-// free, never gated (ADR-0022: gates tax acquisition only).
+// Free reshaping rearranges the paid cells within their bands (ADR-0089).
 export function reshapeCells(state: GameState, next: Hex[]): ActionResult {
   if (state.mode !== "upgrade") return fail("Reshaping happens between sessions.");
   if (next.length !== state.cells.length) return fail("Reshaping preserves the cell count.");
@@ -811,12 +795,23 @@ export function reshapeCells(state: GameState, next: Hex[]): ActionResult {
       return fail("Every deployed module needs a cell.");
     }
   }
-  if ([...state.world.columns, ...state.world.weapons].some((occupant) => occupant.pos !== null && !keys.has(hexKey(occupant.pos)))) {
+  if (worldPiecesOf(state).some(({ copy }) => copy.pos !== null && !keys.has(hexKey(copy.pos)))) {
     return fail("Every deployed World occupant needs a cell.");
   }
-  if (next.some((cell) => !positionInRange(state, cell))) return fail("The board must stay inside the board's lattice.");
+  if (next.some((cell) => !positionInRange(cell))) return fail("The board must stay inside the board's lattice.");
   if (!isConnected(next)) return fail("The board must stay connected.");
-  state.cells = next;
+  const remaining = new Map<number, number>();
+  for (const cell of state.cells) {
+    const band = cellBand(cell);
+    remaining.set(band, (remaining.get(band) ?? 0) + 1);
+  }
+  for (const cell of next) {
+    const band = cellBand(cell);
+    const count = remaining.get(band) ?? 0;
+    if (count < 1) return fail("Reshaping preserves ownership in each distance band.");
+    remaining.set(band, count - 1);
+  }
+  state.cells = next.map(cell => ({ ...cell }));
   return { ok: true, unlocked: checkUnlocks(state) };
 }
 
@@ -935,28 +930,9 @@ export function joinRollPool(_state: GameState): ActionResult {
   return fail("Mutators are retired.");
 }
 
-// The board-side Row unlock (ADR-0044, #174's approved surface): one Arete
-// purchase opens the octave row beyond the launch band — one per side,
-// either order, the ladder escalating 1 then 2 — and the purchase stands in
-// the row gate for the row it opens, so cells inside buy with nous as
-// usual. The board must reach the row it unlocks (frontier-adjacent rows
-// only, matching the banner's construction): a row the board doesn't touch
-// has no banner to click and opens by no other path. Past the ladder's end
-// the board is at its six-row cap: nothing is unlockable, and no price
-// exists to charge.
-export function buyRowUnlock(state: GameState, row: number): ActionResult {
-  if (state.mode !== "upgrade") return fail(ARETE_MODE_LOCK);
-  if (!unlockableRows(state).includes(row)) return fail("That octave row cannot be unlocked.");
-  if (!state.cells.some((cell) => neighbors(cell).some((n) => octaveRowOf(n) === row))) {
-    return fail("The board must reach the octave row it unlocks.");
-  }
-  const price = rowUnlockCost(state);
-  if (price === null) return fail("The board is at its row cap.");
-  if (state.arete < price) return fail("Not enough Arete.");
-  state.arete -= price;
-  state.unlockedRows.push(row);
-  state.gatedRows.push(row);
-  return { ok: true, unlocked: checkUnlocks(state) };
+// Refuse stale command clients explicitly; expansion spends only nous now.
+export function buyRowUnlock(_state: GameState, _row: number): ActionResult {
+  return fail("Rack Extenders are retired. Use Add to buy connected cells with nous.");
 }
 
 // ── Refusing Mutator compatibility API (ADR-0087 retires ADR-0043) ─────
@@ -1086,7 +1062,7 @@ export function buyMergeCapIncrease(state: GameState): ActionResult {
 // starter Charge Blade outright — a granted copy, not a roll, not a
 // purchase; no other claim or prestige ever grants a weapon.
 // The reset boundary: owned modules (types, rarity, secondaries),
-// cells with placement, `cellsBought` and the paid row gates, tray
+// cells with placement and `cellsBought`, tray
 // inventory, banked rolls, Forge progress, and the per-pair practice-roll
 // meters' fill and earned counts (ADR-0041 — progress earned by real life
 // time is never un-earned at the moment prestige pays off), achievements
