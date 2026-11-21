@@ -6,7 +6,9 @@ import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { compileEngine } from '../../../tools/dev/compile-engine.mjs';
+import { recordingEnvironment, requireRuntimeEnvironment } from '../../../tools/dev/runtime.mjs';
 
+await requireRuntimeEnvironment();
 const baselineCommit = '7da4007dee8f2343f9526c96a4dc930c66881683';
 const recipeInput = { seed: 468, policyId: 'pushing', budgetDays: 10, claimTarget: 2,
   schedule: { sessionsPerDay: 2, sessionMinutes: 600, breatherMinutes: 5 } };
@@ -73,11 +75,14 @@ async function measure(root, commit) {
       firstPlacementOnBoughtCell: placementAfterExpansion ? { label: placementAfterExpansion.label, creditedMinutes: placementAfterExpansion.credited / 60 } : null };
     if (process.argv.includes('--opening-only')) return { commit, source, proof, opening: openingResult };
     const world = engine.runPlaythroughCheckpoint(recipe, 'world-enemy-active', source);
+    const eligibility = world.events.find(e => e.ok && e.label === 'First prestige eligibility reached');
     const bank = world.events.find(e => e.ok && e.kind === 'prestige');
+    assert.ok(eligibility);
     assert.ok(bank);
     const bankDay = 1 + Math.floor(bank.at / 86_400);
     const firstFight = engine.WORLD_ENEMIES.find(e => world.state.world.enemies[e.key]?.discovered && world.state.world.enemies[e.key]?.hp > 0);
     return { commit, source, recipe, proof, opening: openingResult,
+      eligibility: { creditedMinutes: eligibility.credited / 60 },
       bank: { day: bankDay, creditedMinutes: bank.credited / 60, claim: world.claims[0],
         purchased: cells({ events: world.events.slice(0, world.events.indexOf(bank)) }) },
       world: { runId: world.runId, day: world.days, creditedMinutes: world.creditedSeconds / 60, purchased: cells(world),
@@ -87,5 +92,6 @@ async function measure(root, commit) {
 const root = process.cwd();
 const commit = head();
 const output = { scope: 'One matched schedule, not a calibration or a representative distribution.',
+  environment: recordingEnvironment(),
   baseline: await measure(resolve(process.argv[2]), baselineCommit), candidate: await measure(root, commit) };
 await writeFile(pathToFileURL(resolve(process.argv[3])), JSON.stringify(output, null, 2) + '\n');

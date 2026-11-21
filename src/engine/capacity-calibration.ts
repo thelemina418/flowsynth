@@ -21,7 +21,7 @@ import { allocateRates, levelCost, wholeNous } from "./economy";
 import { createHabit, selectHabit } from "./habits";
 import { createGoal, deleteGoal } from "./goals";
 import { sameHex } from "./hex";
-import { cellBand, cellFrontier } from "./footprint";
+import { cellFrontier } from "./footprint";
 import { octaveRowOf } from "./lattice";
 import { writeNote } from "./notes";
 import { createInitialState } from "./state";
@@ -48,9 +48,9 @@ export interface CalibrationPolicy {
   capacity: "prompt";
   // Buy the cheapest affordable Arete offering at each management break.
   arete: "prompt" | "never";
-  // modest: at most one shelf purchase and two cells per break, the rest
-  // to levels. aggressive: every affordable shelf purchase and cell, then
-  // levels.
+  // Modest buys at most one shelf module and two seats per break; aggressive
+  // buys every affordable shelf module and can seat the whole collection.
+  // Both keep a small placement margin, then spend on levels.
   expansion: "modest" | "aggressive";
   // sweep: five-level gestures, cheapest voice first; all: the bulk
   // ladder across every voice, holding half the bank in reserve while a
@@ -68,9 +68,8 @@ export const ORDINARY: CalibrationPolicy = {
   upgrades: "sweep",
 };
 
-// The pushy policy: ordinary's level gestures, but every affordable cell
-// each break — the acquisition-hungry variant that maps the cell curve's
-// real cost.
+// The pushy policy: ordinary's level gestures with more room for the
+// collection at each break — the acquisition-hungry variant.
 export const PUSHY: CalibrationPolicy = {
   name: "pushy",
   shape: "compact",
@@ -96,14 +95,18 @@ export function seededRng(seed: number): () => number {
   };
 }
 
-// Compact keeps a narrow pitch lane. Fifths retains its pitch preference.
+// Compact grows around the starter triangle's two registers. A soft
+// penalty past one octave either side of that span favors nearby fifths
+// over a tall column of the same pitch class. It does not exclude any
+// destination or affect the price or permission to buy it.
 export function frontier(state: GameState, shape: CalibrationShape): Hex[] {
-  return cellFrontier(state).sort((a, b) => {
-    const score = (p: Hex) => shape === "compact"
-      ? Math.abs(p.q) * 4 + Math.abs(octaveRowOf(p))
-      : Math.abs(octaveRowOf(p)) * 12 + Math.abs(p.q);
-    return score(a) - score(b) || cellBand(a) - cellBand(b) || a.q - b.q || a.r - b.r;
-  });
+  const score = (pos: Hex): number => {
+    const row = octaveRowOf(pos);
+    if (shape === "fifths") return Math.abs(row) * 12 + Math.abs(pos.q);
+    const fromStarterCenter = Math.abs(row - 0.5);
+    return Math.abs(pos.q) * 4 + fromStarterCenter + 8 * Math.max(0, fromStarterCenter - 1.5);
+  };
+  return cellFrontier(state).sort((a, b) => score(a) - score(b) || a.q - b.q || a.r - b.r);
 }
 
 export interface CapacityMilestone {

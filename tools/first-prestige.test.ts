@@ -18,7 +18,7 @@ import {
   openingDecisionGaps,
   worthwhileHoursOf,
 } from "./first-prestige";
-import { composePlaythroughRecipe, runPlaythrough } from "../src/engine/playthrough";
+import { runPlaythrough, runPlaythroughCheckpoint } from "../src/engine/playthrough";
 
 // The first-worthwhile-prestige evaluation's checks (issue #490, parent
 // stories 1–4, 22–24, 28–31, and 42–43). The declared matrix and the
@@ -84,23 +84,26 @@ describe("the declared evaluation matrix", () => {
   });
 });
 
+// The same earned prompt run supplies both its first door and opening
+// decisions. The nine-day fixture must still reach a zero-claim bank.
+const prompt = runPlaythrough({ ...firstPrestigeRecipe(23, BASELINE_SESSION_MINUTES, "prompt"), budgetDays: 9 });
+
 describe("first eligibility versus banking", () => {
   it("records the pushing door before its later bank, even when the budget ends before banking", { timeout: 300_000 }, () => {
-    const prompt = runPlaythrough(firstPrestigeRecipe(23, 25, "prompt"));
-    const pushing = runPlaythrough({ ...firstPrestigeRecipe(23, 25, "pushing"), budgetDays: 9 });
+    // This case reads the first bank, not its recovery. Keep the same
+    // deadline but stop there; the held twin must play the full budget.
+    const pushing = runPlaythroughCheckpoint({ ...firstPrestigeRecipe(23, 25, "pushing"), budgetDays: 9 }, "after-first-bank");
     expect(eligibilityHoursOf(pushing)).toBe(eligibilityHoursOf(prompt));
     expect(eligibilityHoursOf(pushing)).toBeLessThan(worthwhileHoursOf(pushing)!);
     const held = runPlaythrough({ ...firstPrestigeRecipe(23, 25, "pushing"), claimTarget: 36, budgetDays: 9 });
     expect(held.claims).toEqual([]);
+    expect(held.creditedSeconds).toBe(9 * 2 * 25 * 60);
     expect(eligibilityHoursOf(held)).toBe(eligibilityHoursOf(prompt));
   });
 });
 
 describe("the opening decision-gap read", () => {
-  // A real short walk: the fresh-start prompt policy over six baseline
-  // days makes purchases, placements, and roll acceptances the rule can
-  // read, without a prestige in sight.
-  const record = runPlaythrough(composePlaythroughRecipe({ seed: 23, budgetDays: 9 }));
+  const record = prompt;
 
   it("reads only the ok decisions the rule names, and never session or upgrade stamps", () => {
     const decisions = meaningfulDecisions(record);

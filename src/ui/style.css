@@ -1812,7 +1812,7 @@ button.tree-node:hover { background: var(--hover-bg); border-color: var(--line);
 .cell-offer[aria-disabled="true"] { cursor: not-allowed; }
 .cell-price, .cell-price-state { text-anchor: middle; dominant-baseline: central; pointer-events: none; }
 .cell-price { fill: var(--ink); font: 600 17px var(--mono); font-variant-numeric: tabular-nums; }
-.cell-price-state { fill: var(--muted); font: 600 13px var(--display); }
+.cell-price-state { fill: var(--muted); font: 600 13px var(--font-condensed); }
 
 /* The chord annotation (§6, #137) — the dense-board language (#174, #201):
    two-voice chords seal the shared edge with bracket twins; chords whose

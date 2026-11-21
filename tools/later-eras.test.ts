@@ -128,10 +128,9 @@ describe("the declared evaluation matrix", () => {
 });
 
 describe("the era view and the route probe on real walks", () => {
-  // A real short prompt walk: the fresh-start prompt policy over six
-  // baseline days makes decisions the view reads, without reaching the
-  // prestige door — its era stays honestly open.
-  const promptWalk = runPlaythrough(composePlaythroughRecipe({ seed: 23, budgetDays: 6 }));
+  // Two full baseline days let the prompt policy make decisions for the
+  // gap read while leaving its first era open.
+  const promptWalk = runPlaythrough(composePlaythroughRecipe({ seed: 23, budgetDays: 2 }));
 
   // The declared walk the probe reads: the pushing policy on the baseline
   // shape banks its first claim, demonstrates the combat route (the

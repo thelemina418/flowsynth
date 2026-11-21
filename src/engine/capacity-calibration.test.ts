@@ -18,6 +18,13 @@ const FULL = !!process.env.FLOWSYNTH_CALIBRATION;
 const SEEDS = [157, 42, 2026, 7, 99, 11, 23, 77];
 
 describe("the harmonic-capacity release calibration (#262)", () => {
+  it("buys the first rung on a board that can use it during the opening", () => {
+    const rec = runProgression(42, ORDINARY, { eras: 1, maxSessions: 4, stepSeconds: 120 });
+    const first = rec.eras[0]!.milestones[0];
+    expect(first?.rung).toBe(1);
+    expect(first!.rateAfter).toBeGreaterThan(first!.rateBefore * 1.1);
+  });
+
   it("paces the first era near twenty credited hours and the second provisionally near seventy percent", () => {
     // Seed 42 is the recorded median ordinary seed at the current tuning
     // (full distributions in the calibration tier and in

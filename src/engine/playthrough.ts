@@ -86,7 +86,7 @@ import type { GameState, Hex, ModuleInstance, ModuleType, ResponseCurveId, Weapo
 // policies (issue #491) join both. The declared credited-flow stop
 // (issue #492) — a century walk's terminal and its banking gates — joins
 // them too.
-export const PLAYTHROUGH_RUNNER_VERSION = 16;
+export const PLAYTHROUGH_RUNNER_VERSION = 17;
 
 // The acceleration step (seconds): production is exact at any step; this
 // only coarsens crossing granularity. 60 matches the calibration walk.
@@ -113,7 +113,8 @@ export const PROMPT_POLICY: PlaythroughPolicy = {
   rules: [
     "Accept the first oscillator a roll offers, else a generator, else the first live candidate.",
     "Buy every unowned shelf module it can afford — generator, infusor, then forge.",
-    "Buy for the collection plus up to two spare module seats, favoring a narrow pitch lane; when engaging World without a seat next to the first active enemy, buy toward it first.",
+    "Buy one needed module seat per break, or two when the arriving draft offers could fill the rack twice; keep expansion near the starter registers.",
+    "When engaging World without a seat next to the first active enemy, buy an approach to it before ordinary space.",
     "Place every tray module on the vacancy the authoritative preview scores highest.",
     "Buy every affordable Poly Expander, then sweep five-level upgrades over the deployed voices, cheapest first, while the bank covers the next gesture.",
     "Buy the discount and ceiling offerings when affordable; no entry purchase exists.",
@@ -1242,7 +1243,12 @@ function manage(ctx: RunContext, state: GameState): void {
 
   // Rolls: accept an oscillator when offered, else a generator, else the
   // first live candidate.
-  for (const offer of [...state.bankedRolls]) {
+  const offers = [...state.bankedRolls];
+  // Even a long flow with a rackful of drafts shouldn't build the whole
+  // collection at once. Take one step, or two for an exceptional batch;
+  // anything else can wait in the tray for a later placement decision.
+  const seatBudget = offers.length >= 2 * state.cells.length ? 2 : 1;
+  for (const offer of offers) {
     const candidate =
       offer.candidates.find((c) => isModuleCandidate(c) && isOscillatorType(c.type)) ??
       offer.candidates.find((c) => isModuleCandidate(c) && CATEGORY_OF[c.type] === "generator") ??
@@ -1263,15 +1269,14 @@ function manage(ctx: RunContext, state: GameState): void {
     }
   }
 
-  // ADR-0089: don't fill a ring just because several seats share a price.
-  // Buy for the collection and a small placement margin. The World leg's
-  // first living enemy can also justify going past that space budget.
+  // ADR-0089: buy usable seats, not a whole band of equally priced offers.
+  // The first living enemy can justify buying beyond the Modules budget.
   const fight = state.world.unlocked && ctx.worldOrder !== "none"
     ? WORLD_ENEMIES.find(def => state.world.enemies[def.key]?.discovered && !enemyDefeated(state, def.key))
     : undefined;
-  for (;;) {
+  for (let added = 0;; added++) {
     const approaching = fight && !state.cells.some(cell => adjacent(cell, fight.pos) && !enemyDefAt(cell));
-    if (!approaching && state.cells.length >= state.modules.length + 2) break;
+    if (!approaching && (added >= seatBudget || state.cells.length >= state.modules.length)) break;
     const candidates = frontier(state, "compact");
     const pos = approaching
       ? candidates.reduce<Hex | undefined>((best, cell) =>
