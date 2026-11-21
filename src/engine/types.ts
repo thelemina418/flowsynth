@@ -170,13 +170,14 @@ export interface Candidate {
 // dispatches acquisition without adding them to the module roster.
 export interface WorldCandidate {
   id: string;
-  type: "column" | "chargeBlade";
+  // Blades remain selectable only in previously banked offers.
+  type: "column" | "conduit" | "chargeBlade";
 }
 
 export type DraftCandidate = Candidate | WorldCandidate;
 
 export function isModuleCandidate(candidate: DraftCandidate): candidate is Candidate {
-  return candidate.type !== "column" && candidate.type !== "chargeBlade";
+  return candidate.type !== "column" && candidate.type !== "conduit" && candidate.type !== "chargeBlade";
 }
 
 export interface RollOffer<C = DraftCandidate> {

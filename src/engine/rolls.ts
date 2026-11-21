@@ -179,14 +179,15 @@ export function generateOffer(state: GameState, rng: Rng, extraTierChance = 0): 
   if (firstRollRigged(state) && !candidates.some((c) => isOscillatorType(c.type))) {
     candidates[candidates.length - 1]!.type = "additive";
   }
-  // Shared Blade drafting is temporary (ADR-0087). Only fresh ordinary
-  // offers participate; module weighting and special guarantees stay separate.
+  // Fresh ordinary drafts route their World slot to infrastructure only.
+  // Blacksmith owns new weapons; pending Blade offers already in the queue
+  // are untouched. Module weighting and special guarantees stay separate.
   const offer: RollOffer = { id: newModuleId(state), candidates: [candidates[0]!, candidates[1]!, candidates[2]!] };
   if (state.world.unlocked && rng() < 0.25) {
     // Never erase the first-roll rig's only oscillator.
     const slot = firstRollRigged(state) && isOscillatorType(candidates[2]!.type)
       && !candidates.slice(0, 2).some(c => isOscillatorType(c.type)) ? 0 : 2;
-    offer.candidates[slot] = { id: candidates[slot]!.id, type: rng() < 0.5 ? "column" : "chargeBlade" };
+    offer.candidates[slot] = { id: candidates[slot]!.id, type: rng() < 0.5 ? "column" : "conduit" };
   }
   return offer;
 }

@@ -3,7 +3,7 @@ import { COMBAT, COMBAT_WALLS } from "./world-combat";
 import { isWeaponType, WEAPONS } from "./weapons";
 import { hex } from "./hex";
 import { ENCYCLOPEDIA_REVISION } from "./encyclopedia";
-import type { ChordDiscovery, GameState, ModuleInstance, ModuleType, MutatorFamily, MutatorInstance, Rarity, WeaponCopy, WeaponType, WorldColumn, WorldState } from "./types";
+import type { ChordDiscovery, GameState, ModuleInstance, ModuleType, MutatorFamily, MutatorInstance, Rarity, WeaponCopy, WeaponType, WorldColumn, WorldConduit, WorldState } from "./types";
 
 // The opening board (board-redesign spec §8, ADR-0022): the three-cell
 // opening footprint is retained — its geometry, not its Carrier rationale.
@@ -232,13 +232,17 @@ export function createWeapon(state: GameState, type: WeaponType): WeaponCopy {
   };
 }
 
+export function createWorldConduit(state: GameState): WorldConduit {
+  return { ...createWorldColumn(state), direction: 2 };
+}
+
 export function grantCombatStarter(state: GameState): void {
   const world = state.world;
   if (world.starterCombatGranted) return;
   world.creatures.push({ ...createWorldColumn(state), hp: COMBAT.creature.hp, recovering: false, cooldown: 0 });
   world.armor.push({ ...createWorldColumn(state), bearer: null });
   world.spells.push({ ...createWorldColumn(state), bearer: null, store: 0 });
-  world.conduits.push({ ...createWorldColumn(state), direction: 2 });
+  world.conduits.push(createWorldConduit(state));
   world.starterCombatGranted = true;
 }
 

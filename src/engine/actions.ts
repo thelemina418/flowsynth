@@ -10,7 +10,7 @@ import { arcCardDue } from "./arc";
 import { DIRECTIONS, hexKey, isConnected, sameHex } from "./hex";
 import { positionInRange } from "./lattice";
 import { cellBand, cellPurchaseQuote } from "./footprint";
-import { createModule, createWeapon, createWorldColumn, eraStartGrantOf, grantCombatStarter, openingGrant } from "./state";
+import { createModule, createWeapon, createWorldColumn, createWorldConduit, eraStartGrantOf, grantCombatStarter, openingGrant } from "./state";
 import { logSessionPractice } from "./habits";
 import { plannedTargetHit } from "./records";
 import { rollGoalOccurrences } from "./goals";
@@ -827,6 +827,7 @@ export function chooseRoll(state: GameState, offerId: string, candidateId: strin
   // Dispatch by item kind; only module rewards carry a mint tier. World
   // constructors grant fresh unplaced copies regardless of prior ownership.
   if (candidate.type === "column") state.world.columns.push(createWorldColumn(state));
+  else if (candidate.type === "conduit") state.world.conduits.push(createWorldConduit(state));
   else if (candidate.type === "chargeBlade") state.world.weapons.push(createWeapon(state, "chargeBlade"));
   else if (isModuleCandidate(candidate)) state.modules.push(createModule(state, candidate.type, candidate.tier));
   return { ok: true, unlocked: checkUnlocks(state) };

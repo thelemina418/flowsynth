@@ -1,7 +1,7 @@
 import { SHORTCUTS, isLayerShortcut } from "./shortcuts";
 import { GAME_COMMANDS } from "./game-commands";
 import { advance, earnNous, emptyAdvanceResult } from "../engine/advance";
-import type { AdvanceResult } from "../engine/types";
+import { isModuleCandidate, type AdvanceResult } from "../engine/types";
 import {
   buyCapacity,
   buyCapacityCeiling,
@@ -49,7 +49,7 @@ import {
 } from "../engine/actions";
 import { ARETE_HORIZON, bankableClaimOf, horizonReached } from "../engine/accumulator";
 import { syncWorldDiscoveries, worldOccupantAt, worldPieceOf } from "../engine/world";
-import { worldPieceName } from "./world-combat";
+import { WORLD_DRAFTS, worldPieceName } from "./world-combat";
 import type { WeaponType, ResponseCurveId } from "../engine/types";
 import { WEAPONS, type ForgeWeapon } from "../engine/weapons";
 import { neighbors, hex, sameHex } from "../engine/hex";
@@ -2589,8 +2589,9 @@ export class App {
       return;
     }
     const more = this.state.bankedRolls.length > 0 ? ` ${this.state.bankedRolls.length} more choice${this.state.bankedRolls.length === 1 ? "" : "s"} wait in the Forge.` : "";
-    const name = candidate.type === "column" ? "Column" : candidate.type === "chargeBlade" ? "Charge Blade" : META[candidate.type].name;
-    this.announceUnlocks(result.unlocked, `${name} added to ${candidate.type === "column" || candidate.type === "chargeBlade" ? "World collection" : "inventory"}.${more}`);
+    const module = isModuleCandidate(candidate);
+    const name = module ? META[candidate.type].name : WORLD_DRAFTS[candidate.type].name;
+    this.announceUnlocks(result.unlocked, `${name} added to ${module ? "inventory" : "World collection"}.${more}`);
     this.forgeAfterConsume();
     this.save();
     this.render();

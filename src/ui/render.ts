@@ -27,7 +27,7 @@ import { TILE_APPS, type FocusApp } from "../engine/apps";
 import { poolOutstanding } from "../engine/trust";
 import { arcCardDue } from "../engine/arc";
 import { ACHIEVEMENTS, achievementName, type AchievementCategory, type AchievementContext, type AchievementDef } from "../engine/achievements";
-import { isModuleCandidate, type Category, type DeployedModule, type GameState, type Hex, type ModuleInstance, type ModuleType, type NamedChordTerm, type RateSnapshot, type ResponseCurveId, type SpecialDraftKind } from "../engine/types";
+import { isModuleCandidate, type Category, type DeployedModule, type GameState, type Hex, type ModuleInstance, type ModuleType, type NamedChordTerm, type RateSnapshot, type ResponseCurveId, type SpecialDraftKind, type WorldCandidate } from "../engine/types";
 import { DEV_BOARD_CAPACITIES, type App, type ChordHover, type ModalKind } from "./app";
 import {
   bindFocusSheet,
@@ -70,6 +70,7 @@ import { boardBounds, bindBoardNavigation, lensFrame, renderZoomCluster, syncGlo
 import { beginLayoutPass, containerWidth, endLayoutPass, RATE_DETAILS_BREAKPOINT_PX, isPhoneWidth, PHONE_MAX_PX, viewportWidth, scrollTopOf } from "./container";
 import { liveAttr, liveSet } from "./live";
 import { hexFromAttr } from "./world";
+import { WORLD_DRAFTS } from "./world-combat";
 import {
   bindWorldLayer,
   worldBoardLive,
@@ -3503,6 +3504,15 @@ function updateForgeMetersLive(scope: ParentNode, state: GameState, forgeRate: n
   liveAttr(scope, "modal-mutator-track", "aria-valuetext", mutatorLine);
 }
 
+function worldDraftTileHtml(candidate: WorldCandidate, offerId: string): string {
+  const { name, kind, effect } = WORLD_DRAFTS[candidate.type];
+  return `<div class="candidate-tile" data-type="${candidate.type}"><button class="candidate-pick" data-choice="${candidate.id}" data-offer="${offerId}" aria-label="Take ${name}" aria-describedby="forge-effect-${candidate.id}"></button>
+    <span class="module-preview">${worldTileSvg(kind)}</span>
+    <span class="candidate-readout"><span class="candidate-name">${name}</span>
+    <span id="forge-effect-${candidate.id}" class="candidate-effect">${forgeEffectHtml(effect)}</span></span>
+  </div>`;
+}
+
 function renderForgeModal(app: App, content: HTMLElement, projected: RateSnapshot): void {
   const { state, ui } = app;
   const face = "modules" as typeof ui.forgeFace;
@@ -3527,12 +3537,7 @@ function renderForgeModal(app: App, content: HTMLElement, projected: RateSnapsho
         : ""
     }
     <div class="candidates ${face === "mutators" ? "mut-candidates" : ""}">
-      ${face === "modules" && offer ? offer.candidates.filter(candidate => candidate.type !== "mutatorForge").map(candidate => !isModuleCandidate(candidate) ? `
-        <div class="candidate-tile" data-type="${candidate.type}"><button class="candidate-pick" data-choice="${candidate.id}" data-offer="${offer.id}" aria-label="Take ${candidate.type === "column" ? "Column" : "Charge Blade"}" aria-describedby="forge-effect-${candidate.id}"></button>
-          <span class="module-preview">${worldTileSvg(candidate.type === "column" ? "column" : "weapon")}</span>
-          <span class="candidate-readout"><span class="candidate-name">${candidate.type === "column" ? "Column" : "Charge Blade"}</span>
-          <span id="forge-effect-${candidate.id}" class="candidate-effect">${forgeEffectHtml(candidate.type === "column" ? "Lift charge to World gear" : "Spend charge → armed Sentinel strikes")}</span></span>
-        </div>` : `
+      ${face === "modules" && offer ? offer.candidates.filter(candidate => candidate.type !== "mutatorForge").map(candidate => !isModuleCandidate(candidate) ? worldDraftTileHtml(candidate, offer.id) : `
         <div class="candidate-tile" data-rarity="${typeRarityOf(candidate.type)}" data-type="${candidate.type}"><button class="candidate-pick" data-choice="${candidate.id}" data-offer="${offer.id}" data-rarity="${typeRarityOf(candidate.type)}" data-type="${candidate.type}" aria-label="Take ${RARITY_LABEL[typeRarityOf(candidate.type)]} ${META[candidate.type].name} · ${tierWord(candidate.tier)}" aria-describedby="forge-effect-${candidate.id}"></button>
           <span class="module-preview">${inventoryTileSvg(candidate)}</span>
           <span class="candidate-readout"><span class="candidate-name">${rarityMark(typeRarityOf(candidate.type))} ${META[candidate.type].name} <span class="mono">${tierNumeral(candidate.tier)}</span></span>

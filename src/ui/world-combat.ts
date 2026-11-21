@@ -4,7 +4,7 @@ import { cellNoteOf } from "../engine/lattice";
 import { enemyPenaltyOf, type WorldLift, type WorldPiece } from "../engine/world";
 import { attackPowerOf, WEAPONS, type WeaponType } from "../engine/weapons";
 import { adjacentBearersOf, bearerOf, COMBAT } from "../engine/world-combat";
-import type { GameState, WorldGear } from "../engine/types";
+import type { GameState, WorldCandidate, WorldGear } from "../engine/types";
 import { formatNumber } from "./format";
 import { COLUMN_WORD } from "./meta";
 
@@ -15,6 +15,15 @@ export function weaponEffect(state: GameState, type: WeaponType): string {
     ? `${unfedDamage} HP unfed · ${powered} · every ${cadence} s`
     : `Charged hit · ${powered} · every ${cadence} s · no hit unfed`;
 }
+
+const CONDUIT_EFFECT = "Forwards charge along its selected edge";
+
+export const WORLD_DRAFTS = {
+  column: { name: "Column", kind: "column", effect: "Lift charge to World gear" },
+  conduit: { name: COMBAT.conduit.name, kind: "conduit", effect: CONDUIT_EFFECT },
+  // Only legacy offers use this entry; their name and promise stand.
+  chargeBlade: { name: WEAPONS.chargeBlade.name, kind: "weapon", effect: "Spend charge → armed Sentinel strikes" },
+} as const satisfies Record<WorldCandidate["type"], { name: string; kind: WorldPiece["kind"]; effect: string }>;
 
 export function worldPieceName(piece: WorldPiece): string {
   switch (piece.kind) {
@@ -62,7 +71,7 @@ export function worldPieceRead(state: GameState, piece: WorldPiece, lift?: World
     }
     case "conduit": {
       const outlet = piece.copy.pos ? neighbors(piece.copy.pos)[piece.copy.direction]! : null;
-      return { read: outlet ? `→ ${cellNoteOf(outlet)}` : "", stateWord: "", tip: "Forwards charge along its selected edge" };
+      return { read: outlet ? `→ ${cellNoteOf(outlet)}` : "", stateWord: "", tip: CONDUIT_EFFECT };
     }
   }
 }
