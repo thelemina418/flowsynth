@@ -10,7 +10,8 @@ import type { GameState, Hex, RateSnapshot } from "../engine/types";
 import type { App } from "./app";
 import { startPointerDrag } from "./pointer-drag";
 import { HEX_RADIUS, boardPoint, hexPoints } from "./face";
-import { COLUMN_SHORT, WORLD_META } from "./meta";
+import { COLUMN_SHORT } from "./meta";
+import { WEAPONS } from "../engine/weapons";
 import { formatNumber } from "./format";
 import { wireTooltips } from "./instrument";
 import { COMBAT_GLYPHS, enemyPenaltyFigure, worldPieceRead, worldPieceName } from "./world-combat";
@@ -170,7 +171,7 @@ function combatEngraving(name: string, mark: string, read: string, verdict: stri
 
 function pieceEngraving(state: GameState, piece: WorldPiece, lift: WorldLift, large: boolean) {
   const name = worldPieceName(piece);
-  const label = piece.kind === "column" ? COLUMN_SHORT : piece.kind === "weapon" ? WORLD_META[piece.copy.type].short : name;
+  const label = piece.kind === "column" ? COLUMN_SHORT : piece.kind === "weapon" ? WEAPONS[piece.copy.type].plate : name;
   const { read, stateWord, tip } = worldPieceRead(state, piece, lift);
   let rotation = 0;
   if (piece.kind === "conduit" && piece.copy.pos) {

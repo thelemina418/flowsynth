@@ -208,7 +208,8 @@ export interface MutatorInstance {
 // weapon the first World-eligible claim grants. The union is the whole
 // schema a later type joins: a new key in the per-type records (Hone
 // ranks, storage, attack), no reshaping of saves.
-export type WeaponType = "chargeBlade";
+export type { WeaponType } from "./weapons";
+import type { WeaponType } from "./weapons";
 
 // A Charge Column (issue #425, ADR-0074): the World layer's lift occupant.
 // It sits over an owned module cell, copies the charge received at that
@@ -267,7 +268,7 @@ export interface WorldState {
   armor: WorldGear[];
   spells: WorldSpell[];
   conduits: WorldConduit[];
-  hone: Record<WeaponType, number>;
+  hone: { chargeBlade: number };
   enemies: Record<string, WorldEnemyState>;
   enemyCooldown: number;
   elapsed: number;

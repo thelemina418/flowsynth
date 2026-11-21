@@ -1,4 +1,5 @@
-import { BALANCE, EPS, WORLD_ENEMIES } from "./constants";
+import { EPS, WORLD_ENEMIES } from "./constants";
+import { attackPowerOf, WEAPONS } from "./weapons";
 import { adjacent } from "./hex";
 import { requireFinite } from "./numeric";
 import type { GameState, Hex, WorldCombatCreature, WorldGear } from "./types";
@@ -7,10 +8,6 @@ export const COMBAT = {
   creature: { name: "Sentinel", hp: 24, damage: 3, cadence: 6, regeneration: 2 },
   enemyCadence: 4,
   armor: { name: "Guard Plate", remainingDamage: 0.5 },
-  bladeCadence: 5,
-  // The tested starter and first two Hone ranks keep the proof's hits.
-  // Later paid ranks open new strength bands, not shorter attack timers.
-  bladePower: [BALANCE.world.attackBase, 6, 8, 32, 512],
   spell: { name: "Pulse", threshold: 6, damage: 11 },
   conduit: { name: "Conduit" },
 };
@@ -140,7 +137,7 @@ export function combatBoundaryOf(state: GameState, spellIncoming?: ReadonlyMap<s
   if (!fight) return Infinity;
   let next = COMBAT.enemyCadence - state.world.enemyCooldown;
   for (const { cooldown } of fight.creatures) next = Math.min(next, COMBAT.creature.cadence - cooldown);
-  for (const { cooldown } of fight.weapons) next = Math.min(next, COMBAT.bladeCadence - cooldown);
+  for (const { type, cooldown } of fight.weapons) next = Math.min(next, WEAPONS[type].cadence - cooldown);
   for (const { id, store } of fight.spells) {
     const missing = COMBAT.spell.threshold - store;
     if (missing <= EPS) return EPS;
@@ -153,7 +150,7 @@ export function combatBoundaryOf(state: GameState, spellIncoming?: ReadonlyMap<s
 // Attacks resolve before a simultaneous return hit. The wall hits the
 // first adjacent creature in collection order until it falls; other
 // creatures and their own gear continue to act independently.
-export function advanceCombat(state: GameState, seconds: number, bladePower: number): void {
+export function advanceCombat(state: GameState, seconds: number): void {
   const { world } = state;
   world.elapsed = requireFinite(world.elapsed + seconds, "the World clock");
   for (const creature of world.creatures) {
@@ -175,13 +172,17 @@ export function advanceCombat(state: GameState, seconds: number, bladePower: num
     creature.cooldown = Math.max(0, creature.cooldown - COMBAT.creature.cadence);
     live.hp = Math.max(0, live.hp - COMBAT.creature.damage);
   }
-  for (const blade of fight.weapons) {
-    blade.cooldown += seconds;
-    if (blade.cooldown + EPS < COMBAT.bladeCadence) continue;
-    blade.cooldown = Math.max(0, blade.cooldown - COMBAT.bladeCadence);
-    if (live.hp <= EPS || blade.store + EPS < BALANCE.world.attackCost) continue;
-    blade.store = Math.max(0, blade.store - BALANCE.world.attackCost);
-    live.hp = Math.max(0, live.hp - bladePower);
+  for (const weapon of fight.weapons) {
+    const { cadence, chargeCost, unfedDamage } = WEAPONS[weapon.type];
+    weapon.cooldown += seconds;
+    if (weapon.cooldown + EPS < cadence) continue;
+    weapon.cooldown = Math.max(0, weapon.cooldown - cadence);
+    if (live.hp <= EPS) continue;
+    // Compare at the hit, not at fill. A reserve buys exactly one authored
+    // effect; neither extra charge nor an unbound copy changes the hit.
+    const powered = weapon.store >= chargeCost;
+    if (powered) weapon.store -= chargeCost;
+    live.hp = Math.max(0, live.hp - (powered ? attackPowerOf(state, weapon.type) : unfedDamage));
   }
   for (const spell of fight.spells) {
     if (live.hp <= EPS || spell.store + EPS < COMBAT.spell.threshold) continue;

@@ -51,6 +51,7 @@ import { ARETE_HORIZON, bankableClaimOf, horizonReached } from "../engine/accumu
 import { syncWorldDiscoveries, worldOccupantAt, worldPieceOf } from "../engine/world";
 import { worldPieceName } from "./world-combat";
 import type { WeaponType, ResponseCurveId } from "../engine/types";
+import { WEAPONS } from "../engine/weapons";
 import { neighbors, hex, sameHex } from "../engine/hex";
 import { cellFrontier } from "../engine/footprint";
 import { preferredChordCue } from "../engine/chords";
@@ -115,7 +116,7 @@ import type { Category, ClassId, GameState, HabitColor, Hex, ModuleInstance, Mod
 import type { FocusFace, NotesFace } from "./focus";
 import { render, updateChordReadout } from "./render";
 import { FAMILY_WORD } from "./mutators";
-import { HISTORY_PAGE_ROWS, META, CATEGORY_WORD, SPECIAL_DRAFT_NAME, tierWord, WORLD_META } from "./meta";
+import { HISTORY_PAGE_ROWS, META, CATEGORY_WORD, SPECIAL_DRAFT_NAME, tierWord } from "./meta";
 import { browserChannels, type SignalChannels } from "./signals";
 import { suppressNextClick } from "./click";
 import { createInventoryState, type InventoryState } from "./inventory";
@@ -1769,7 +1770,7 @@ export class App {
   }
 
   buyHoneRankAction(type: WeaponType): void {
-    this.act(this.gameAction("buyHoneRank", () => buyHoneRank(this.state, type)), `${WORLD_META[type].name} attack power honed.`);
+    this.act(this.gameAction("buyHoneRank", () => buyHoneRank(this.state, type)), `${WEAPONS[type].name} attack power honed.`);
   }
 
   // The live drop preview over the second face (issue #426): hover state

@@ -7,7 +7,8 @@ import type { PlaythroughInspection } from "../engine/playthrough";
 import { boardPoint, HEX_RADIUS, hexPoints, moduleFace } from "./face";
 import { escapeHtml } from "./focus";
 import { formatNumber } from "./format";
-import { META, WORLD_META } from "./meta";
+import { META } from "./meta";
+import { WEAPONS } from "../engine/weapons";
 import { mutatorTileInner } from "./mutators";
 import { termTipHtml } from "./terms";
 import { worldPieceName, worldPieceRead } from "./world-combat";
@@ -44,7 +45,7 @@ export function historicalBoardHtml(inspection: PlaythroughInspection): string {
     const piece = pieces.find(({ copy }) => copy.pos && sameHex(copy.pos, pos));
     const weapon = state.world.weapons.find(item => item.pos && sameHex(item.pos, pos));
     const column = state.world.columns.find(item => item.pos && sameHex(item.pos, pos));
-    const name = piece ? worldPieceName(piece) : enemy ? (live?.discovered ? (live.hp <= 0 ? "CLEARED" : "name" in enemy ? enemy.name : "ENEMY") : "RESERVED") : weapon ? WORLD_META[weapon.type].short : column ? "COLUMN" : "OPEN";
+    const name = piece ? worldPieceName(piece) : enemy ? (live?.discovered ? (live.hp <= 0 ? "CLEARED" : "name" in enemy ? enemy.name : "ENEMY") : "RESERVED") : weapon ? WEAPONS[weapon.type].plate : column ? "COLUMN" : "OPEN";
     const value = piece ? worldPieceRead(state, piece).read : live?.discovered ? `HP ${formatNumber(live.hp)}` : weapon ? `⌁ ${formatNumber(weapon.store)}` : "";
     return cell(pos, `${name} ${value}`, `<rect class="dev-history-plate" x="-45" y="-45" width="90" height="90"/><text class="dev-history-note" text-anchor="middle" y="-20">${name}</text><text class="dev-history-note" text-anchor="middle" y="4">${escapeHtml(value)}</text><text class="dev-history-note" text-anchor="middle" y="30">${escapeHtml(cellNoteOf(pos))}</text>`, "world");
   }).join("");
@@ -59,6 +60,6 @@ export function historicalBoardHtml(inspection: PlaythroughInspection): string {
   const mutatorTray = state.mutators.filter(item => item.pos === null).map(item => `${item.rarity} ${item.family}`);
   const moduleTray = state.modules.filter(item => item.pos === null).map(item => `${META[item.type].name} Lv. ${item.level}`);
   const worldTray = currentWorld ? pieces.filter(({ copy }) => copy.pos === null).map(worldPieceName)
-    : [...state.world.columns.filter(item => item.pos === null).map(() => "Column"), ...state.world.weapons.filter(item => item.pos === null).map(item => WORLD_META[item.type].name)];
+    : [...state.world.columns.filter(item => item.pos === null).map(() => "Column"), ...state.world.weapons.filter(item => item.pos === null).map(item => WEAPONS[item.type].name)];
   return `<div class="dev-history-board">${layer("Mutators", mutators, state.cells, mutatorTray)}${layer("Modules", modules, state.cells, moduleTray)}${layer("World", world, positions, worldTray, termTipHtml("World layer", "World"))}</div>`;
 }

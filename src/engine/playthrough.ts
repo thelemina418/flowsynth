@@ -33,7 +33,7 @@ import { writeNote } from "./notes";
 import { SCENARIOS, scenarioOf } from "./scenarios";
 import { deserialize, serialize } from "./save";
 import { activeWallOf, columnCost, enemyDefeated, honeCostOf, worldCellReserved, worldEnemiesOf, worldOccupantAt, hasActiveWorldEnemy } from "./world";
-import type { GameState, Hex, ModuleInstance, ModuleType, ResponseCurveId, WeaponType } from "./types";
+import type { GameState, Hex, ModuleInstance, ModuleType, ResponseCurveId } from "./types";
 
 // The reproducible playthrough runner (issues #468/#469/#472, parent
 // #465): a recipe declares every behavior-affecting input — starting
@@ -761,7 +761,7 @@ export interface PlaythroughAreteSpent {
   readonly ceilings: number;
   readonly columns: number;
   readonly rowUnlocks: number; // historical artifacts only; live runs record zero
-  readonly hone: Record<WeaponType, number>;
+  readonly hone: GameState["world"]["hone"];
 }
 
 // The result. The kind line is the honest one: this walk rode the real
@@ -884,7 +884,7 @@ interface RunContext {
   snapshots: PlaythroughSnapshot[];
   openEvents: number[];
   claims: number[];
-  areteSpent: { entry: number; discounts: number; ceilings: number; columns: number; rowUnlocks: number; hone: Record<WeaponType, number> };
+  areteSpent: { entry: number; discounts: number; ceilings: number; columns: number; rowUnlocks: number; hone: GameState["world"]["hone"] };
   achievements: string[];
   discovered: string[];
   defeated: string[];
@@ -1504,6 +1504,7 @@ function buyColumnsWhileAffordable(ctx: RunContext, state: GameState): void {
 
 function buyHoneWhileAffordable(ctx: RunContext, state: GameState): void {
   for (const weapon of state.world.weapons) {
+    if (weapon.type !== "chargeBlade") continue;
     for (;;) {
       const price = honeCostOf(state, weapon.type);
       if (price === null || state.arete < price) {

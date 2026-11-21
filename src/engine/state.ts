@@ -1,5 +1,6 @@
 import { BALANCE, isOscillatorType } from "./constants";
 import { COMBAT, COMBAT_WALLS } from "./world-combat";
+import { isWeaponType, WEAPONS } from "./weapons";
 import { hex } from "./hex";
 import { ENCYCLOPEDIA_REVISION } from "./encyclopedia";
 import type { ChordDiscovery, GameState, ModuleInstance, ModuleType, MutatorFamily, MutatorInstance, Rarity, WeaponCopy, WeaponType, WorldColumn, WorldState } from "./types";
@@ -296,22 +297,20 @@ export function normalizeWorld(raw: unknown): WorldState {
       if (typeof weapon !== "object" || weapon === null) continue;
       const candidate = weapon as unknown as Record<string, unknown>;
       if (typeof candidate.id !== "string") continue;
-      // The first experiment ships one weapon type (issue #425); the
-      // per-type schema is the seam a second joins, so the load read is
-      // per-type already.
-      const type: WeaponType = "chargeBlade";
+      // Pre-profile saves had only the Blade; retain their lenient default.
+      const type = isWeaponType(candidate.type) ? candidate.type : "chargeBlade";
       const store = typeof candidate.store === "number" && Number.isFinite(candidate.store) && candidate.store > 0 ? candidate.store : 0;
       const cooldown = typeof candidate.cooldown === "number" && Number.isFinite(candidate.cooldown) && candidate.cooldown > 0 ? candidate.cooldown : 0;
       world.weapons.push({
         ...gearOf(candidate),
         type,
         store: Math.min(store, BALANCE.world.storageCap),
-        cooldown: Math.min(cooldown, COMBAT.bladeCadence),
+        cooldown: Math.min(cooldown, WEAPONS[type].cadence),
       });
     }
   }
   if (typeof shape.hone === "object" && shape.hone !== null) {
-    for (const key of Object.keys(world.hone) as WeaponType[]) {
+    for (const key of Object.keys(world.hone) as (keyof WorldState["hone"])[]) {
       const rank = (shape.hone as Record<string, unknown>)[key];
       if (typeof rank === "number" && Number.isFinite(rank) && rank > 0) {
         world.hone[key] = Math.min(Math.floor(rank), BALANCE.world.honeCosts.length);

@@ -27,7 +27,7 @@ import { TILE_APPS, type FocusApp } from "../engine/apps";
 import { poolOutstanding } from "../engine/trust";
 import { arcCardDue } from "../engine/arc";
 import { ACHIEVEMENTS, achievementName, type AchievementCategory, type AchievementContext, type AchievementDef } from "../engine/achievements";
-import { isModuleCandidate, type Category, type DeployedModule, type GameState, type Hex, type ModuleInstance, type ModuleType, type NamedChordTerm, type RateSnapshot, type ResponseCurveId, type SpecialDraftKind, type WeaponType } from "../engine/types";
+import { isModuleCandidate, type Category, type DeployedModule, type GameState, type Hex, type ModuleInstance, type ModuleType, type NamedChordTerm, type RateSnapshot, type ResponseCurveId, type SpecialDraftKind } from "../engine/types";
 import { DEV_BOARD_CAPACITIES, type App, type ChordHover, type ModalKind } from "./app";
 import {
   bindFocusSheet,
@@ -56,8 +56,9 @@ import { renderInventoryContent, openInventoryForDrag } from "./inventory";
 import { chargeGlow, chargeLeads } from "./leads";
 import { chordOverlay, chordMarkCovers, chipWidth, CHORD_HUES, type ChordMark } from "./chordlayer";
 import { updateSvg } from "./svg";
-import { APP_LABELS, CATEGORY_WORD, META, RARITY_LABEL, SHELF_DESCRIPTIONS, SPECIAL_DRAFT_NAME, WORLD_META, rarityMark, tierNumeral, tierWord } from "./meta";
+import { APP_LABELS, CATEGORY_WORD, META, RARITY_LABEL, SHELF_DESCRIPTIONS, SPECIAL_DRAFT_NAME, rarityMark, tierNumeral, tierWord } from "./meta";
 import { attackPowerOf, honeCostOf, honePowerAt, worldPiecesOf } from "../engine/world";
+import { WEAPONS } from "../engine/weapons";
 import { typeRarityOf } from "../engine/constants";
 import { formatBalance, formatInt, formatNumber, formatPracticeMinutes, chordTermLabel, practiceCountdown } from "./format";
 import { enemyPressureHtml, renderBoardLedger, renderGameInfoStrip, rateDetailsHtml, updateRateDetailsLive, deployedRosterKey, unlockedCount, wireSynthPicks, FEATS_SVG, LIBRARY_SVG, ARETE_SVG, CAPACITY_SVG, SCRAP_SVG } from "./ledger";
@@ -3367,15 +3368,12 @@ function catalogAreteFaceHtml(app: App): string {
   ${upgrade ? "" : `<p class="modal-note">Arete is spent between sessions — enter upgrade mode to buy.</p>`}`;
 }
 
-// The Hone row (issue #426, priority 6): one entry per weapon type, each
-// rank persistently raising the type's attack power for every copy — the
-// type's power owned, never a per-copy purchase. The authored ladder's end
-// lands the engraved word; weapons appear nowhere as purchases.
-function catalogHoneRowHtml(app: App, type: WeaponType): string {
+// Hone raises every Charge Blade copy's power, never a single copy's.
+function catalogHoneRowHtml(app: App, type: "chargeBlade"): string {
   const { state } = app;
   const rank = state.world.hone[type];
   const price = honeCostOf(state, type);
-  const name = WORLD_META[type].name;
+  const name = WEAPONS[type].name;
   const ladderLength = BALANCE.world.honeCosts.length;
   return `<article class="catalog-row">
     <div><h3 class="t-condensed">${termTipHtml("Hone")} <span class="mono">${rank}/${ladderLength}</span></h3><p class="t-note">Every ${termTipHtml(name as CatalogTerm)} · ${termTipHtml("memorized")}</p>${

@@ -1,15 +1,24 @@
 import { BALANCE } from "../engine/constants";
 import { neighbors } from "../engine/hex";
 import { cellNoteOf } from "../engine/lattice";
-import { attackPowerOf, enemyPenaltyOf, type WorldLift, type WorldPiece } from "../engine/world";
+import { enemyPenaltyOf, type WorldLift, type WorldPiece } from "../engine/world";
+import { attackPowerOf, WEAPONS, type WeaponType } from "../engine/weapons";
 import { adjacentBearersOf, bearerOf, COMBAT } from "../engine/world-combat";
 import type { GameState, WorldGear } from "../engine/types";
 import { formatNumber } from "./format";
-import { COLUMN_WORD, WORLD_META } from "./meta";
+import { COLUMN_WORD } from "./meta";
+
+export function weaponEffect(state: GameState, type: WeaponType): string {
+  const { cadence, chargeCost, unfedDamage } = WEAPONS[type];
+  const powered = `${attackPowerOf(state, type)} HP for ${chargeCost} charge`;
+  return unfedDamage > 0
+    ? `${unfedDamage} HP unfed · ${powered} · every ${cadence} s`
+    : `Charged hit · ${powered} · every ${cadence} s · no hit unfed`;
+}
 
 export function worldPieceName(piece: WorldPiece): string {
   switch (piece.kind) {
-    case "weapon": return WORLD_META[piece.copy.type].name;
+    case "weapon": return WEAPONS[piece.copy.type].name;
     case "column": return COLUMN_WORD;
     default: return COMBAT[piece.kind].name;
   }
@@ -29,7 +38,7 @@ export function enemyPenaltyFigure(state: GameState, key: string): string {
 }
 
 export function worldPieceRead(state: GameState, piece: WorldPiece, lift?: WorldLift): { read: string; stateWord: string; tip: string } {
-  const { creature, armor, spell, bladeCadence } = COMBAT;
+  const { creature, armor, spell } = COMBAT;
   const gearCopy = piece.kind === "weapon" || piece.kind === "spell" || piece.kind === "armor" ? piece.copy : null;
   const bearer = gearCopy ? bearerOf(state, gearCopy) : undefined;
   const gear = bearer ? "Bound" : gearCopy && adjacentBearersOf(state, gearCopy).length > 1 ? "Choose bearer" : "Unbound";
@@ -45,7 +54,7 @@ export function worldPieceRead(state: GameState, piece: WorldPiece, lift?: World
     case "spell":
       return { read: `⌁${Math.floor(piece.copy.store)}/${spell.threshold}`, stateWord: bearer && lift && !lift.bySpell.get(piece.copy.id) ? "Unfed" : gear, tip: gearTip(`Bursts for ${spell.damage} HP at full charge`) };
     case "weapon":
-      return { read: `⌁${Math.floor(piece.copy.store)}/${BALANCE.world.storageCap}`, stateWord: bearer && lift && !lift.byWeapon.get(piece.copy.id) ? "Unfed" : gear, tip: gearTip(`Charged hit · ${attackPowerOf(state, piece.copy.type)} HP / ${bladeCadence} s`) };
+      return { read: `⌁${Math.floor(piece.copy.store)}/${BALANCE.world.storageCap}`, stateWord: bearer && lift && !lift.byWeapon.get(piece.copy.id) ? "Unfed" : gear, tip: gearTip(weaponEffect(state, piece.copy.type)) };
     case "column": {
       const pos = piece.copy.pos;
       const host = pos && state.modules.some(({ pos: m }) => m?.q === pos.q && m.r === pos.r);

@@ -5,6 +5,7 @@ import { requireFinite } from "./numeric";
 import type { GameState, Hex, RateSnapshot, WeaponCopy, WeaponType, WorldColumn, WorldCombatCreature, WorldConduit, WorldEnemyState, WorldGear, WorldSpell } from "./types";
 import { activeWallOf, advanceCombat, combatBoundaryOf, COMBAT, discoverySecondsOf, worldEnemiesOf } from "./world-combat";
 export { activeWallOf, discoverySecondsOf, syncWorldDiscoveries, worldEnemiesOf } from "./world-combat";
+export { attackPowerOf, honePowerAt } from "./weapons";
 
 export function worldEnemyAt(state: GameState, pos: Hex) {
   return worldEnemiesOf(state).find((def) => sameHex(def.pos, pos));
@@ -75,14 +76,6 @@ export function worldBoundarySeconds(state: GameState, rate: number, snapshot: P
   return Math.min(threshold, combatBoundaryOf(state, lift.bySpell), Math.max(EPS, next));
 }
 
-export function honePowerAt(rank: number): number {
-  return COMBAT.bladePower[rank] ?? COMBAT.bladePower[0];
-}
-
-export function attackPowerOf(state: GameState, type: WeaponType): number {
-  return honePowerAt(state.world.hone[type]);
-}
-
 // Kept for historical balance tooling. The live purchase is retired.
 export function columnCost(owned: number): number {
   if (owned < 0) throw new Error("owned must be non-negative");
@@ -90,11 +83,11 @@ export function columnCost(owned: number): number {
 }
 
 export function honeCostOf(state: GameState, type: WeaponType): number | null {
-  return BALANCE.world.honeCosts[state.world.hone[type]] ?? null;
+  return type === "chargeBlade" ? BALANCE.world.honeCosts[state.world.hone.chargeBlade] ?? null : null;
 }
 
 export function advanceWorldCombat(state: GameState, spanSeconds: number): void {
-  advanceCombat(state, spanSeconds, attackPowerOf(state, "chargeBlade"));
+  advanceCombat(state, spanSeconds);
 }
 
 export interface WorldLift {

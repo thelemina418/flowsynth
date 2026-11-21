@@ -1227,6 +1227,7 @@ export function buyChargeColumn(_state: GameState): ActionResult {
 // Like every World purchase: irreversible, no refund action anywhere.
 export function buyHoneRank(state: GameState, type: WeaponType): ActionResult {
   if (state.mode !== "upgrade") return fail(ARETE_MODE_LOCK);
+  if (type !== "chargeBlade") return fail("Hone is a Charge Blade upgrade.");
   const price = honeCostOf(state, type);
   if (price === null) return fail("That weapon type is at its Hone ceiling.");
   if (state.arete < price) return fail("Not enough Arete.");
