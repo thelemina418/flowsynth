@@ -101,7 +101,13 @@ describe("distance-priced shared footprint", () => {
     const state = loaded.state!;
     expect(state.cells).toEqual(before.cells);
     expect(state.modules).toEqual(before.modules);
-    expect(state.world).toEqual(before.world);
+    expect(state.world).toMatchObject({
+      unlocked: true, starterColumnGranted: true, starterWeaponGranted: true, starterCombatGranted: true,
+      frontier: before.world.frontier, hone: before.world.hone, columns: before.world.columns, weapons: before.world.weapons,
+    });
+    expect(state.world.columns).toHaveLength(1);
+    expect(state.world.creatures).toHaveLength(1);
+    expect(state.world.creatures[0]!.pos).toBeNull();
     expect(state).toMatchObject({ arete: 7, nous: 456, cellsBought: 2, achievements: { "first-row": 160 } });
     const next = serialize(state, 1);
     expect(JSON.parse(next)).toMatchObject({ version: 15 });

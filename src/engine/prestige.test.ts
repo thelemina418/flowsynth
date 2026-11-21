@@ -8,6 +8,7 @@ import { serialize, deserialize } from "./save";
 import { hex } from "./hex";
 import { levelCost } from "./economy";
 import { eraStartGrantOf } from "./state";
+import { syncWorldDiscoveries } from "./world";
 import type { GameState } from "./types";
 
 // The prestige reset boundary (ADR-0039, issue #194): what a reset banks,
@@ -253,6 +254,7 @@ describe("the prestige action", () => {
   it("an unrepresentable claim grant refuses prestige without changing state or serialized save bytes", () => {
     const s = atHorizon();
     s.eraEarned = BALANCE.world.entryNous;
+    syncWorldDiscoveries(s); // make the constructed threshold a playable checkpoint
     const before = structuredClone(s);
     const savedAt = 1000;
     const saved = serialize(s, savedAt);
