@@ -25,7 +25,7 @@ import { frontier, seededRng } from "./capacity-calibration";
 import { BALANCE, CATEGORY_OF, isOscillatorType, RESPONSE_CURVES, responseCurveCandidateOf, SAVE_VERSION, SHELF_TYPES, WORLD_ENEMIES } from "./constants";
 import { isModuleCandidate } from "./types";
 import type { WorldEnemyDef } from "./constants";
-import { chargeLineCells } from "./playthrough-placement";
+import { chargeLineCells, starterChargeLineMove } from "./playthrough-placement";
 import { affordableLevels, syncRates, wholeNous, levelsCost } from "./economy";
 import { activeGoalOf, createGoal, rollGoalOccurrences } from "./goals";
 import { createHabit, selectHabit } from "./habits";
@@ -132,7 +132,7 @@ export const PUSHING_POLICY: PlaythroughPolicy = {
     "Never prestiges at the first eligibility: it pushes until the pending claim reaches its configured target, then banks that claim.",
     "After permanent World discovery, deploy granted or drafted occupants and buy Hone ranks cheapest-first while affordable; Columns are not sold.",
     "Each weapon deploys beside the fight: an owned cell next to a living discovered enemy, preferring a cell that also touches a placed Column, nearest the enemy first; while no enemy lives, the weapon waits in the tray. A weapon whose fight is won relocates to the next living discovered enemy, and a Column the fight left behind follows the charge line — relocation is free between sessions.",
-    "Each Column deploys on the charge line: an owned cell next to a deployed generator, preferring a cell that also touches a placed weapon.",
+    "Each Column deploys on the charge line: an owned cell next to a deployed generator, preferring a cell that also touches a placed weapon. If the first Column has no usable line, move a generator beside an eligible receiver.",
     "Ends every session at its planned target and writes a practice note.",
   ],
 };
@@ -1534,9 +1534,6 @@ function buyHoneWhileAffordable(ctx: RunContext, state: GameState): void {
   }
 }
 
-// The World placement leg (story 24): each weapon deploys beside the fight
-// — an owned cell adjacent to a living discovered enemy, preferring one
-// that also touches a placed Column, nearest the enemy first — and each
 // The World placement leg (story 24, the charge-line seat repaired by
 // issue #491): the weapon deploys beside the fight — an owned cell
 // adjacent to a living discovered enemy, preferring one that also touches
@@ -1569,16 +1566,6 @@ function placeWorldOccupants(ctx: RunContext, state: GameState): void {
   // seat with no receiving module copies nothing — and an Arete purchase
   // stranded on such a seat is exactly the progression trap this ticket
   // repairs in the placement rule, never in currency.
-  const chargeSnapshot = syncRates(state, true);
-  // The deployed modules indexed once: the seat reads run per candidate
-  // cell, and the board never changes inside this leg.
-  const moduleAt = new Map(state.modules.filter((entry) => entry.pos !== null).map((entry) => [seatKey(entry.pos!), entry]));
-  const receivedAt = (pos: Hex): number => {
-    const module = moduleAt.get(seatKey(pos));
-    return module ? (chargeSnapshot.chargeStrength.get(module.id) ?? 0) : 0;
-  };
-  const lineCells = new Set(chargeLineCells(state).map(seatKey));
-  const lineAt = (pos: Hex): boolean => lineCells.has(seatKey(pos));
   // The weapon seat's rank, one construction shared by the deploy leg and
   // the relocation read — the two can never disagree about preference.
   const weaponRank = (pos: Hex): readonly number[] => [
@@ -1633,6 +1620,27 @@ function placeWorldOccupants(ctx: RunContext, state: GameState): void {
       )) break;
     }
   };
+  // Give the weapon the first seat claim. If all remaining charge lines
+  // are blocked, route one to a free World seat with a real Module move.
+  weaponLeg();
+  if (state.world.columns.length > 0 && state.world.columns.every(column => column.pos === null)) {
+    const anchor = (living[0] ?? WORLD_ENEMIES[0]!).pos;
+    const seats = free().sort((a, b) => hexDistance(a, anchor) - hexDistance(b, anchor));
+    const move = starterChargeLineMove(state, seats);
+    if (move) {
+      const module = state.modules.find(entry => entry.id === move.id)!;
+      const result = placeModule(state, move.id, move.pos);
+      record(ctx, { kind: "placement", label: `Routed ${module.type} at ${move.pos.q},${move.pos.r}`, ...outcome(result) });
+    }
+  }
+  const chargeSnapshot = syncRates(state, true);
+  const moduleAt = new Map(state.modules.filter((entry) => entry.pos !== null).map((entry) => [seatKey(entry.pos!), entry]));
+  const receivedAt = (pos: Hex): number => {
+    const module = moduleAt.get(seatKey(pos));
+    return module ? (chargeSnapshot.chargeStrength.get(module.id) ?? 0) : 0;
+  };
+  const lineCells = new Set(chargeLineCells(state).map(seatKey));
+  const lineAt = (pos: Hex): boolean => lineCells.has(seatKey(pos));
   const columnLeg = (): void => {
     for (const column of state.world.columns) {
       if (column.pos !== null) continue;
@@ -1650,9 +1658,6 @@ function placeWorldOccupants(ctx: RunContext, state: GameState): void {
       )) break;
     }
   };
-  // The deployment order is shared: the weapon's fight first, then the
-  // charge line (issue #491's repair).
-  weaponLeg();
   columnLeg();
   relocateWorldOccupants(ctx, state, { living, free, lineAt, receivedAt, weaponRank });
 }

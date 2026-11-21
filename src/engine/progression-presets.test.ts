@@ -12,6 +12,9 @@ import {
 } from "./playthrough";
 import { SCENARIOS, scenarioOf } from "./scenarios";
 import { horizonReached } from "./accumulator";
+import { sameHex } from "./hex";
+import { chargeLineCells } from "./playthrough-placement";
+import { worldCellReserved } from "./world";
 
 // The progression presets (issue #471, parent #465): three scenario
 // checkpoints grown from declared playthrough recipes — the approaching
@@ -120,7 +123,10 @@ describe("the walked presets", () => {
     expect(living.length).toBeGreaterThanOrEqual(1);
     expect(state.world.weapons.some((weapon) => weapon.pos === null)).toBe(true);
     expect(state.catalogEntryOwned).toBe(false);
-    expect(state.world.columns.some((column) => column.pos !== null)).toBe(true);
+    const column = state.world.columns.find((column) => column.pos !== null);
+    expect(column).toBeDefined();
+    expect(worldCellReserved(state, column!.pos!)).toBe(false);
+    expect(chargeLineCells(state).some(pos => sameHex(pos, column!.pos!))).toBe(true);
     expect(state.arete).toBeLessThanOrEqual(preset.record.claims[0]!);
     scenarioOf("world-enemy")!.assert(state, 0);
   });
