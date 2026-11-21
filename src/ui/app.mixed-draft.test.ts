@@ -54,14 +54,14 @@ it.each([1280, 390])("mixed drafts route repeated World choices through inventor
   expect(app.state.world.weapons).toHaveLength(2);
 });
 
-it("Blade draft retains its effect and the section Charge reference returns without consuming the offer", () => {
+it("Blade draft explains the Sentinel's charged strike and the Charge reference does not consume the offer", () => {
   const app = fixture.boot();
   app.state.world.unlocked = true;
   const offer = generateOffer(app.state, stubRng([...Array(9).fill(0.5), 0, 0.5]));
   app.state.bankedRolls.push(offer);
   app.openModal("forge");
   const effect = document.getElementById(`forge-effect-${offer.candidates[2].id}`)!;
-  expect(effect.textContent).toBe("Store charge → strike enemies");
+  expect(effect.textContent).toBe("Spend charge → armed Sentinel strikes");
   expect(effect.querySelector('[aria-label="charge — what it means"]')).toBeNull();
   const help = document.getElementById("forge-about-charge")!;
   help.focus(); help.click();
