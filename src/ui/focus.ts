@@ -40,7 +40,10 @@ import {
   sessionRecordsNewestFirst,
 } from "../engine/records";
 import { activeHabit, HABIT_COLORS } from "../engine/habits";
-import { CLASSES, nodeAvailable, pairDef, pairOf, practiceRollThreshold, rankOf } from "../engine/classes";
+import { availableClasses, nodeAvailable, pairDef, pairOf, practiceRollThreshold, rankOf, weaponChoicesOf } from "../engine/classes";
+import { BALANCE } from "../engine/constants";
+import { FORGE_WEAPONS, WEAPONS } from "../engine/weapons";
+import { weaponEffect } from "./world-combat";
 import type { ClassId } from "../engine/types";
 import { isInFlowNote } from "../engine/notes";
 import { achievementName } from "../engine/achievements";
@@ -192,6 +195,8 @@ export function focusSheetKey(app: App): string {
     ui.developHabitId,
     ui.editingHabitId,
     state.activeHabitId,
+    state.world.unlocked,
+    state.mode === "upgrade" ? state.habits.map(weaponChoicesOf) : null,
     state.habits.map((h) => `${h.archived ? "·" : ""}${h.name}:${h.color}`).join("|"),
     // The class layer (issue #423): the wear and each pair's level, free
     // points, and allocation hash into the key, so tree moves rebuild the
@@ -332,7 +337,7 @@ function planPreparationHtml(app: App, habit: Habit | undefined): string {
     ${classSummaryHtml(app, habit, { developAction: false })}
     ${upgrade ? `<div class="folio-rows focus-actions"><div class="folio-row">
       <button class="focus-action" data-habit-edit="${habit.id}">Edit habit</button>
-      <button class="focus-action" data-habit-develop="${habit.id}">Develop</button>
+      <button class="focus-action" data-habit-develop="${habit.id}">${habit.classId === "blacksmith" ? "Change class" : "Develop"}</button>
     </div></div>` : ""}
   </div>`;
 }
@@ -392,9 +397,14 @@ export function practiceMeterLine(pair: ClassPairState): string {
 // no-drift rule, issue #423).
 function classMeterRead(habit: Habit): { threshold: number; fill: string; line: string } {
   const pair = pairOf(habit);
-  const threshold = practiceRollThreshold(pair, pair.rollMeter.earned);
+  const smith = habit.classId === "blacksmith";
+  const threshold = smith ? BALANCE.blacksmithForgeSeconds : practiceRollThreshold(pair, pair.rollMeter.earned);
   const fill = `${(Math.min(1, Math.max(0, pair.rollMeter.progress / threshold)) * 100).toFixed(1)}%`;
-  return { threshold, fill, line: practiceMeterLine(pair) };
+  const banked = smith ? weaponChoicesOf(habit) : 0;
+  const line = smith
+    ? `${formatCountdown(pair.rollMeter.progress)} / ${formatCountdown(threshold)} credited${banked ? ` · ${banked} banked` : ""}`
+    : practiceMeterLine(pair);
+  return { threshold, fill, line };
 }
 
 // The pair's next-level read (issue #446): the XP countdown expressed in
@@ -416,13 +426,25 @@ function classXpRead(habit: Habit): string {
 // in the compact summary; the live patcher fills both the track and line.
 function classMeterRowHtml(habit: Habit): string {
   const { threshold, fill, line } = classMeterRead(habit);
+  const smith = habit.classId === "blacksmith";
+  const label = smith ? "Next weapon choice" : "Next module roll";
   return `<div class="folio-row class-meter-row">
-    <span class="folio-key">${termTipHtml("Next module roll")}</span>
+    <span class="folio-key">${smith ? `${label} ${tipHtml(`weapon-meter-${habit.id}`, "What fills the weapon meter?", "Credited flow with this habit and class selected")}` : termTipHtml("Next module roll")}</span>
     <span class="folio-main class-meter">
-      <span class="class-meter-track" data-live="class-meter-track" data-habit="${habit.id}" role="progressbar" aria-label="Next module roll" aria-valuemin="0" aria-valuemax="${threshold}" aria-valuenow="${pairOf(habit).rollMeter.progress}" aria-valuetext="${escapeHtml(line)}"><i data-live="class-meter-pip" style="width:${fill}"></i></span>
+      <span class="class-meter-track" data-live="class-meter-track" data-habit="${habit.id}" role="progressbar" aria-label="${label}" aria-valuemin="0" aria-valuemax="${threshold}" aria-valuenow="${pairOf(habit).rollMeter.progress}" aria-valuetext="${escapeHtml(line)}"><i data-live="class-meter-pip" style="width:${fill}"></i></span>
       <small class="mono" data-live="class-meter-line" data-habit="${habit.id}">${escapeHtml(line)}</small>
     </span>
   </div>`;
+}
+
+function weaponChoiceHtml(app: App, habit: Habit): string {
+  const { state } = app;
+  if (state.mode !== "upgrade" || habit.id !== state.activeHabitId || !weaponChoicesOf(habit)) return "";
+  return `<div class="weapon-choices" role="group" aria-label="Banked weapon choice">${FORGE_WEAPONS.map((type) => `
+    <div class="folio-row weapon-choice">
+      <span>${weaponEffect(state, type)}</span>
+      <button type="button" class="focus-action" data-forge-weapon="${type}" data-habit="${habit.id}">Forge ${WEAPONS[type].name}</button>
+    </div>`).join("")}</div>`;
 }
 
 // The compact class summary (issue #446, ADR-0075): the selected habit's
@@ -439,11 +461,13 @@ function classSummaryHtml(app: App, habit: Habit, options: { developAction?: boo
   const upgrade = app.state.mode === "upgrade";
   const def = pairDef(habit);
   const pair = pairOf(habit);
+  const smith = def.id === "blacksmith";
   return `<div class="habit-class">
-    <div class="stat-row"><span class="mono">${termTipHtml(def.id === "engineer" ? "Engineer" : "Habit class", def.name)} · Level ${pair.level} · ${pair.points} ${termTipHtml("tree point", pair.points === 1 ? "tree point" : "tree points")} free</span></div>
-    <div class="stat-row"><span>Next level</span><span class="mono" data-live="class-xp-line" data-habit="${habit.id}">${escapeHtml(classXpRead(habit))}</span></div>
+    <div class="stat-row"><span class="mono">${smith ? def.name : termTipHtml("Engineer")} · Level ${pair.level}${smith ? "" : ` · ${pair.points} ${termTipHtml("tree point", pair.points === 1 ? "tree point" : "tree points")} free`}</span></div>
+    ${smith ? "" : `<div class="stat-row"><span>Next level</span><span class="mono" data-live="class-xp-line" data-habit="${habit.id}">${escapeHtml(classXpRead(habit))}</span></div>`}
     ${classMeterRowHtml(habit)}
-    ${upgrade && options.developAction !== false ? `<div class="folio-row"><button class="focus-action" data-habit-develop="${habit.id}">Develop</button></div>` : ""}
+    ${smith ? weaponChoiceHtml(app, habit) : ""}
+    ${upgrade && options.developAction !== false ? `<div class="folio-row"><button class="focus-action" data-habit-develop="${habit.id}">${smith ? "Change class" : "Develop"}</button></div>` : ""}
   </div>`;
 }
 
@@ -459,10 +483,11 @@ function habitDevelopHtml(app: App, habit: Habit): string {
   const upgrade = state.mode === "upgrade";
   const def = pairDef(habit);
   const pair = pairOf(habit);
-  const chips = CLASSES.map((cls) => {
+  const classes = availableClasses(state);
+  const chips = classes.map((cls) => {
     const selected = habit.classId === cls.id;
     return upgrade
-      ? `<button class="class-chip${selected ? " st-selected" : ""}" data-class-pick="${cls.id}" data-habit="${habit.id}" aria-pressed="${selected}"${selected ? " disabled" : ""}>${cls.name}</button>`
+      ? `<button class="class-chip${selected ? " st-selected" : ""}" data-class-pick="${cls.id}" data-habit="${habit.id}" aria-pressed="${selected}">${cls.name}</button>`
       : `<span class="class-chip${selected ? " st-selected" : ""}">${cls.name}</span>`;
   }).join("");
   const nodeTerms: Record<string, CatalogTerm> = { governor: "Governor", reed: "Reed", "punch-card": "Punch card" };
@@ -508,8 +533,8 @@ function habitDevelopHtml(app: App, habit: Habit): string {
     .join("");
   return `<button class="focus-back" id="habit-develop-back">← Summary</button>
     <div class="habit-class">
-    ${CLASSES.length > 1 ? `<div class="class-chips" role="group" aria-label="Class">${chips}</div>` : ""}
-    <div class="class-tree">
+    ${classes.length > 1 ? `<div class="class-chips" role="group" aria-label="Class">${chips}</div>` : ""}
+    ${def.id === "blacksmith" ? "" : `<div class="class-tree">
       <span class="eyebrow">TREE</span>
       <p class="small muted mono">${spentTotal} spent · ${termTipHtml("Respec", "respec")} is free</p>
       <div class="tree-nodes">${rows}</div>
@@ -517,7 +542,7 @@ function habitDevelopHtml(app: App, habit: Habit): string {
         ${upgrade ? `<button class="quiet small" data-class-respec="${habit.id}" ${spentTotal > 0 ? "" : "disabled"} title="Returns every spent point — experience and level stay">Respec</button>` : ""}
         ${upgrade ? `<span class="class-presets" role="group" aria-label="Presets">${presets}</span>` : ""}
       </div>
-    </div>
+    </div>`}
   </div>`;
 }
 
@@ -1266,7 +1291,19 @@ export function bindFocusSheet(app: App, scope: HTMLElement): void {
     app.listen(button, "click", () => {
       const classId = button.getAttribute("data-class-pick");
       const habitId = button.getAttribute("data-habit");
-      if (classId && habitId) app.selectHabitClassAction(habitId, classId as ClassId);
+      if (!classId || !habitId) return;
+      app.selectHabitClassAction(habitId, classId as ClassId);
+      scope.querySelector<HTMLElement>(`[data-class-pick="${classId}"]`)?.focus({ preventScroll: true });
+    });
+  });
+  scope.querySelectorAll<HTMLButtonElement>("[data-forge-weapon]").forEach((button) => {
+    app.listen(button, "click", () => {
+      const { forgeWeapon, habit } = button.dataset;
+      const type = FORGE_WEAPONS.find((value) => value === forgeWeapon);
+      if (!type || !habit) return;
+      app.claimForgedWeaponAction(habit, type);
+      (scope.querySelector<HTMLElement>(`[data-forge-weapon="${type}"]`) ??
+        scope.querySelector<HTMLElement>("[data-habit-develop]"))?.focus({ preventScroll: true });
     });
   });
   scope.querySelectorAll<HTMLElement>("[data-class-allocate]").forEach((button) => {

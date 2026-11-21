@@ -141,19 +141,13 @@ function firstRollRigged(state: GameState): boolean {
   return state.forge.earned + totalPracticeRollsEarned(state) === 1;
 }
 
-// Every practice-minted roll ever banked from any habit–class pair (issue
-// #423): the retired flow meter's earned count fed this same figure, and
-// the feats that read rolls taken still read the total, never one pair's.
+// Only Engineer banks module rolls. Blacksmith fills are not draft rolls
+// and don't advance the first-roll rig or the rolls-taken feats.
 export function totalPracticeRollsEarned(state: GameState): number {
   let total = 0;
   for (const habit of state.habits) {
-    const classes = habit.classes;
-    if (!classes || typeof classes !== "object") continue;
-    for (const pair of Object.values(classes)) {
-      if (pair && typeof pair === "object" && Number.isFinite(pair.rollMeter?.earned)) {
-        total += pair.rollMeter.earned;
-      }
-    }
+    const earned = habit.classes?.engineer?.rollMeter?.earned;
+    if (typeof earned === "number" && Number.isFinite(earned)) total += earned;
   }
   return total;
 }

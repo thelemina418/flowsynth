@@ -6,6 +6,7 @@ import { resolveHonestyReport } from "../engine/trust";
 import * as actions from "../engine/actions";
 import type { ActionResult } from "../engine/actions";
 import type { GameState, Hex } from "../engine/types";
+import { FORGE_WEAPONS } from "../engine/weapons";
 
 // A declared data-only vocabulary: no method lookup, code evaluation, or RNG input.
 // Each argument is checked before the engine sees it; the engine owns prerequisites.
@@ -65,7 +66,8 @@ export const GAME_COMMANDS: Readonly<Record<string, Command>> = {
   editGoal: command([text, number, choice("once", "daily", "weekly")], (s, id, minutes, schedule) => goals.editGoal(s, id, { minutes, schedule }, Date.now())),
   deleteGoal: command([text], goals.deleteGoal),
   retainGoalChoice: command([text], goals.retainGoalChoice),
-  selectHabitClass: command([text, choice("engineer")], classes.selectHabitClass),
+  selectHabitClass: command([text, choice(...classes.CLASS_IDS)], classes.selectHabitClass),
+  claimForgedWeapon: command([text, choice(...FORGE_WEAPONS)], classes.claimForgedWeapon),
   allocateClassNode: command([text, text], classes.allocateClassNode),
   respecClassTree: command([text], classes.respecClassTree),
   applyClassPreset: command([text, text], classes.applyClassPreset),

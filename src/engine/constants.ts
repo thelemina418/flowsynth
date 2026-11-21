@@ -210,6 +210,7 @@ export interface Balance {
   // the class level cap. Provisional tuning throughout — exact thresholds
   // are hypothesis knobs pending simulation evidence.
   engineerLevelThresholds: readonly number[];
+  blacksmithForgeSeconds: number;
   // The Governor node's bounded cadence discount: each owned rank cuts the
   // flat practice-roll cadence block by this share (the opening fill
   // never moves). Two ranks → the flat block's floor is 84% of authored.
@@ -480,6 +481,7 @@ export const BALANCE: Balance = {
   // Two, six, fourteen, twenty-eight, fifty, eighty credited hours with
   // the pair selected: six levels, six tree points. Provisional tuning.
   engineerLevelThresholds: [2 * 3600, 6 * 3600, 14 * 3600, 28 * 3600, 50 * 3600, 80 * 3600],
+  blacksmithForgeSeconds: 600,
   engineerCadenceDiscountPerRank: 0.08,
   engineerTierChancePerRank: 0.15,
   engineerGuaranteedWeaveNth: 6,

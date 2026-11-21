@@ -530,6 +530,11 @@ function readSave(text: string, rng: Rng, recovery: boolean): LoadResult {
     world.unlocked = world.frontier > 0 || world.starterWeaponGranted ||
       world.columns.length > 0 || world.weapons.length > 0 || world.hone.chargeBlade > 0;
   }
+  if (!world.unlocked) {
+    for (const habit of merged.habits) {
+      if (habit.classId === "blacksmith") habit.classId = "engineer";
+    }
+  }
   if (world.unlocked) {
     if (!world.starterColumnGranted) {
       world.columns.push(createWorldColumn(merged));

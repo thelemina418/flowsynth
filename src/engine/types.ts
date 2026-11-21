@@ -308,7 +308,7 @@ export interface Meter {
 // player or the habit across classes. `engineer` is the launch class; the
 // id union and the per-pair record are the whole schema a second class
 // joins — a new key under `Habit.classes`, no reshaping of saves.
-export type ClassId = "engineer";
+export type ClassId = "engineer" | "blacksmith";
 
 // One habit–class pair's progression. Experience accrues only from credited
 // flow time with this pair selected (live advance and honesty-credited
@@ -327,9 +327,10 @@ export interface ClassPairState {
   // Allocated ranks by node id. Ordinary points: respec and presets
   // rewrite them freely, never experience or level.
   spent: Record<string, number>;
-  // The pair's practice-roll meter: progress in credited seconds, earned
-  // = module rolls minted. Freezes while another pair is selected.
+  // The pair's one reward meter: credited seconds and lifetime fills.
+  // Engineer fills mint module rolls; Blacksmith fills bank weapon choices.
   rollMeter: Meter;
+  weaponClaims?: number;
 }
 
 // The starter shelf (ADR-0013, amended by ADR-0022): one-time catalog
@@ -548,7 +549,7 @@ export interface Habit {
   // allocations, and partial roll progress all freeze in place. Only the
   // selected pair accrues. Lenient-defaulted to a fresh engineer pair at
   // load; unknown keys drop.
-  classes: Record<ClassId, ClassPairState>;
+  classes: { engineer: ClassPairState; blacksmith?: ClassPairState };
 }
 
 export interface PracticeEntry {

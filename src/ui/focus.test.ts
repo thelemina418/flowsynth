@@ -4,7 +4,7 @@ import type { App } from "./app";
 import { createHabit, selectHabit, addPracticeLog, archiveHabit } from "../engine/habits";
 import { createGoal, accrueGoalProgress, editGoal, retainGoalChoice } from "../engine/goals";
 import type { Goal } from "../engine/types";
-import { endSession, pauseSession, startSession } from "../engine/actions";
+import { endSession, pauseSession, prestige, startSession } from "../engine/actions";
 import { advance } from "../engine/advance";
 import { deserialize, serialize } from "../engine/save";
 import { goalMeterOf, GOAL_METER_SEGMENTS } from "./focus";
@@ -37,6 +37,43 @@ function openHabitDetail(habitId: string): HTMLElement {
   document.querySelector<HTMLButtonElement>(`[data-drill-habit="${habitId}"]`)!.click();
   return sheet();
 }
+
+it("reveals Blacksmith after discovery, silently banks during flow and offers one informed choice in Focus", () => {
+  const habit = createHabit(app.state, "Piano").habit!;
+  selectHabit(app.state, habit.id);
+  const click = (selector: string) => sheet().querySelector<HTMLButtonElement>(selector)!.click();
+  openFace("plan");
+  click("[data-habit-develop]");
+  expect(sheet().querySelector('[data-class-pick="blacksmith"]')).toBeNull();
+  app.state.eraEarned = 20_000_000;
+  expect(prestige(app.state).ok).toBe(true);
+  app.render();
+  click('[data-class-pick="blacksmith"]');
+  expect(document.activeElement).toBe(sheet().querySelector('[data-class-pick="blacksmith"][aria-pressed="true"]'));
+  click("#habit-develop-back");
+  expect(sheet().textContent).toContain("Blacksmith · Level 1");
+  expect(startSession(app.state, null).ok).toBe(true);
+  openFace("plan");
+  const meter = () => sheet().querySelector('[role="progressbar"][aria-label="Next weapon choice"]');
+  const before = meter();
+  expect(before).not.toBeNull();
+  expect(advance(app.state, 600, () => 0.2).fault).toBeUndefined();
+  app.render();
+  expect(app.state.mode).toBe("flow");
+  expect(app.ui.modal).toBeNull();
+  expect(meter()).toBe(before);
+  expect(meter()?.getAttribute("aria-valuetext")).toContain("1 banked");
+  expect(document.querySelectorAll('[aria-label="Next weapon choice"]')).toHaveLength(1);
+  expect(document.querySelector("[data-forge-weapon]")).toBeNull();
+  expect(endSession(app.state).ok).toBe(true);
+  openFace("plan");
+  expect(sheet().textContent).toContain("5 HP unfed · 8 HP for 1 charge · every 4 s");
+  expect(sheet().textContent).toContain("12 HP unfed · 24 HP for 2 charge · every 8 s");
+  click('[data-forge-weapon="maul"]');
+  expect(document.activeElement).toBe(sheet().querySelector('[data-habit-develop]'));
+  expect(sheet().querySelector("[data-forge-weapon]")).toBeNull();
+  expect(app.state.world.weapons.map(({ type, pos }) => [type, pos])).toEqual([["chargeBlade", null], ["maul", null]]);
+});
 
 describe("the faces in the Focus frame", () => {
   it("each facetab selects its face; the frame is one clipped plate under the clock", () => {

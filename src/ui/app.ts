@@ -51,7 +51,7 @@ import { ARETE_HORIZON, bankableClaimOf, horizonReached } from "../engine/accumu
 import { syncWorldDiscoveries, worldOccupantAt, worldPieceOf } from "../engine/world";
 import { worldPieceName } from "./world-combat";
 import type { WeaponType, ResponseCurveId } from "../engine/types";
-import { WEAPONS } from "../engine/weapons";
+import { WEAPONS, type ForgeWeapon } from "../engine/weapons";
 import { neighbors, hex, sameHex } from "../engine/hex";
 import { cellFrontier } from "../engine/footprint";
 import { preferredChordCue } from "../engine/chords";
@@ -108,7 +108,7 @@ import {
   selectHabit,
   setHabitColor,
 } from "../engine/habits";
-import { allocateClassNode, applyClassPreset, classDefOf, respecClassTree, selectHabitClass } from "../engine/classes";
+import { allocateClassNode, applyClassPreset, claimForgedWeapon, classDefOf, respecClassTree, selectHabitClass } from "../engine/classes";
 import { createGoal, deleteGoal, editGoal, retainGoalChoice, rollGoalOccurrences } from "../engine/goals";
 import { allocatedDevScenarioRates, createDevScenario, type DevBoardResult } from "../engine/dev-scenario";
 import type { StressProgress, StressRow } from "../engine/allocation-stress";
@@ -2492,6 +2492,10 @@ export class App {
   selectHabitClassAction(habitId: string, classId: ClassId): void {
     const def = classDefOf(classId);
     this.habitAction(() => selectHabitClass(this.state, habitId, classId), `${def.name} selected.`);
+  }
+
+  claimForgedWeaponAction(habitId: string, type: ForgeWeapon): void {
+    this.habitAction(() => claimForgedWeapon(this.state, habitId, type), `${WEAPONS[type].name} added to World tray.`);
   }
 
   allocateClassNodeAction(habitId: string, nodeId: string): void {

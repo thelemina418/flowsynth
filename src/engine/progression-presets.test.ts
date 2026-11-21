@@ -18,6 +18,7 @@ import { placeModule, placeWorldOccupant, startSession } from "./actions";
 import { CATEGORY_OF } from "./constants";
 import { chargeLineCells } from "./playthrough-placement";
 import { worldCellReserved } from "./world";
+import { walkBlacksmithShale } from "./blacksmith-walk";
 
 // The progression presets (issue #471, parent #465): three scenario
 // checkpoints grown from declared playthrough recipes — the approaching
@@ -151,6 +152,17 @@ describe("the walked presets", () => {
     expect(state.world.enemies.shale?.hp).toBe(0);
     expect(sentinel!.hp).toBeGreaterThan(0);
     expect(state.world.enemies.basalt?.discovered).toBe(false); // own threshold still unmet
+  });
+
+  it("forges a Maul from ten credited minutes and clears Shale without charge where Striker and the starter Blade fall", { timeout: 60_000 }, () => {
+    const result = walkBlacksmithShale(playthroughCheckpointPreset("world-enemy-active").state);
+    expect(result).toMatchObject({ credited: 600, banked: 1 });
+    const [blade, striker, maul] = result.branches;
+    expect(blade?.outcome).toMatchObject({ recovering: true, store: 0 });
+    expect(striker?.firstBeat.wallHP).toBe(43);
+    expect(striker?.outcome).toMatchObject({ recovering: true, store: 0 });
+    expect(maul?.firstBeat.wallHP).toBe(48);
+    expect(maul?.outcome).toMatchObject({ wallHP: 0, sentinelHP: 3, store: 0 });
   });
 
   it("carries the recipe and origin provenance on each preset descriptor", () => {
