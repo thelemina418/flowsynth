@@ -11,6 +11,7 @@ import { startSession, endSession } from "../engine/actions";
 import { advance } from "../engine/advance";
 import { give } from "../engine/fixtures";
 import { hex, sameHex } from "../engine/hex";
+import { syncWorldDiscoveries } from "../engine/world";
 import { formatFixed, formatInt, formatNumber } from "./format";
 import { createAppFixture, clickCell, setAppWidth } from "./testing/app-fixture";
 import { syncGlowLens } from "./zoom";
@@ -33,28 +34,18 @@ function stubChannels() {
 }
 
 describe("the board ledger (§7, issue #270)", () => {
-  it("ledger explains pre-unlock pressure with multiplicative sources and live deepening", () => {
-    app.state.world.enemies.w0 = { discovered: true, hp: 100 };
-    app.state.world.enemies.w1 = { discovered: true, hp: 100 };
+  it("explains one actual pressure in the Ledger before discovery without revealing the map", () => {
+    app.state.eraEarned = 2e15;
+    syncWorldDiscoveries(app.state);
     app.render();
     document.getElementById("ledger-overview")!.click();
-    const pressure = () => document.getElementById("ledger-pressure")!.textContent!;
-    // Two 20% sources leave 0.8 × 0.8 = 64%, not 60%.
-    expect(pressure()).toContain("36.0% production reduction");
-    expect(pressure()).toContain("−20.0% · ×0.800 remaining");
-    expect(pressure()).toContain("Enemy 1");
-    expect(pressure()).toContain("Enemy 2");
-    expect(pressure()).toContain("Pressure deepens with era progress");
-    expect(pressure()).toContain("positive Arete unlocks World");
-    expect(document.querySelector("#ledger-pressure button")).toBeNull();
-    app.state.eraEarned = 1e15;
-    app.render();
-    expect(pressure()).toContain("87.8% production reduction");
-    expect(pressure()).toContain("−65.0% · ×0.350 remaining");
-    app.state.world.enemies.w0.hp = 0;
-    app.render();
-    expect(pressure()).not.toContain("Enemy 1");
-    expect(pressure()).toContain("65.0% production reduction");
+    const pressure = document.getElementById("ledger-pressure")!;
+    expect(pressure.textContent).toContain("One enemy");
+    expect(pressure.textContent).toContain("−20% ν");
+    expect(pressure.textContent).toContain("Bank Arete at prestige to discover World");
+    expect(pressure.textContent).not.toMatch(/Shale|Basalt|−35%/);
+    expect(pressure.querySelector("button")).toBeNull();
+    expect(document.querySelector('[data-legend-layer="world"], [data-world-cell]')).toBeNull();
   });
 
   it("ambient reset on desktop and phone explains eligibility and retains zero-yield confirmation", () => {

@@ -7,6 +7,7 @@ import type { GameState } from "./types";
 
 function oldSave(state: GameState): string {
   const file = JSON.parse(serialize(state, 5_000));
+  file.version = 14;
   delete file.state.world.unlocked;
   delete file.state.world.starterColumnGranted;
   return JSON.stringify(file);
@@ -62,6 +63,10 @@ it.each(["frontier", "starter", "collection", "hone"] as const)("translates old 
   expect(loaded.world.starterColumnGranted).toBe(true);
   expect(loaded.world.columns).toHaveLength(s.world.columns.length + 1);
   expect(loaded.world.columns.at(-1)!.pos).toBeNull();
+  expect(loaded.world.creatures).toHaveLength(1);
+  expect(loaded.world.armor).toHaveLength(1);
+  expect(loaded.world.spells).toHaveLength(1);
+  expect(loaded.world.conduits).toHaveLength(1);
   if (proof === "collection") {
     expect(loaded.world.columns[0]).toEqual(s.world.columns[0]);
     expect(loaded.world.weapons).toEqual(s.world.weapons);

@@ -3,7 +3,7 @@ import { SHORTCUTS } from "./shortcuts";
 // from the engine; only preparation exposes configuration controls.
 import { columnLiftsOf, enemyStateOf, worldCellReserved, worldEnemiesOf, worldEnemyAt, worldOccupantAt, worldPieceOf, worldPiecesOf, type WorldLift, type WorldPiece } from "../engine/world";
 import { neighbors, sameHex } from "../engine/hex";
-import type { CombatWall } from "../engine/world-combat";
+import { COMBAT, type CombatWall } from "../engine/world-combat";
 import { cellNoteOf } from "../engine/lattice";
 import { displayedRates } from "../engine/economy";
 import type { GameState, Hex, RateSnapshot } from "../engine/types";
@@ -189,8 +189,12 @@ function wallEngraving(state: GameState, wall: CombatWall, large: boolean) {
   return { inner: combatEngraving(wall.name, mark, read, pressure, large), label: `${wall.name} · ${read} · ${pressure}` };
 }
 
+function wallMechanic(wall: CombatWall): string {
+  return `Hits for ${wall.damage} HP / ${COMBAT.enemyCadence} s · heals ${wall.regeneration} HP/s`;
+}
+
 function worldGridHit(pos: Hex, label: string): string {
-  return `<polygon class="world-hit" tabindex="0" role="button" aria-label="${label}" data-world-cell="${pos.q},${pos.r}" points="${hexPoints(HEX_RADIUS)}" fill="none" stroke="none"/>`;
+  return `<polygon class="world-hit" tabindex="0" role="button" aria-label="${label} · ${cellNoteOf(pos)}" data-world-cell="${pos.q},${pos.r}" points="${hexPoints(HEX_RADIUS)}" fill="none" stroke="none"/>`;
 }
 
 /* ── The grid decorations ───────────────────────────── */
@@ -254,7 +258,7 @@ export function worldAskHtml(app: App, pos: Hex, snapshot: RateSnapshot): string
   const occupant = worldOccupantAt(state, pos);
   let read = `Open World cell · ${cellNoteOf(pos)}`;
   if (def && worldCellReserved(state, pos)) {
-    read = enemyStateOf(state, def.key).discovered ? wallEngraving(state, def, false).label : "Reserved cell";
+    read = enemyStateOf(state, def.key).discovered ? wallMechanic(def) : "Reserved cell";
   } else if (occupant) {
     const item = worldPieceOf(state, occupant.id)!;
     const facts = worldPieceRead(state, item, columnLiftsOf(state, snapshot));
@@ -595,7 +599,7 @@ export function worldChassisHtml(state: GameState, pos: Hex, snapshot: RateSnaps
   if (def && reserved) {
     if (!enemyStateOf(state, def.key).discovered) return { chassis: wrap(plate("reserved") + `<text class="world-word" y="-7" text-anchor="middle">RESERVED</text>`), tip: "Reserved for a future wall" };
     const { inner } = wallEngraving(state, def, true);
-    return { chassis: wrap(inner), tip: `Heals ${def.regeneration} HP/s in World time` };
+    return { chassis: wrap(inner), tip: wallMechanic(def) };
   }
   const occupant = worldOccupantAt(state, pos);
   if (!occupant) return def

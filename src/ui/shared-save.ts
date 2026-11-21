@@ -167,7 +167,7 @@ export class SharedSave {
         replace(PRE_V15_ORIGINAL_SAVE_KEY, raw, this.storage.getItem(PRE_V15_ORIGINAL_SAVE_KEY));
         if (earlier === null) replace(ORIGINAL_SAVE_KEY, raw, earlier);
       } else {
-        if (earlier !== null && earlier !== raw && archive === null) replace(PRE_V13_ORIGINAL_SAVE_KEY, earlier, archive);
+        if (earlier !== null && earlier !== raw) replace(PRE_V13_ORIGINAL_SAVE_KEY, earlier, archive);
         replace(ORIGINAL_SAVE_KEY, raw, earlier);
       }
       this.storage.setItem(STORAGE_KEY, text);

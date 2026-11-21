@@ -33,7 +33,7 @@ export function worldPieceRead(state: GameState, piece: WorldPiece, lift?: World
   const gearCopy = piece.kind === "weapon" || piece.kind === "spell" || piece.kind === "armor" ? piece.copy : null;
   const bearer = gearCopy ? bearerOf(state, gearCopy) : undefined;
   const gear = bearer ? "Bound" : gearCopy && adjacentBearersOf(state, gearCopy).length > 1 ? "Choose bearer" : "Unbound";
-  const gearTip = (effect: string) => bearer?.pos ? `${effect} · Sentinel at ${cellNoteOf(bearer.pos)}` : effect;
+  const gearTip = (effect: string) => bearer?.pos ? `${effect} · Sentinel at ${cellNoteOf(bearer.pos)}` : `${effect} · needs an adjacent Sentinel`;
   switch (piece.kind) {
     case "creature": {
       const stateWord = piece.copy.pos ? "Deployed" : piece.copy.recovering ? "Recovering" : "Ready";

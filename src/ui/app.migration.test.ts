@@ -1,12 +1,13 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import type { App } from "./app";
-import { ORIGINAL_SAVE_KEY, PRE_V13_ORIGINAL_SAVE_KEY, PRE_V14_ORIGINAL_SAVE_KEY, STORAGE_KEY, serialize } from "../engine/save";
-import { startSession } from "../engine/actions";
+import { ORIGINAL_SAVE_KEY, PRE_V13_ORIGINAL_SAVE_KEY, PRE_V14_ORIGINAL_SAVE_KEY, PRE_V15_ORIGINAL_SAVE_KEY, STORAGE_KEY, serialize } from "../engine/save";
+import { chooseRoll, startSession } from "../engine/actions";
 import { advance } from "../engine/advance";
 import { bankableClaimOf } from "../engine/accumulator";
-import { createInitialState } from "../engine/state";
+import { createInitialState, createWeapon, createWorldColumn } from "../engine/state";
 import { BALANCE } from "../engine/constants";
+import { worldCellReserved, worldPiecesOf } from "../engine/world";
 import { SharedSave, memorySaveStorage, type SaveStorage } from "./shared-save";
 import { createAppFixture } from "./testing/app-fixture";
 
@@ -92,6 +93,90 @@ describe("distance pricing at the save boundary (issue #543)", () => {
     expect(files.get(STORAGE_KEY)).toBe(raw);
     expect(files.get(ORIGINAL_SAVE_KEY)).toBe("earlier");
     expect(files.get(PRE_V13_ORIGINAL_SAVE_KEY)).toBe("archived");
+  });
+});
+
+function priorCombat(lost = false): string {
+  const state = createInitialState();
+  state.arete = 3;
+  state.nous = 555;
+  state.eraEarned = 20_000_000;
+  state.world.unlocked = state.world.starterColumnGranted = state.world.starterWeaponGranted = true;
+  state.world.frontier = 2;
+  state.world.hone.chargeBlade = 1;
+  state.cells.push({ q: -1, r: 0 });
+  state.modules[0]!.pos = { q: -1, r: 0 }; // occupied below old cleared World wall
+  const blade = createWeapon(state, "chargeBlade");
+  const column = createWorldColumn(state);
+  state.world.weapons.push({ ...blade, pos: state.cells[1]!, store: 9, cooldown: 55 });
+  state.world.columns.push({ ...column, pos: state.cells[2]! });
+  state.bankedRolls = [{ id: "historical-offer", candidates: [
+    { id: "old-world", type: "chargeBlade" }, { id: "old-synth", type: "additive", tier: 1 }, { id: "old-synth-2", type: "square", tier: 1 },
+  ] }];
+  const file = JSON.parse(serialize(state, 700));
+  file.version = 14;
+  const { unlocked, starterColumnGranted, starterWeaponGranted, frontier, hone, weapons, columns } = file.state.world;
+  file.state.world = { unlocked, starterColumnGranted, starterWeaponGranted, frontier, hone, weapons, columns,
+    enemies: { w0: { discovered: true, hp: 0 }, w1: { discovered: true, hp: 4 } } };
+  if (lost) file.state.arete = null;
+  return JSON.stringify(file, null, 3);
+}
+
+describe("lifetime combat migration (issue #544)", () => {
+  it("archives exact v14 bytes beside earlier originals, keeps valid ledgers and opens a fresh sequence once", () => {
+    const source = priorCombat();
+    const before = JSON.parse(source).state;
+    const files = new Map([[STORAGE_KEY, source], [ORIGINAL_SAVE_KEY, "v12 source"], [PRE_V13_ORIGINAL_SAVE_KEY, "older"], [PRE_V14_ORIGINAL_SAVE_KEY, "v13 source"]]);
+    app = boot(undefined, false, new SharedSave(mapStorage(files)));
+    expect(files.get(PRE_V15_ORIGINAL_SAVE_KEY)).toBe(source);
+    expect(files.get(ORIGINAL_SAVE_KEY)).toBe("v12 source");
+    expect(files.get(PRE_V13_ORIGINAL_SAVE_KEY)).toBe("older");
+    expect(files.get(PRE_V14_ORIGINAL_SAVE_KEY)).toBe("v13 source");
+    expect(document.getElementById("status")!.textContent).toContain("Old Blade-only clears do not count");
+    expect(app.state).toMatchObject({ arete: 3, nous: 555, eraEarned: 20_000_000, cells: before.cells, modules: before.modules, bankedRolls: before.bankedRolls });
+    expect(app.state.world).toMatchObject({ frontier: 2, hone: before.world.hone });
+    expect(app.state.world.weapons).toHaveLength(1);
+    expect(app.state.world.weapons[0]).toMatchObject({ pos: before.world.weapons[0].pos, store: 9, cooldown: 0 });
+    expect(app.state.world.columns).toEqual(before.world.columns);
+    expect(app.state.world.enemies.shale).toEqual({ discovered: true, hp: 48 });
+    expect(worldCellReserved(app.state, { q: -1, r: 0 })).toBe(true);
+    expect(worldPiecesOf(app.state).filter(({ copy }) => copy.pos === null)).toHaveLength(4);
+    expect(JSON.parse(files.get(STORAGE_KEY)!).version).toBe(15);
+    app = boot(undefined, false, new SharedSave(mapStorage(files)));
+    expect(worldPiecesOf(app.state)).toHaveLength(6);
+    expect(document.getElementById("status")!.textContent).not.toContain("Old Blade-only");
+    expect(chooseRoll(app.state, "historical-offer", "old-world").ok).toBe(true);
+    expect(app.state.world.weapons).toHaveLength(2);
+  });
+
+  it("protects exact v14 bytes on denied backup, including forced writes", () => {
+    const source = priorCombat();
+    const files = new Map([[STORAGE_KEY, source], [ORIGINAL_SAVE_KEY, "old"]]);
+    const storage = { ...mapStorage(files), setItem(key: string, value: string) {
+      if (key === PRE_V15_ORIGINAL_SAVE_KEY) throw new Error("quota exceeded");
+      files.set(key, value);
+    } };
+    app = boot(undefined, false, new SharedSave(storage));
+    expect(app.state.world.unlocked).toBe(false);
+    app.save();
+    app.save(Date.now(), true);
+    expect(files.get(STORAGE_KEY)).toBe(source);
+    expect(files.get(ORIGINAL_SAVE_KEY)).toBe("old");
+  });
+
+  it("requires explicit recovery for lost v14 money and retains the source on successful recovery", () => {
+    const source = priorCombat(true);
+    const files = new Map([[STORAGE_KEY, source], [ORIGINAL_SAVE_KEY, "old"], [PRE_V13_ORIGINAL_SAVE_KEY, "older"]]);
+    app = boot(undefined, false, new SharedSave(mapStorage(files)));
+    expect(app.ui.recovery?.lost).toContain("arete");
+    app.save(Date.now(), true);
+    expect(files.get(STORAGE_KEY)).toBe(source);
+    document.getElementById("recovery-apply")!.click();
+    expect(files.get(PRE_V15_ORIGINAL_SAVE_KEY)).toBe(source);
+    expect(files.get(ORIGINAL_SAVE_KEY)).toBe("old");
+    expect(files.get(PRE_V13_ORIGINAL_SAVE_KEY)).toBe("older");
+    expect(app.state.arete).toBe(0);
+    expect(worldPiecesOf(app.state)).toHaveLength(6);
   });
 });
 

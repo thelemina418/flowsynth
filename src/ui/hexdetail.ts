@@ -228,7 +228,7 @@ export function renderHexDetail(app: App, live: RateSnapshot, projected: RateSna
   // write; the new stack restores that captured position.
   const focused = document.activeElement;
   const focusAttribute = focused instanceof Element && host.contains(focused)
-    ? ["id", "data-ctx-cell", "data-ctx-navigation", "data-legend-layer", "data-detail-face", "data-bulk", "data-shift", "data-target", "data-world-edge", "aria-describedby"]
+    ? ["id", "data-ctx-cell", "data-ctx-navigation", "data-legend-layer", "data-detail-face", "data-bulk", "data-shift", "data-target", "data-world-edge", "data-world-bearer", "aria-describedby"]
         .find((attribute) => focused.hasAttribute(attribute))
     : undefined;
   const focusValue = focusAttribute ? focused!.getAttribute(focusAttribute) : null;

@@ -5,13 +5,13 @@ import type { App } from "./app";
 import { createAppFixture, clickCell, setAppWidth } from "./testing/app-fixture";
 import { give } from "../engine/fixtures";
 import { hex, sameHex } from "../engine/hex";
-import { startSession, endSession } from "../engine/actions";
+import { startSession, endSession, placeWorldOccupant } from "../engine/actions";
 import { renderHexDetail } from "./hexdetail";
 import { formatInt, formatNumber } from "./format";
 import { levelsCost, displayedRates, deployedAt } from "../engine/economy";
 import { BALANCE } from "../engine/constants";
-import { enemyPenaltyOf } from "../engine/world";
-import { createWeapon, createWorldColumn } from "../engine/state";
+import { syncWorldDiscoveries } from "../engine/world";
+import { createWeapon, createWorldColumn, grantCombatStarter } from "../engine/state";
 
 // The Hex detail (issue #295): the module bloom's successor — an owned
 // cell's full-stack cross-section replacing the grid. The presentation is
@@ -390,47 +390,38 @@ describe("the World face in detail", () => {
     expect(worldTip()).toContain("Open World cell");
   });
 
-  it("a weapon's enlarged face carries its stores, its routing, and the target priority rail", () => {
+  it("names an unbound Blade and its charge store without a target picker", () => {
     seedEra();
-    app.render();
     clickCell(1, 0);
     app.detailFace("world");
-    const tip = worldTip()!;
-    expect(tip).toContain("Charge Blade");
-    // The tip adds what the plate cannot: the feed line, never a restatement.
-    expect(tip).toContain("place beside a Column to feed");
-    // Unfed is the face's own word, never a tooltip apology.
-    expect(section("world").querySelector(".world-stack")!.textContent).toContain("UNFED");
-    expect(section("world").querySelector(".world-stack")!.textContent).toContain(`⌁0/${BALANCE.world.storageCap}`);
-    // The rail holds the retrieve and the between-sessions priority control.
+    expect(worldTip()).toContain("needs an adjacent Sentinel");
+    expect(faceSvg("world").textContent).toContain("Unbound");
+    expect(faceSvg("world").textContent).toContain(`⌁0/${BALANCE.world.storageCap}`);
     expect(document.getElementById("detail-world-retrieve")).not.toBeNull();
-    expect(detail().querySelector(".world-priority")).not.toBeNull();
-    expect(detail().querySelectorAll(".world-priority-row")).toHaveLength(9);
-    expect(detail().querySelector(".world-priority-head")!.textContent).toContain("roster default");
+    expect(detail().querySelector("[data-world-bearer]")).toBeNull();
   });
 
-  it("the priority controls reorder and reset through the engine action", () => {
+  it("offers a contested gear bearer on the World rail, keeps focus on selection, and locks choices in flow", () => {
     seedEra();
+    grantCombatStarter(app.state);
+    const sentinel = app.state.world.creatures[0]!;
+    app.state.world.creatures.push({ ...sentinel, id: "second-sentinel" });
+    app.state.cells.push(hex(1, -1));
+    expect(placeWorldOccupant(app.state, sentinel.id, hex(0, 0)).ok).toBe(true);
+    expect(placeWorldOccupant(app.state, "second-sentinel", hex(1, -1)).ok).toBe(true);
     app.render();
     clickCell(1, 0);
     app.detailFace("world");
-    const raise = detail().querySelector<HTMLButtonElement>("[data-world-priority='w1'][data-dir='-1']")!;
-    raise.click();
-    // The move stores the explicit order — preference first, authored
-    // roster behind it.
-    expect(app.state.world.weapons[0]!.targetPriority[0]).toBe("w1");
-    expect(detail().querySelector(".world-priority-head")!.textContent).not.toContain("roster default");
-    detail().querySelector<HTMLButtonElement>("[data-world-priority-reset]")!.click();
-    expect(app.state.world.weapons[0]!.targetPriority).toEqual([]);
-  });
-
-  it("the priority control locks in flow — the rail leaves with the rest of the editing furniture", () => {
-    seedEra();
+    expect(faceSvg("world").textContent).toContain("Choose bearer");
+    const option = () => detail().querySelector<HTMLButtonElement>('[data-world-bearer="second-sentinel"]')!;
+    option().focus();
+    option().click();
+    expect(app.state.world.weapons[0]!.bearer).toBe("second-sentinel");
+    expect(option().getAttribute("aria-pressed")).toBe("true");
+    expect(document.activeElement).toBe(option());
     startSession(app.state, 600);
     app.render();
-    clickCell(1, 0);
-    app.detailFace("world");
-    expect(detail().querySelector(".world-priority")).toBeNull();
+    expect(detail().querySelector("[data-world-bearer]")).toBeNull();
     expect(document.getElementById("detail-world-retrieve")).toBeNull();
     endSession(app.state);
   });
@@ -440,29 +431,27 @@ describe("the World face in detail", () => {
     app.render();
     clickCell(0, 1);
     app.detailFace("world");
-    expect(worldTip()!).toContain("Charge Column");
+    expect(worldTip()).toContain("Copies the module cell’s received charge");
     // The enemy position w0 sits at (-1,0): undiscovered, so reserved —
     // the board's second face carries the plate once the detail stands down.
     app.setBoardLayer("world");
     app.closeDetail();
-    const reserved = grid().querySelector('[data-key="world-w0"]')!;
+    const reserved = grid().querySelector('[data-key="world-shale"]')!;
     expect(reserved.textContent).toContain("RESERVED");
   });
 
-  it("an enemy's detail reads its live depth-band penalty on the line and the chassis (issue #489)", () => {
+  it("gives the current wall's HP and pressure one home on its World chassis", () => {
     seedEra();
-    // The enemy coordinate owned: the cross-section can stand there.
     app.state.cells.push(hex(-1, 0));
-    app.state.world.enemies["w0"] = { discovered: true, hp: BALANCE.world.enemyBaseHp };
-    app.state.eraEarned = BALANCE.world.entryNous * 100; // two bands past w0's reveal
+    app.state.eraEarned = BALANCE.world.entryNous * 100;
+    syncWorldDiscoveries(app.state);
     app.render();
     app.openDetail(hex(-1, 0), "world");
-    const figure = `−${Math.round(enemyPenaltyOf(app.state, "w0") * 100)}% ν`;
-    expect(enemyPenaltyOf(app.state, "w0")).toBe(BALANCE.world.enemyDepthPenalties[2]);
-    // The details column's World line and the World chassis carry the
-    // same shared read, not a def field.
-    expect(detail().querySelector(".hex-detail-world-line")!.textContent).toContain(`Enemy · ${figure} while it stands`);
-    expect(faceSvg("world").textContent).toContain(figure);
+    expect(faceSvg("world").textContent).toContain("Shale");
+    expect(faceSvg("world").textContent).toContain("48/48 HP");
+    expect(faceSvg("world").textContent).toContain("−20% ν");
+    expect(worldTip()).toContain("heals 0.35 HP/s");
+    expect(worldTip()).not.toContain("−20%");
   });
 
   it("the rail's retrieve lands the occupant in the World tray", () => {
@@ -476,14 +465,15 @@ describe("the World face in detail", () => {
     expect(app.ui.detail!.face).toBe("world");
   });
 
-  it("the cleared enemy's plate carries the era bonus engraved", () => {
+  it("shows a lifetime clear and keeps its owned coordinate open", () => {
     seedEra();
-    app.state.world.enemies["w0"] = { discovered: true, hp: 0 };
+    app.state.cells.push(hex(-1, 0));
+    app.state.world.enemies.shale = { discovered: true, hp: 0 };
     app.render();
     app.setBoardLayer("world");
-    const cleared = grid().querySelector('[data-key="world-w0"]')!;
+    const cleared = grid().querySelector('[data-key="world-open--1,0"]')!;
     expect(cleared.textContent).toContain("CLEARED");
-    expect(cleared.textContent).toContain("+8% ν");
+    expect(cleared.textContent).not.toContain("% ν");
   });
 });
 
@@ -1123,7 +1113,7 @@ describe("the shared inventory in Hex detail", () => {
     document.querySelector<HTMLButtonElement>('#modal-content [data-legend-layer="world"]')!.click();
     document.querySelector<HTMLButtonElement>('#modal-content [data-world-tray]')!.click();
     const preview = document.querySelector('#modal-content [aria-label="Placement supply preview"]');
-    expect(preview?.textContent).toContain("this BLADE:");
+    expect(preview?.textContent).toContain("Charge Blade:");
     expect(preview?.textContent).toContain("→");
     expect(app.state.world.weapons[1]!.pos).toBeNull();
     document.querySelector<HTMLButtonElement>('#modal-content [data-world-place]')!.click();
