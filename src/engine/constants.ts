@@ -945,4 +945,4 @@ export const REFLECTION_SLIDER_NEUTRAL = 3;
 // half standing — docs/save-migration.md) each run for their own version
 // alone, and a retired step is gone with its version: nothing below v10
 // loads, so nothing can still need the dead ones.
-export const SAVE_VERSION = 14; // Shared distance-band footprint (ADR-0089).
+export const SAVE_VERSION = 15; // Lifetime World combat (ADR-0088).

@@ -93,7 +93,7 @@ it("loading an eligible old save discovers World and adds exactly one free Colum
   const old = createInitialState();
   old.world.frontier = 2;
   old.world.starterWeaponGranted = true;
-  old.world.weapons.push({ id: "old-blade", type: "chargeBlade", pos: old.cells[0]!, store: 0, cooldown: 0, targetPriority: [] });
+  old.world.weapons.push({ id: "old-blade", type: "chargeBlade", pos: old.cells[0]!, store: 0, cooldown: 0, bearer: null });
   old.world.columns.push({ id: "old-column", pos: old.cells[1]! });
   const raw = JSON.parse(serialize(old, 5_000));
   delete raw.state.world.unlocked;

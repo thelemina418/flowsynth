@@ -46,8 +46,8 @@ function seedEra(): void {
   s.eraEarned = BALANCE.world.entryNous * 1.5;
   s.world.unlocked = true;
   s.world.weapons.push(
-    { id: "wp1", type: "chargeBlade", pos: hex(1, 0), store: 0, cooldown: 0, targetPriority: [] },
-    { id: "wp2", type: "chargeBlade", pos: null, store: 0, cooldown: 0, targetPriority: [] },
+    { id: "wp1", type: "chargeBlade", pos: hex(1, 0), store: 0, cooldown: 0, bearer: null },
+    { id: "wp2", type: "chargeBlade", pos: null, store: 0, cooldown: 0, bearer: null },
   );
   s.world.columns.push(
     { id: "col1", pos: hex(0, 1) },

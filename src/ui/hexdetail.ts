@@ -9,14 +9,14 @@ import { affordableLevels, boosterBonusOf, boosterTermOf, deployed, deployedAt, 
 import { BALANCE, isOscillatorType, typeRarityOf } from "../engine/constants";
 import { adjacent, sameHex } from "../engine/hex";
 import { cellNoteOf, noteNameOf, pitchOf } from "../engine/lattice";
-import { enemyStateOf, worldEnemyAt, worldOccupantAt, worldPieceOf } from "../engine/world";
-import { conduitEdgesHtml, worldPieceName } from "./world-combat";
+import { enemyStateOf, worldEnemyAt, worldOccupantAt, worldPieceOf, worldPiecesOf } from "../engine/world";
+import { conduitEdgesHtml, gearBearersHtml, worldPieceName } from "./world-combat";
 import type { Hex, ModuleInstance, RateSnapshot } from "../engine/types";
 import type { App, DetailFace } from "./app";
 import { HEX_RADIUS, hexPoints, moduleFace, forgeBranchOf, faceLevel, faceReadoutFor, waterFill, zeroBuyRead, spotlightInactiveVerdict } from "./face";
 import { chargeGlow } from "./leads";
 import { formatInt, formatNumber } from "./format";
-import { worldEntered, bindWorldDrag, enemyPenaltyFigure, targetPriorityHtml, worldChassisHtml } from "./world";
+import { worldEntered, bindWorldDrag, worldChassisHtml } from "./world";
 import { META, RARITY_LABEL, tierWord } from "./meta";
 import { isPhoneWidth, scrollTopOf } from "./container";
 import { wireTooltips } from "./instrument";
@@ -178,7 +178,6 @@ export function renderHexDetail(app: App, live: RateSnapshot, projected: RateSna
   // chargeStrength, and the level below; the World chassis' figures derive
   // from the occupant's store and the lift read.
   const contribution = module ? snapshot.contributions.get(module.id) ?? null : null;
-  const worldOccupant = worldOccupantAt(state, pos);
   const worldEnemy = worldEnemyAt(state, pos);
   const key = JSON.stringify([
     phone,
@@ -205,22 +204,12 @@ export function renderHexDetail(app: App, live: RateSnapshot, projected: RateSna
         ]
       : null,
     module ? snapshot.chargeStrength.get(module.id) ?? 0 : 0,
-    worldOccupant
-      ? worldOccupant.kind === "weapon"
-        ? (() => {
-            const weapon = state.world.weapons.find((w) => w.id === worldOccupant.id)!;
-            return `w:${weapon.store}:${weapon.targetPriority.join(">")}`;
-          })()
-        : `c:${worldOccupant.id}`
-      : null,
     worldEnemy && enemyStateOf(state, worldEnemy.key),
-    state.world.proof && [state.world.proof.creature, state.world.proof.spell, state.world.proof.conduit],
+    worldEntered(state) && [worldPiecesOf(state), state.world.hone, [...snapshot.chargeStrength]],
     state.cells.length,
     // The open inventory (issue #296) and what waits in it: a placement
     // changes both, so the tray and its tiles can never show stale stock.
     state.modules.filter((m) => m.pos === null).map((m) => `${m.id}:${m.type}:${m.level}:${m.tier}`),
-    state.world.weapons.map((w) => `${w.id}:${w.pos}`),
-    state.world.columns.map((c) => `${c.id}:${c.pos}`),
     upgrade ? Math.floor(state.arete) : 0,
     upgrade ? ui.bulkCount : 0,
     upgrade ? Math.floor(wholeNous(state)) : 0,
@@ -409,7 +398,7 @@ function moduleLayerHtml(app: App, pos: Hex, module: ModuleInstance | undefined,
    One row below the stack, its contents following the focused face —
    the eye lands here after the face. Modules focus carries the upgrade
    column (pickers, dial, button); World focus carries the occupant's
-   retrieve and, for a weapon, its target priority — between sessions
+   retrieve and any bearer or outlet choices — between sessions
    only. Flow leaves no rail at all. */
 
 function actionRailHtml(app: App, pos: Hex, module: ModuleInstance | undefined): string {
@@ -420,7 +409,8 @@ function actionRailHtml(app: App, pos: Hex, module: ModuleInstance | undefined):
     if (!occupant) return "";
     const piece = worldPieceOf(state, occupant.id)!;
     const name = worldPieceName(piece);
-    const local = piece.kind === "weapon" ? targetPriorityHtml(state, piece.copy) : piece.kind === "conduit" ? conduitEdgesHtml(piece) : "";
+    const local = piece.kind === "conduit" ? conduitEdgesHtml(piece)
+      : piece.kind === "weapon" || piece.kind === "armor" || piece.kind === "spell" ? gearBearersHtml(state, piece.copy) : "";
     return `<div class="hex-detail-actions"><button class="hex-action" id="detail-world-retrieve" aria-label="Retrieve the ${name} to the World tray">Retrieve to World tray</button>${local}</div>`;
   }
   return module ? `<div class="hex-detail-actions">${detailBuyHtml(app, module)}</div>` : "";
@@ -444,18 +434,6 @@ function detailColumnHtml(app: App, pos: Hex, module: ModuleInstance | undefined
     const grades = profileGradesHtml(module.type);
     if (grades) sections.push(`<section class="hex-detail-section"><span class="hex-detail-section-head">Profile</span>${grades}${chargeHelpHtml(app, "detail-about-charge")}</section>`);
     if (chordRow.html) sections.push(`<section class="hex-detail-section"><span class="hex-detail-section-head">Chord facts</span>${chordRow.html}${chordsHelpHtml(app, "detail-about-chords")}</section>`);
-  }
-  // The World line (issue #426): the enemy threat or the cleared bonus —
-  // the same read the plate's tooltip carries, stated once in the column.
-  const enemyDef = worldEnemyAt(state, pos);
-  if (enemyDef && worldEntered(state) && !state.world.proof) {
-    const live = state.world.enemies[enemyDef.key];
-    const line = !live?.discovered
-      ? "Reserved cell — the World holds this position"
-      : live.hp <= 0
-        ? `Cleared · era bonus +${Math.round(enemyDef.bonus * 100)}% ν`
-        : `Enemy · ${enemyPenaltyFigure(state, enemyDef.key)} while it stands`;
-    sections.push(`<section class="hex-detail-section"><span class="hex-detail-section-head">World</span><p class="hex-detail-world-line">${line}</p></section>`);
   }
   if (sections.length === 0) return "";
   return `<aside class="hex-detail-side" aria-label="Details at ${note}">${sections.join("")}</aside>`;
@@ -574,11 +552,10 @@ function wireDetailWorldActions(app: App, host: HTMLElement, pos: Hex): void {
     const occupant = worldOccupantAt(app.state, pos);
     if (occupant) app.worldRetrieve(occupant.id);
   });
-  host.querySelectorAll<HTMLButtonElement>("[data-world-priority]").forEach((el) => {
+  host.querySelectorAll<HTMLButtonElement>("[data-world-bearer]").forEach((el) => {
     app.listen(el, "click", () => {
       const occupant = worldOccupantAt(app.state, pos);
-      if (occupant?.kind !== "weapon") return;
-      app.worldMovePriority(occupant.id, el.dataset.worldPriority!, Number(el.dataset.dir));
+      if (occupant) app.equipWorldGear(occupant.id, el.dataset.worldBearer!);
     });
   });
   host.querySelectorAll<HTMLButtonElement>("[data-world-edge]").forEach((el) => {
@@ -586,10 +563,6 @@ function wireDetailWorldActions(app: App, host: HTMLElement, pos: Hex): void {
       const occupant = worldOccupantAt(app.state, pos);
       if (occupant?.kind === "conduit") app.routeWorldConduit(occupant.id, Number(el.dataset.worldEdge));
     });
-  });
-  app.listen(host.querySelector<HTMLButtonElement>("[data-world-priority-reset]"), "click", () => {
-    const occupant = worldOccupantAt(app.state, pos);
-    if (occupant?.kind === "weapon") app.setWeaponPriority(occupant.id, []);
   });
 }
 

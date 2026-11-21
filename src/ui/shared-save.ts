@@ -1,4 +1,4 @@
-import { deserialize, recoverLostSave, serialize, STORAGE_KEY, ORIGINAL_SAVE_KEY, PRE_V13_ORIGINAL_SAVE_KEY, PRE_V14_ORIGINAL_SAVE_KEY, type MigrationReport, type RecoveryReport } from "../engine/save";
+import { deserialize, recoverLostSave, serialize, STORAGE_KEY, ORIGINAL_SAVE_KEY, PRE_V13_ORIGINAL_SAVE_KEY, PRE_V14_ORIGINAL_SAVE_KEY, PRE_V15_ORIGINAL_SAVE_KEY, type MigrationReport, type RecoveryReport } from "../engine/save";
 import type { GameState } from "../engine/types";
 
 export interface LoadedSave {
@@ -9,6 +9,7 @@ export interface LoadedSave {
   // explains at the save/import destination.
   migration?: MigrationReport;
   footprintMigration?: { areteRefunded: number };
+  combatMigration?: { oldClears: number; discovered: boolean };
   // The explicit lost-money recovery (issue #494): present exactly when
   // this parse performed the player's chosen recovery — the choice was
   // explained before it applied, so this rides without a second surface.
@@ -70,8 +71,8 @@ export class SharedSave {
         ? { error: result.error ?? "Explicit recovery required.", recoveryRequired: true, lost: result.lost ?? [] }
         : { error: result.error ?? "unknown error" };
     }
-    const { state, migration, footprintMigration } = result;
-    return { state, savedAt: savedAtOf(text) ?? this.now(), ...(migration && { migration }), ...(footprintMigration && { footprintMigration }) };
+    const { state, migration, footprintMigration, combatMigration } = result;
+    return { state, savedAt: savedAtOf(text) ?? this.now(), ...(migration && { migration }), ...(footprintMigration && { footprintMigration }), ...(combatMigration && { combatMigration }) };
   }
 
   // The recovery choice's parse (issue #494): the same bytes through the
@@ -85,6 +86,7 @@ export class SharedSave {
       savedAt: savedAtOf(text) ?? this.now(),
       ...(result.recovered ? { recovered: result.recovered } : {}),
       ...(result.footprintMigration && { footprintMigration: result.footprintMigration }),
+      ...(result.combatMigration && { combatMigration: result.combatMigration }),
     };
   }
 
@@ -101,15 +103,16 @@ export class SharedSave {
         return { ...parsed, raw, lost: parsed.lost ?? [] };
       }
       this.sourceProtected = false;
-      if ("state" in parsed && (parsed.migration || parsed.footprintMigration)) {
+      if ("state" in parsed && (parsed.migration || parsed.footprintMigration || parsed.combatMigration)) {
         try {
           if (parsed.migration) {
             const earlier = this.storage.getItem(ORIGINAL_SAVE_KEY);
             if (earlier !== null && earlier !== raw) this.storage.setItem(PRE_V13_ORIGINAL_SAVE_KEY, earlier);
             this.storage.setItem(ORIGINAL_SAVE_KEY, raw);
           } else {
-            // Keep this source without displacing the v13 translation's original.
-            this.storage.setItem(PRE_V14_ORIGINAL_SAVE_KEY, raw);
+            // Keep this source without displacing an earlier boundary's original.
+            const archive = parsed.footprintMigration ? PRE_V14_ORIGINAL_SAVE_KEY : PRE_V15_ORIGINAL_SAVE_KEY;
+            this.storage.setItem(archive, raw);
             this.retainOnce(raw);
           }
         } catch {
@@ -149,7 +152,7 @@ export class SharedSave {
   // primary intact, and only completed backup writes need undoing.
   // Keep the source timestamp so a reload can still reconcile its gap
   // if the normal post-adoption session save fails.
-  adoptRecovered(raw: string, state: GameState, savedAt: number): boolean {
+  adoptRecovered(raw: string, state: GameState, savedAt: number, fromVersion?: number): boolean {
     const changed: { key: string; previous: string | null }[] = [];
     try {
       const text = serialize(state, savedAt);
@@ -160,8 +163,13 @@ export class SharedSave {
         this.storage.setItem(key, value);
         changed.push({ key, previous });
       };
-      if (earlier !== null && earlier !== raw) replace(PRE_V13_ORIGINAL_SAVE_KEY, earlier, archive);
-      replace(ORIGINAL_SAVE_KEY, raw, earlier);
+      if (fromVersion === 14) {
+        replace(PRE_V15_ORIGINAL_SAVE_KEY, raw, this.storage.getItem(PRE_V15_ORIGINAL_SAVE_KEY));
+        if (earlier === null) replace(ORIGINAL_SAVE_KEY, raw, earlier);
+      } else {
+        if (earlier !== null && earlier !== raw && archive === null) replace(PRE_V13_ORIGINAL_SAVE_KEY, earlier, archive);
+        replace(ORIGINAL_SAVE_KEY, raw, earlier);
+      }
       this.storage.setItem(STORAGE_KEY, text);
       this.sourceProtected = false;
       this.knownSavedAt = savedAt;

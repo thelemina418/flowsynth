@@ -106,7 +106,7 @@ export const GAME_COMMANDS: Readonly<Record<string, Command>> = {
   scrapModule: command([text], actions.scrapModule),
   setBendShift: command([text, integer], actions.setBendShift),
   setBoosterTarget: command([text, nullable(text)], actions.setBoosterTarget),
-  setWeaponTargetPriority: command([text, list(text)], actions.setWeaponTargetPriority),
+  setWorldGearBearer: command([text, text], actions.setWorldGearBearer),
   setWorldConduitDirection: command([text, integer], actions.setWorldConduitDirection),
   skipRoll: command([text], actions.skipRoll),
   startBreather: command([], (s) => actions.startBreather(s, Date.now())),

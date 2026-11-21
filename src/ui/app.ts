@@ -36,7 +36,7 @@ import {
   scrapModule,
   setBendShift,
   setBoosterTarget,
-  setWeaponTargetPriority,
+  setWorldGearBearer,
   setWorldConduitDirection,
   skipRoll,
   startBreather as startBreatherAction,
@@ -48,7 +48,7 @@ import {
   type BulkPurchase,
 } from "../engine/actions";
 import { ARETE_HORIZON, bankableClaimOf, horizonReached } from "../engine/accumulator";
-import { worldOccupantAt, worldPieceOf } from "../engine/world";
+import { syncWorldDiscoveries, worldOccupantAt, worldPieceOf } from "../engine/world";
 import { worldPieceName } from "./world-combat";
 import type { WeaponType, ResponseCurveId } from "../engine/types";
 import { neighbors, hex, sameHex } from "../engine/hex";
@@ -56,7 +56,7 @@ import { cellFrontier } from "../engine/footprint";
 import { preferredChordCue } from "../engine/chords";
 import { displayedRates, flowLive, deployedAt, syncRates, wholeNous } from "../engine/economy";
 import { worldEntered, refreshWorldPreview, worldBoardLive } from "./world";
-import { WORLD_ENEMIES, RESPONSE_CURVES } from "../engine/constants";
+import { RESPONSE_CURVES } from "../engine/constants";
 import { newlyActiveTermsOf, type AllocatedInstance } from "../engine/allocation";
 import { serialize, STORAGE_KEY, type MigrationReport } from "../engine/save";
 import { SharedSave, browserSaveStorage, memorySaveStorage, type LoadedSave } from "./shared-save";
@@ -68,7 +68,7 @@ import { formatInt, formatNumber } from "./format";
 import { applyBreatherGap, applyGap, flushPendingAway, poolOutstanding, resolveHonestyReport, type HonestyOutcome } from "../engine/trust";
 import { availableEntries, encounterEntries, type EntryId } from "../engine/encyclopedia";
 import { isPhoneWidth } from "./container";
-import { createInitialState, createModule, createWeapon, createWorldColumn } from "../engine/state";
+import { createInitialState, createModule, createWeapon, createWorldColumn, grantCombatStarter } from "../engine/state";
 import { SCENARIOS, scenarioOf, type ScenarioDescriptor } from "../engine/scenarios";
 import {
   composePlaythroughRecipe,
@@ -119,6 +119,13 @@ import { HISTORY_PAGE_ROWS, META, CATEGORY_WORD, SPECIAL_DRAFT_NAME, tierWord, W
 import { browserChannels, type SignalChannels } from "./signals";
 import { suppressNextClick } from "./click";
 import { createInventoryState, type InventoryState } from "./inventory";
+
+function saveTransitionNote(loaded: LoadedSave): string {
+  const combat = loaded.combatMigration;
+  const adjustment = combat?.discovered ? `World: new starter gear is in the tray. ${combat.oldClears ? "Old Blade-only clears do not count;" : "The new sequence starts fresh;"} new victories last through prestige.` : "";
+  const refund = loaded.footprintMigration?.areteRefunded;
+  return [refund ? footprintRefundNote(refund) : "", adjustment].filter(Boolean).join(" ");
+}
 
 function footprintRefundNote(arete: number): string {
   return `Rack Extenders retired · ${arete} Arete returned. Your cells stay owned.`;
@@ -636,7 +643,8 @@ export class App {
     // same host and signal is idempotent.
     wireTooltips(document.getElementById("console-session") ?? document.body, this.signal);
     if (!resumingBreather || this.state.mode === "breather") this.greet();
-    if (loaded?.footprintMigration?.areteRefunded) this.say(footprintRefundNote(loaded.footprintMigration.areteRefunded));
+    const transition = loaded && saveTransitionNote(loaded);
+    if (transition) this.say(transition);
     this.render();
     this.save();
   }
@@ -931,7 +939,8 @@ export class App {
         ? "Save imported while a session was running — the honesty report is waiting."
         : "Save imported.",
     );
-    if (parsed.footprintMigration?.areteRefunded) this.say(footprintRefundNote(parsed.footprintMigration.areteRefunded));
+    const transition = saveTransitionNote(parsed);
+    if (transition) this.say(transition);
     this.save(Date.now(), true);
     this.render();
     // The import's dismissal returns focus to the walk's opener — unless
@@ -1623,7 +1632,7 @@ export class App {
   // ── The World layer's gestures (issue #426) ─────────────────────────────
   // The second face over the board: every landing routes through the engine
   // actions from #425 — placeWorldOccupant, retrieveWorldOccupant,
-  // setWeaponTargetPriority — so the UI can never drift from the contracts
+  // setWorldGearBearer — so the UI can never drift from the contracts
   // those tests pin. Upgrade-mode-only: each engine gate owns its refusal,
   // and the renderers simply stop drawing.
 
@@ -1749,23 +1758,8 @@ export class App {
     this.act(this.gameAction("setWorldConduitDirection", () => setWorldConduitDirection(this.state, id, direction)), "Conduit outlet set.");
   }
 
-  // The weapon's between-session target priority (issue #426): the rail's
-  // and tray's controls land here, the engine deduplicating and dropping
-  // unknown keys. The move walks the effective order — stored preference
-  // first, authored roster behind.
-  setWeaponPriority(id: string, keys: string[]): void {
-    this.act(this.gameAction("setWeaponTargetPriority", () => setWeaponTargetPriority(this.state, id, keys)), "Target priority set.");
-  }
-
-  worldMovePriority(id: string, key: string, dir: number): void {
-    const weapon = this.state.world.weapons.find((w) => w.id === id);
-    if (!weapon) return;
-    const order = [...weapon.targetPriority, ...WORLD_ENEMIES.map((def) => def.key)].filter((entry, index, all) => all.indexOf(entry) === index);
-    const from = order.indexOf(key);
-    const to = Math.max(0, Math.min(order.length - 1, from + dir));
-    if (from === to) return;
-    order.splice(to, 0, ...order.splice(from, 1));
-    this.setWeaponPriority(id, order);
+  equipWorldGear(id: string, bearerId: string): void {
+    this.act(this.gameAction("setWorldGearBearer", () => setWorldGearBearer(this.state, id, bearerId)), "Bearer equipped.");
   }
 
   // The Arete Catalog's World purchases (issue #426): the Column ladder and
@@ -2876,7 +2870,7 @@ export class App {
       return;
     }
     try {
-      if (!this.sharedSave.adoptRecovered(offer.raw, parsed.state, parsed.savedAt)) {
+      if (!this.sharedSave.adoptRecovered(offer.raw, parsed.state, parsed.savedAt, parsed.recovered?.fromVersion)) {
         this.ui.recovery = { ...offer, error: "The original could not be retained or the recovered save could not be saved. Nothing was adopted; retry after making storage available." };
         this.render();
         return;
@@ -2890,8 +2884,7 @@ export class App {
     this.ui.modal = null;
     this.ui.importError = null;
     this.resumeFromSave(parsed);
-    this.say("Save recovered — the economy opens calibrated; your practice record stands.");
-    if (parsed.footprintMigration?.areteRefunded) this.say(footprintRefundNote(parsed.footprintMigration.areteRefunded));
+    this.say(saveTransitionNote(parsed) || "Save recovered — the economy opens calibrated; your practice record stands.");
     this.save(Date.now(), true);
     this.render();
     if (this.ui.modal === null) this.restoreModalInvoker();
@@ -3065,6 +3058,8 @@ export class App {
     s.world.unlocked = true;
     s.world.starterWeaponGranted = true;
     s.world.starterColumnGranted = true;
+    grantCombatStarter(s);
+    syncWorldDiscoveries(s);
     if (!s.world.weapons.some((w) => w.pos !== null)) {
       const weapon = createWeapon(s, "chargeBlade");
       weapon.pos = hex(1, 0);
@@ -3646,8 +3641,8 @@ export class App {
     return this.devGameAction(`Retrieve World ${id}`, () => retrieveWorldOccupant(this.state, id));
   }
 
-  devActionWorldPriority(id: string, keys: string[]): ActionResult {
-    return this.devGameAction(`World priority ${id}: ${keys.join(", ")}`, () => setWeaponTargetPriority(this.state, id, keys));
+  devActionWorldBearer(id: string, bearerId: string): ActionResult {
+    return this.devGameAction(`World bearer ${id}: ${bearerId}`, () => setWorldGearBearer(this.state, id, bearerId));
   }
 
   devActionEndBreather(): ActionResult {
@@ -3733,7 +3728,7 @@ export class App {
     const [verb, ...args] = command.split(/\s+/);
     switch (verb) {
       case "help":
-        return "commands: actions · action <name> [JSON argument array] · scenarios · launch <id> · assert · inspect · run [k=v…] · runs · select <runId> · export · import <artifact JSON> · start <min|open> · end · pause · resume · honesty <full|planned|missed> · breather · end-breather · world-buy · world-hone <chargeBlade> · world-place <id> <q> <r> · world-retrieve <id> · world-priority <id> [keys…] · advance <s> · buy <type> · cell <q> <r> · place <id> <q> <r> · levels <id> <n|max> · prestige · grant <nous|synth|world> · tuning";
+        return "commands: actions · action <name> [JSON argument array] · scenarios · launch <id> · assert · inspect · run [k=v…] · runs · select <runId> · export · import <artifact JSON> · start <min|open> · end · pause · resume · honesty <full|planned|missed> · breather · end-breather · world-buy · world-hone <chargeBlade> · world-place <id> <q> <r> · world-retrieve <id> · world-bearer <gear-id> <creature-id> · advance <s> · buy <type> · cell <q> <r> · place <id> <q> <r> · levels <id> <n|max> · prestige · grant <nous|synth|world> · tuning";
       case "actions":
         return Object.keys(GAME_COMMANDS).join(" · ");
       case "action": {
@@ -3869,9 +3864,9 @@ export class App {
         if (!args[0]) throw new Error("world-retrieve needs an occupant id.");
         return this.terminalResult(this.devActionWorldRetrieve(args[0]), "World occupant retrieved.");
       }
-      case "world-priority": {
-        if (!args[0]) throw new Error("world-priority needs a weapon id and ordered enemy keys.");
-        return this.terminalResult(this.devActionWorldPriority(args[0], args.slice(1)), "target priority set.");
+      case "world-bearer": {
+        if (!args[0] || !args[1]) throw new Error("world-bearer needs a gear id and a creature id.");
+        return this.terminalResult(this.devActionWorldBearer(args[0], args[1]), "bearer equipped.");
       }
       case "breather": {
         const result = this.devActionBreather();

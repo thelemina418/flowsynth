@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { createInitialState, createWeapon, createWorldColumn } from "./state";
 import { deserialize, serialize } from "./save";
 import { prestige, buyHoneRank, placeWorldOccupant } from "./actions";
-import { attackPowerOf } from "./world";
+import { attackPowerOf, worldPiecesOf } from "./world";
 import type { GameState } from "./types";
 
 function oldSave(state: GameState): string {
@@ -17,7 +17,7 @@ it("zero bank, pending entitlement and Catalog ownership do not translate into W
   s.eraEarned = 7_000_000;
   expect(prestige(s).ok).toBe(true);
   expect(s.world.unlocked).toBe(false);
-  expect(s.world.columns).toHaveLength(0);
+  expect(worldPiecesOf(s)).toEqual([]);
   s.eraEarned = 20_000_000;
   s.catalogEntryOwned = true;
   s.arete = 20;
@@ -29,6 +29,9 @@ it("zero bank, pending entitlement and Catalog ownership do not translate into W
   expect(loaded.world.unlocked).toBe(true);
   expect(loaded.world.columns).toHaveLength(1);
   expect(loaded.world.weapons).toHaveLength(1);
+  const kit = worldPiecesOf(loaded);
+  expect(kit.map(({ kind }) => kind).sort()).toEqual(["armor", "column", "conduit", "creature", "spell", "weapon"]);
+  expect(kit.every(({ copy }) => copy.pos === null)).toBe(true);
 });
 
 it.each(["frontier", "starter", "collection", "hone"] as const)("translates old %s eligibility once without resetting or refunding the era", (proof) => {

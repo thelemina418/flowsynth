@@ -112,7 +112,7 @@ describe("the lost-money recovery's flow (issue #494)", () => {
     // recovered v13 file in the slot.
     expect(files.get(ORIGINAL_SAVE_KEY)).toBe(source);
     const stored = JSON.parse(files.get(STORAGE_KEY)!);
-    expect(stored.version).toBe(14);
+    expect(stored.version).toBe(15);
     expect(stored.state.nous).toBe(BALANCE.openingGrant);
     // A reload of the recovered save stands silent: no re-recovery, no
     // duplicated explanation, no duplicated entitlement.
@@ -210,7 +210,7 @@ describe("the lost-money recovery's flow (issue #494)", () => {
     expect(app.ui.modal).toBeNull();
     expect(files.get(ORIGINAL_SAVE_KEY)).toBe(source);
     expect(files.get(PRE_V13_ORIGINAL_SAVE_KEY)).toBe(earlier);
-    expect(JSON.parse(files.get(STORAGE_KEY)!).version).toBe(14);
+    expect(JSON.parse(files.get(STORAGE_KEY)!).version).toBe(15);
     expect(app.state.nous).toBe(BALANCE.openingGrant);
   });
 
@@ -237,7 +237,7 @@ describe("the lost-money recovery's flow (issue #494)", () => {
     const reconciledPool = app.state.session!.accounting.poolSeconds;
     expect(reconciledPool).toBe(600);
     const committed = JSON.parse(files.get(STORAGE_KEY)!);
-    expect(committed.version).toBe(14);
+    expect(committed.version).toBe(15);
     expect(committed.savedAt).toBe(400_000);
     expect(committed.state.session.accounting.poolSeconds).toBe(0);
     const reloaded = boot(undefined, false, new SharedSave(mapStorage(files)));
@@ -301,7 +301,7 @@ describe("the lost-money recovery's flow (issue #494)", () => {
     expect(app.state.nous).toBe(BALANCE.openingGrant);
     expect(app.state.eraEarned).toBe(0);
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
-    expect(stored.version).toBe(14);
+    expect(stored.version).toBe(15);
   });
 
   it("closing the offer counts as declining", () => {

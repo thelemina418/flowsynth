@@ -23,7 +23,7 @@ import {
 } from "./response-comparison";
 import { upgradeModuleLevels } from "../src/engine/actions";
 import { allocateRates, voiceCapacityOf } from "../src/engine/economy";
-import { BALANCE, RESPONSE_CURVES, WORLD_ENEMIES } from "../src/engine/constants";
+import { BALANCE, RESPONSE_CURVES } from "../src/engine/constants";
 import { exportPlaythroughArtifact, importPlaythroughArtifact } from "../src/engine/playthrough-artifact";
 import { completeSnapshotsOf, composePlaythroughRecipe, playthroughNote, playthroughRunId, runPlaythrough, type PlaythroughEvent, type PlaythroughRecord } from "../src/engine/playthrough";
 
@@ -165,13 +165,8 @@ describe("the supplied-board reconstruction", () => {
       const module = state.modules[SUPPLIED_BOARD.indexOf(copy)]!;
       expect(module.reserve).toBeGreaterThan(0);
     }
-    // All nine enemies discovered and undefeated.
-    expect(Object.keys(state.world.enemies)).toHaveLength(WORLD_ENEMIES.length);
-    for (const def of WORLD_ENEMIES) {
-      const live = state.world.enemies[def.key]!;
-      expect(live.discovered).toBe(true);
-      expect(live.hp).toBe(def.maxHp);
-    }
+    // Current-engine comparison: the first wall alone imposes pressure.
+    expect(Object.values(state.world.enemies).filter((live) => live.discovered)).toEqual([{ discovered: true, hp: 48 }]);
     // The two Spotlights select P30 — the table's declared settings.
     const tail = state.modules[29]!;
     expect(tail.type).toBe("tail");
@@ -192,17 +187,12 @@ describe("the supplied-board reconstruction", () => {
       expect(typeof rates.read.certified).toBe("boolean");
       expect(Number.isFinite(rates.snapshot.rate)).toBe(true);
     }
-    // The enemies press, behaviorally: the same board with no enemy
-    // discovered reads exactly the discovered board's rate divided by the
-    // nine (1 − penalty) floors — 0.8⁹ — because the World factor
-    // multiplies every voice's weight and value alike, so the allocation
-    // cannot differ. Certified solves only: an incumbent pair could pick
-    // different allocations and spoil the ratio's meaning.
+    // Certified solves on identical boards isolate the one live penalty.
     const pressed = allocateRates(suppliedBoardState(100, 5, "bounded"), true);
     const unpressed = allocateRates(suppliedBoardUnpressed(100, 5, "bounded"), true);
     expect(pressed.read.certified).toBe(true);
     expect(unpressed.read.certified).toBe(true);
-    expect(pressed.snapshot.rate / unpressed.snapshot.rate).toBeCloseTo(0.8 ** WORLD_ENEMIES.length, 6);
+    expect(pressed.snapshot.rate / unpressed.snapshot.rate).toBeCloseTo(0.8, 6);
   });
 
   it("reads the adopted shipped board at the bounded candidate's rate, linear above, at the same declared level", () => {

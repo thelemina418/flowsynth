@@ -135,7 +135,7 @@ describe("the thumb bar (§7, portrait phone)", () => {
     s.catalogEntryOwned = true;
     s.eraEarned = BALANCE.world.entryNous * 1.5;
     s.world.unlocked = true;
-    s.world.weapons.push({ id: "wp2", type: "chargeBlade", pos: null, store: 0, cooldown: 0, targetPriority: [] });
+    s.world.weapons.push({ id: "wp2", type: "chargeBlade", pos: null, store: 0, cooldown: 0, bearer: null });
     app.returnToInventory("m1");
     app.openModal("inventory");
     const modal = document.getElementById("modal-content")!;

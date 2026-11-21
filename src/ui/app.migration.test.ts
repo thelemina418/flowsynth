@@ -73,7 +73,7 @@ describe("distance pricing at the save boundary (issue #543)", () => {
     expect(files.get(PRE_V14_ORIGINAL_SAVE_KEY)).toBe(raw);
     expect(files.get(ORIGINAL_SAVE_KEY)).toBe("earlier");
     expect(files.get(PRE_V13_ORIGINAL_SAVE_KEY)).toBe("archived");
-    expect(JSON.parse(files.get(STORAGE_KEY)!).version).toBe(14);
+    expect(JSON.parse(files.get(STORAGE_KEY)!).version).toBe(15);
     app = boot(undefined, false, new SharedSave(storage));
     expect(document.getElementById("status")!.textContent).not.toContain("Arete returned");
     expect(app.state.arete).toBe(3);
@@ -107,7 +107,7 @@ describe("the calibrated migration's flow (issue #493)", () => {
     // the slot with the converted v13 file.
     expect(files.get(ORIGINAL_SAVE_KEY)).toBe(source);
     const stored = JSON.parse(files.get(STORAGE_KEY)!);
-    expect(stored.version).toBe(14);
+    expect(stored.version).toBe(15);
     expect(stored.state.nous).toBe(BALANCE.openingGrant);
     expect(stored.state.eraEarned).toBe(0);
     expect(stored.state.world.frontier).toBe(0);
@@ -121,7 +121,7 @@ describe("the calibrated migration's flow (issue #493)", () => {
     app = boot(undefined, false, new SharedSave(mapStorage(files)));
     expect(app.retainedOriginal()).toBe(source);
     expect(files.get(PRE_V13_ORIGINAL_SAVE_KEY)).toBe(earlier);
-    expect(JSON.parse(files.get(STORAGE_KEY)!).version).toBe(14);
+    expect(JSON.parse(files.get(STORAGE_KEY)!).version).toBe(15);
     app.closeModal();
     app = boot(undefined, false, new SharedSave(mapStorage(files)));
     expect(app.retainedOriginal()).toBe(source);

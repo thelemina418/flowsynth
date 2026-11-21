@@ -21,7 +21,7 @@ it("launches the fixed fight in a private slot and equips it from World without 
   expect(document.querySelector(".inventory-inspection")?.textContent).toContain("24/24 HP · Ready");
   document.querySelector<HTMLButtonElement>('[data-world-place="sentinel"]')!.click();
   document.querySelector<SVGElement>('[data-world-cell="0,0"]')!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-  expect(app.state.world.proof!.creature.pos).toEqual({ q: 0, r: 0 });
+  expect(app.state.world.creatures[0]!.pos).toEqual({ q: 0, r: 0 });
   expect(localStorage.getItem(STORAGE_KEY)).toBe(beforeLaunch);
   app.dispose();
   const reopened = fixture.boot();

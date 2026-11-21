@@ -1,4 +1,3 @@
-import { WORLD_ENEMIES } from "../src/engine/constants";
 import { DEFAULT_ALLOCATION_BUDGET } from "../src/engine/allocation";
 import assert from "node:assert/strict";
 import {
@@ -16,8 +15,8 @@ import {
   type PlaythroughSource,
 } from "../src/engine/playthrough";
 import { buyChargeColumn, buyHoneRank, placeWorldOccupant } from "../src/engine/actions";
-import { enemyDefAt, honeCostOf, worldOccupantAt } from "../src/engine/world";
-import { adjacent } from "../src/engine/hex";
+import { activeWallOf, honeCostOf, worldCellReserved, worldEnemiesOf, worldOccupantAt } from "../src/engine/world";
+import { adjacent, sameHex } from "../src/engine/hex";
 import { chargeLineCells } from "../src/engine/playthrough-placement";
 import { seededRng } from "../src/engine/capacity-calibration";
 import type { GameState } from "../src/engine/types";
@@ -511,23 +510,29 @@ function probeBuy(state: GameState, piece: RoutePiece, _rng: () => number): bool
   return buyHoneRank(state, "chargeBlade").ok;
 }
 
-// The rig's placements through the engine's own action: the weapon on a
-// free owned cell beside the first enemy's authored cell, the Column on a
-// free owned cell whose module can receive charge beside a charge source
-// (the same topological line the placement leg reads), preferring one
-// that also touches the weapon. Returns whether both landed.
+// Probe a legal three-piece rig (creature, Blade and charge line) through
+// the same placements a live player uses. It is not a simulated victory.
 function probePlace(state: GameState): boolean {
-  const first = WORLD_ENEMIES[0]!;
-  const free = state.cells.filter((cell) => !enemyDefAt(cell) && !worldOccupantAt(state, cell));
-  const weapon = state.world.weapons[0];
-  if (!weapon) return false;
-  const weaponSeat = free.find((cell) => adjacent(cell, first.pos));
-  if (!weaponSeat || !placeWorldOccupant(state, weapon.id, weaponSeat).ok) return false;
-  const column = state.world.columns[0];
-  if (!column) return false;
-  const columnSeat = chargeLineCells(state).find((cell) =>
-    !enemyDefAt(cell) && !worldOccupantAt(state, cell) && adjacent(cell, weaponSeat));
-  return columnSeat !== undefined && placeWorldOccupant(state, column.id, columnSeat).ok;
+  const wall = activeWallOf(state) ?? worldEnemiesOf(state).find((entry) => state.world.enemies[entry.key]?.hp > 0);
+  const [weapon] = state.world.weapons;
+  const [column] = state.world.columns;
+  const [creature] = state.world.creatures;
+  if (!wall || !weapon || !column || !creature || creature.recovering) return false;
+  const availableFor = (pos: typeof wall.pos, id: string) => {
+    const occupant = worldOccupantAt(state, pos);
+    return !worldCellReserved(state, pos) && (!occupant || occupant.id === id);
+  };
+  const lines = chargeLineCells(state);
+  for (const front of state.cells) {
+    if (!availableFor(front, creature.id) || !adjacent(front, wall.pos)) continue;
+    for (const blade of state.cells) {
+      if (!availableFor(blade, weapon.id) || !adjacent(front, blade)) continue;
+      const line = lines.find((pos) => availableFor(pos, column.id) && adjacent(pos, blade) && !sameHex(pos, front));
+      if (line) return placeWorldOccupant(state, creature.id, front).ok && placeWorldOccupant(state, weapon.id, blade).ok &&
+        placeWorldOccupant(state, column.id, line).ok;
+    }
+  }
+  return false;
 }
 
 // The probe itself, over one recorded walk: one probe per bank the walk

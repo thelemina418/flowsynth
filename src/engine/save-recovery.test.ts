@@ -45,7 +45,7 @@ function overpowered(): GameState {
   s.world.frontier = 1;
   s.world.starterWeaponGranted = true;
   s.world.columns.push({ id: "col1", pos: null });
-  s.world.weapons.push({ id: "w1", type: "chargeBlade", pos: null, store: 25, cooldown: 2, targetPriority: [] });
+  s.world.weapons.push({ id: "w1", type: "chargeBlade", pos: null, store: 25, cooldown: 2, bearer: null });
   const enemies = freshEnemyStates();
   const first = Object.keys(enemies)[0]!;
   enemies[first] = { discovered: true, hp: 0 };

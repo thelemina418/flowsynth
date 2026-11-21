@@ -201,7 +201,7 @@ describe("the catalog door (issue #271)", () => {
     s.arete = 20;
     s.eraEarned = BALANCE.world.entryNous * 1.5;
     s.world.unlocked = true;
-    s.world.weapons.push({ id: "wp1", type: "chargeBlade", pos: null, store: 0, cooldown: 0, targetPriority: [] });
+    s.world.weapons.push({ id: "wp1", type: "chargeBlade", pos: null, store: 0, cooldown: 0, bearer: null });
     app.render();
     // The cell arm dies at the layer change, named by the toast.
     app.armCellPurchase();
@@ -251,7 +251,7 @@ describe("the catalog door (issue #271)", () => {
       s.catalogEntryOwned = true;
       s.eraEarned = BALANCE.world.entryNous * 1.5;
       s.world.unlocked = true;
-      s.world.weapons.push({ id: "wp1", type: "chargeBlade", pos: null, store: 0, cooldown: 0, targetPriority: [] });
+      s.world.weapons.push({ id: "wp1", type: "chargeBlade", pos: null, store: 0, cooldown: 0, bearer: null });
       app.armCellPurchase();
       app.setBoardLayer("world");
       const toast = document.getElementById("mode-toast")!;

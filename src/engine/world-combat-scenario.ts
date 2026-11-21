@@ -1,8 +1,8 @@
 import { BALANCE } from "./constants";
 import { hex } from "./hex";
-import { createInitialState, createModule, createWeapon, createWorldColumn } from "./state";
+import { createInitialState, createModule, createWeapon, createWorldColumn, grantCombatStarter } from "./state";
 import type { GameState } from "./types";
-import { COMBAT_PROOF } from "./world-combat";
+import { COMBAT } from "./world-combat";
 import { syncWorldDiscoveries, worldPiecesOf } from "./world";
 
 export function createWorldCombatScenario(): GameState {
@@ -22,25 +22,23 @@ export function createWorldCombatScenario(): GameState {
   state.world.unlocked = state.world.starterColumnGranted = state.world.starterWeaponGranted = true;
   state.world.columns.push(createWorldColumn(state));
   state.world.weapons.push(createWeapon(state, "chargeBlade"));
-  state.world.proof = {
-    creature: { id: "sentinel", pos: null, hp: COMBAT_PROOF.creature.hp, recovering: false, cooldown: 0 },
-    armor: { id: "guard-plate", pos: null },
-    spell: { id: "pulse", pos: null, store: 0 },
-    conduit: { id: "conduit", pos: null, direction: 2 },
-    enemies: Object.fromEntries(COMBAT_PROOF.walls.map((wall) => [wall.key, { hp: wall.maxHp, discovered: false }])),
-    enemyCooldown: 0,
-    elapsed: 0,
-  };
+  state.world.proof = true;
+  grantCombatStarter(state);
+  // Stable fixture identifiers for #542's scripted reproduction.
+  state.world.creatures[0]!.id = "sentinel";
+  state.world.armor[0]!.id = "guard-plate";
+  state.world.spells[0]!.id = "pulse";
+  state.world.conduits[0]!.id = "conduit";
   syncWorldDiscoveries(state);
   return state;
 }
 
 export function assertWorldCombatScenario(state: GameState): void {
-  const proof = state.world.proof;
+  const { proof, elapsed, creatures: [creature], enemies } = state.world;
   const pieces = worldPiecesOf(state);
-  if (state.mode !== "upgrade" || !state.world.unlocked || !proof || proof.elapsed !== 0 ||
-      proof.creature.hp !== 24 || proof.creature.recovering || proof.enemies.shale?.hp !== 48 || !proof.enemies.shale.discovered ||
-      proof.enemies.basalt?.hp !== 35 || proof.enemies.basalt.discovered || state.world.hone.chargeBlade !== 0 ||
+  if (state.mode !== "upgrade" || !state.world.unlocked || !proof || elapsed !== 0 ||
+      creature?.hp !== COMBAT.creature.hp || creature.recovering || enemies.shale?.hp !== 48 || !enemies.shale.discovered ||
+      enemies.basalt?.hp !== 35 || enemies.basalt.discovered || state.world.hone.chargeBlade !== 0 ||
       state.world.columns.length !== 1 || state.world.weapons.length !== 1 || pieces.length !== 6 || pieces.some(({ copy }) => copy.pos !== null)) {
     throw new Error("World combat: expected a fresh, unplayed fixed kit at Shale.");
   }

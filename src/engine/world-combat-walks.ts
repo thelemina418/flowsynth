@@ -10,13 +10,15 @@ import { createWorldCombatScenario } from "./world-combat-scenario";
 
 const EPOCH = Date.UTC(2026, 10, 21, 12);
 const rng = () => 0.3;
-const proofOf = (state: GameState) => state.world.proof!;
-const stamp = (state: GameState) => EPOCH + proofOf(state).elapsed * 1_000;
+const kitOf = ({ world }: GameState) => ({
+  creature: world.creatures[0]!, armor: world.armor[0]!, spell: world.spells[0]!, conduit: world.conduits[0]!,
+});
+const stamp = (state: GameState) => EPOCH + state.world.elapsed * 1_000;
 
 function sample(state: GameState) {
-  const { creature, spell, elapsed } = proofOf(state);
+  const { creature, spell } = kitOf(state);
   return {
-    worldSeconds: elapsed,
+    worldSeconds: state.world.elapsed,
     creditedSeconds: state.sessionRecords.reduce((total, record) => total + record.creditedSeconds, 0) + (state.session?.accounting.creditedSeconds ?? 0),
     sentinelHp: creature.hp,
     deployed: creature.pos !== null,
@@ -56,7 +58,7 @@ function layout(state: GameState) {
 
 function shaleWalk(origin: GameState, variant: "effective" | "attrition" | "weak") {
   const state = structuredClone(origin);
-  const { armor, conduit, creature, spell } = proofOf(state);
+  const { armor, conduit, creature, spell } = kitOf(state);
   if (variant !== "effective") accept("Bench armor", retrieveWorldOccupant(state, armor.id));
   const [column] = state.world.columns;
   const [blade] = state.world.weapons;
@@ -85,7 +87,7 @@ function shaleWalk(origin: GameState, variant: "effective" | "attrition" | "weak
 
 function basaltWalk(origin: GameState, invest: boolean) {
   const state = structuredClone(origin);
-  const { creature, armor, spell } = proofOf(state);
+  const { creature, armor, spell } = kitOf(state);
   const start = sample(state);
   const areteBeforeBuy = state.arete;
   if (invest) for (let rank = 0; rank < 2; rank++) accept("Buy type-wide Hone", buyHoneRank(state, "chargeBlade"));
@@ -108,7 +110,7 @@ function basaltWalk(origin: GameState, invest: boolean) {
 
 export function walkWorldCombatProof() {
   const origin = createWorldCombatScenario();
-  const { creature, armor, conduit } = proofOf(origin);
+  const { creature, armor, conduit } = kitOf(origin);
   const preparation: Point[] = [];
   // A common, played injury checkpoint matters: a weak build starting
   // against full HP can only stand still, never show an actual loss.

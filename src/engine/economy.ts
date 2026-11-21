@@ -1,5 +1,5 @@
 import { amplifierGainOf, tierPowerOf } from "./module-strength";
-import { BALANCE, CATEGORY_OF, CHARGE_RECEIVING_CATEGORIES, EPS, isOscillatorType, isVoiceType, responseCurveCandidateOf, typeRarityOf, WORLD_ENEMIES } from "./constants";
+import { BALANCE, CATEGORY_OF, CHARGE_RECEIVING_CATEGORIES, EPS, isOscillatorType, isVoiceType, responseCurveCandidateOf, typeRarityOf } from "./constants";
 import { lifetimeBreatherSecondsOf, baseProductionOf, boosterResponseOf, breatherResponseOf, chargeResponseOf, chordResponseOf, restPhaseKeyOf, restWarmthFactorOf, usesChargeConversion, usesChordConversion, productionClockFactorOf, temporalPhaseKeyOf } from "./profiles";
 import { analyzeChords, hypotheticalBoardFor, partitionVoices, type ChordAnalysis, type Singer } from "./chords";
 import { allocateChords, DEFAULT_ALLOCATION_BUDGET, type AllocationBudget, type AllocationRead, type AllocationVoiceParams } from "./allocation";
@@ -7,7 +7,7 @@ import { capacityOf } from "./capacity";
 import { achievementBoostOf, syncAchievements } from "./achievements";
 import { discoveryBoostOf, discoveryCount, syncChordDiscoveries } from "./library";
 import { summaryTermsOf } from "./allocation";
-import { worldFactorOf, enemyDepthOf } from "./world";
+import { worldFactorOf } from "./world";
 import { adjacent } from "./hex";
 import type { Contribution, DeployedModule, GameState, Hex, ModuleInstance, ModuleType, MutatorFamily, MutatorInstance, Rarity, RateSnapshot } from "./types";
 
@@ -934,15 +934,8 @@ function allocationFingerprint(state: GameState): string {
   // term is the solve's input — a candidate on the state must re-solve,
   // never serve the shipped solve's result.
   parts.push(`r:${state.candidates?.responseCurve ?? "shipped"}`);
-  // The World layer's remaining-production factor (issue #425): the
-  // enemies' discovered/alive bits and the era's depth band per enemy
-  // (issue #489) are the factor's whole input — a reveal, a kill, or a
-  // band crossing must re-solve, while steady combat damage between the
-  // two must not.
-  for (const def of WORLD_ENEMIES) {
-    const live = state.world.enemies[def.key];
-    parts.push(`w:${def.key}:${live?.discovered ? 1 : 0}:${live && live.hp > EPS ? 1 : 0}:${enemyDepthOf(state, def.key)}`);
-  }
+  // Only a change of pressure changes the allocation's rate input.
+  parts.push(`w:${worldFactorOf(state)}`);
   // The temporal profiles' phase (issue #372): the pass's clock factor
   // moves at step boundaries, not every second, so the quantized phase —
   // never the raw clock — keeps consecutive ticks on one solve while a

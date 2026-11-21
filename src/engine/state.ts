@@ -1,4 +1,5 @@
-import { BALANCE, isOscillatorType, WORLD_ENEMIES } from "./constants";
+import { BALANCE, isOscillatorType } from "./constants";
+import { COMBAT, COMBAT_WALLS } from "./world-combat";
 import { hex } from "./hex";
 import { ENCYCLOPEDIA_REVISION } from "./encyclopedia";
 import type { ChordDiscovery, GameState, ModuleInstance, ModuleType, MutatorFamily, MutatorInstance, Rarity, WeaponCopy, WeaponType, WorldColumn, WorldState } from "./types";
@@ -188,14 +189,8 @@ export function createMutator(state: GameState, family: MutatorFamily, rarity: R
   };
 }
 
-// The World layer's fresh surface (issue #425): an unclaimed frontier, the
-// once-ever starter flag down, empty occupant trays, zero Hone ranks, and
-// every authored enemy standing reserved at its fixed stats. Enemies key to
-// the authored roster — the table is code, the save only live state.
-// `freshEnemyStates` is the restore shape too: prestige resets the
-// encounters to exactly this map.
 export function freshEnemyStates(): WorldState["enemies"] {
-  return Object.fromEntries(WORLD_ENEMIES.map((def) => [def.key, { discovered: false, hp: def.maxHp }]));
+  return Object.fromEntries(COMBAT_WALLS.map((def) => [def.key, { discovered: false, hp: def.maxHp }]));
 }
 
 export function freshWorld(): WorldState {
@@ -204,10 +199,17 @@ export function freshWorld(): WorldState {
     starterColumnGranted: false,
     frontier: 0,
     starterWeaponGranted: false,
+    starterCombatGranted: false,
     columns: [],
     weapons: [],
+    creatures: [],
+    armor: [],
+    spells: [],
+    conduits: [],
     hone: { chargeBlade: 0 },
     enemies: freshEnemyStates(),
+    enemyCooldown: 0,
+    elapsed: 0,
   };
 }
 
@@ -217,9 +219,7 @@ export function createWorldColumn(state: GameState): WorldColumn {
   return { id: newModuleId(state), pos: null };
 }
 
-// A weapon copy waits in the World tray: its store and cadence clock start
-// empty, and its target priority starts unconfigured — the authored roster
-// order resolves until the player picks between sessions (issue #425).
+// A weapon enters the tray uncharged and unbound.
 export function createWeapon(state: GameState, type: WeaponType): WeaponCopy {
   return {
     id: newModuleId(state),
@@ -227,8 +227,18 @@ export function createWeapon(state: GameState, type: WeaponType): WeaponCopy {
     pos: null,
     store: 0,
     cooldown: 0,
-    targetPriority: [],
+    bearer: null,
   };
+}
+
+export function grantCombatStarter(state: GameState): void {
+  const world = state.world;
+  if (world.starterCombatGranted) return;
+  world.creatures.push({ ...createWorldColumn(state), hp: COMBAT.creature.hp, recovering: false, cooldown: 0 });
+  world.armor.push({ ...createWorldColumn(state), bearer: null });
+  world.spells.push({ ...createWorldColumn(state), bearer: null, store: 0 });
+  world.conduits.push({ ...createWorldColumn(state), direction: 2 });
+  world.starterCombatGranted = true;
 }
 
 // Load-time normalization for the World layer's surface (issue #425): a
@@ -252,6 +262,27 @@ export function normalizeWorld(raw: unknown): WorldState {
   if (shape.unlocked === true) world.unlocked = true;
   if (shape.starterColumnGranted === true) world.starterColumnGranted = true;
   if (shape.starterWeaponGranted === true) world.starterWeaponGranted = true;
+  if (shape.starterCombatGranted === true) world.starterCombatGranted = true;
+  const bounded = (value: unknown, cap: number, fallback = 0): number =>
+    typeof value === "number" && Number.isFinite(value) ? Math.min(cap, Math.max(0, value)) : fallback;
+  const rows = (items: unknown): Record<string, unknown>[] => Array.isArray(items)
+    ? items.filter((item): item is Record<string, unknown> => typeof item?.id === "string") : [];
+  const columnOf = (item: Record<string, unknown>) => ({ id: item.id as string, pos: hexOrTray(item.pos) });
+  const gearOf = (item: Record<string, unknown>) => ({
+    ...columnOf(item),
+    bearer: typeof item.bearer === "string" ? item.bearer : null,
+    ...(typeof item.chosenBearer === "string" && { chosenBearer: item.chosenBearer }),
+  });
+  world.enemyCooldown = bounded(shape.enemyCooldown, COMBAT.enemyCadence);
+  world.elapsed = bounded(shape.elapsed, Number.MAX_VALUE);
+  world.creatures = rows(shape.creatures).map((item) => {
+    const hp = bounded(item.hp, COMBAT.creature.hp, COMBAT.creature.hp);
+    const recovering = hp < COMBAT.creature.hp && (item.recovering === true || hp === 0);
+    return { ...columnOf(item), hp, recovering, pos: recovering ? null : hexOrTray(item.pos), cooldown: bounded(item.cooldown, COMBAT.creature.cadence) };
+  });
+  world.armor = rows(shape.armor).map(gearOf);
+  world.spells = rows(shape.spells).map((item) => ({ ...gearOf(item), store: bounded(item.store, COMBAT.spell.threshold) }));
+  world.conduits = rows(shape.conduits).map((item) => ({ ...columnOf(item), direction: Math.floor(bounded(item.direction, 5, 2)) }));
   if (Array.isArray(shape.columns)) {
     for (const column of shape.columns) {
       if (typeof column !== "object" || column === null) continue;
@@ -271,16 +302,11 @@ export function normalizeWorld(raw: unknown): WorldState {
       const type: WeaponType = "chargeBlade";
       const store = typeof candidate.store === "number" && Number.isFinite(candidate.store) && candidate.store > 0 ? candidate.store : 0;
       const cooldown = typeof candidate.cooldown === "number" && Number.isFinite(candidate.cooldown) && candidate.cooldown > 0 ? candidate.cooldown : 0;
-      const priority = Array.isArray(candidate.targetPriority)
-        ? candidate.targetPriority.filter((key): key is string => typeof key === "string" && WORLD_ENEMIES.some((def) => def.key === key))
-        : [];
       world.weapons.push({
-        id: candidate.id,
+        ...gearOf(candidate),
         type,
-        pos: hexOrTray(candidate.pos),
         store: Math.min(store, BALANCE.world.storageCap),
-        cooldown: cooldown % BALANCE.world.attackCadenceSeconds,
-        targetPriority: [...new Set(priority)],
+        cooldown: Math.min(cooldown, COMBAT.bladeCadence),
       });
     }
   }
@@ -294,7 +320,7 @@ export function normalizeWorld(raw: unknown): WorldState {
   }
   if (typeof shape.enemies === "object" && shape.enemies !== null) {
     for (const [key, value] of Object.entries(shape.enemies as Record<string, unknown>)) {
-      const def = WORLD_ENEMIES.find((entry) => entry.key === key);
+      const def = COMBAT_WALLS.find((entry) => entry.key === key);
       if (!def || typeof value !== "object" || value === null) continue;
       const candidate = value as Record<string, unknown>;
       const hp = typeof candidate.hp === "number" && Number.isFinite(candidate.hp) ? candidate.hp : def.maxHp;

@@ -69,7 +69,7 @@ describe("persistence", () => {
   it("saves carry the current version", () => {
     const parsed = JSON.parse(serialize(fresh()));
     expect(parsed.version).toBe(SAVE_VERSION);
-    expect(parsed.version).toBe(14);
+    expect(parsed.version).toBe(15);
   });
 
   it("the load boundary strips a run-candidates key — an ordinary save never reads a comparison curve (issue #487)", () => {
@@ -782,7 +782,7 @@ describe("the v12 → v13 migration (issue #493)", () => {
     s.world.frontier = 1;
     s.world.starterWeaponGranted = true;
     s.world.columns.push({ id: "col1", pos: null });
-    s.world.weapons.push({ id: "w1", type: "chargeBlade", pos: null, store: 25, cooldown: 2, targetPriority: [] });
+    s.world.weapons.push({ id: "w1", type: "chargeBlade", pos: null, store: 25, cooldown: 2, bearer: null });
     s.world.hone.chargeBlade = 2;
     const enemies = freshEnemyStates();
     const first = Object.keys(enemies)[0]!;

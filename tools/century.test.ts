@@ -1,7 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { WORLD_ENEMIES } from "../src/engine/constants";
 import {
   exportPlaythroughArtifact,
   importPlaythroughArtifact,
@@ -28,7 +27,7 @@ import {
   suppliedBoardState,
   type CenturyEraClass,
 } from "./century";
-import { enemyDefAt } from "../src/engine/world";
+import { activeWallOf, worldEnemyAt } from "../src/engine/world";
 import { syncRates } from "../src/engine/economy";
 
 // The century evaluation's always-on checks (issue #492, parent #484
@@ -175,17 +174,14 @@ describe("the anonymized supplied-board fixture", () => {
     for (const module of supplied) {
       expect(module.level).toBe(SUPPLIED_BOARD_LEVEL);
       expect(module.pos).not.toBeNull();
-      expect(enemyDefAt(module.pos!), `no module stands on an enemy cell (${module.id})`).toBeUndefined();
+      expect(worldEnemyAt(state, module.pos!), `no module stands on an enemy cell (${module.id})`).toBeUndefined();
     }
     // The footprint is the launch band's compact frontier: connected and
     // inside the lattice. Every seat is an owned cell.
     const owned = new Set(state.cells.map((cell) => `${cell.q},${cell.r}`));
     for (const module of supplied) expect(owned.has(`${module.pos!.q},${module.pos!.r}`)).toBe(true);
-    for (const def of WORLD_ENEMIES) {
-      const live = state.world.enemies[def.key]!;
-      expect(live.discovered).toBe(true);
-      expect(live.hp).toBe(def.maxHp);
-    }
+    expect(activeWallOf(state)?.key).toBe("shale");
+    expect(Object.values(state.world.enemies).filter((live) => live.discovered)).toEqual([{ discovered: true, hp: 48 }]);
     expect(state.world.columns).toHaveLength(0);
     expect(state.world.weapons).toHaveLength(0);
     expect(Number.isFinite(syncRates(state, false).rate)).toBe(true);

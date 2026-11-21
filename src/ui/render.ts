@@ -57,7 +57,7 @@ import { chargeGlow, chargeLeads } from "./leads";
 import { chordOverlay, chordMarkCovers, chipWidth, CHORD_HUES, type ChordMark } from "./chordlayer";
 import { updateSvg } from "./svg";
 import { APP_LABELS, CATEGORY_WORD, META, RARITY_LABEL, SHELF_DESCRIPTIONS, SPECIAL_DRAFT_NAME, WORLD_META, rarityMark, tierNumeral, tierWord } from "./meta";
-import { honeCostOf } from "../engine/world";
+import { attackPowerOf, honeCostOf, honePowerAt, worldPiecesOf } from "../engine/world";
 import { typeRarityOf } from "../engine/constants";
 import { formatBalance, formatInt, formatNumber, formatPracticeMinutes, chordTermLabel, practiceCountdown } from "./format";
 import { enemyPressureHtml, renderBoardLedger, renderGameInfoStrip, rateDetailsHtml, updateRateDetailsLive, deployedRosterKey, unlockedCount, wireSynthPicks, FEATS_SVG, LIBRARY_SVG, ARETE_SVG, CAPACITY_SVG, SCRAP_SVG } from "./ledger";
@@ -2399,9 +2399,8 @@ function renderInventoryTray(app: App): void {
   if (!moduleTray || !worldTray) return;
   const modules = app.ui.boardLayer === "modules";
   moduleTray.classList.toggle("off", app.state.mode !== "upgrade" || !modules);
-  // The proof uses the same phone Inventory sheet, not the desktop tray
-  // behind it. Keep the shipped World presentation unchanged here.
-  worldTray.hidden = app.state.mode !== "upgrade" || modules || (!!app.state.world.proof && isPhoneWidth());
+  // Phone Inventory owns the tray; the desktop overlay would cover the board.
+  worldTray.hidden = app.state.mode !== "upgrade" || modules || isPhoneWidth();
   const tray = modules ? moduleTray : worldTray;
   tray.closest<HTMLElement>(".tray-column")?.classList.toggle("collapsed", app.ui.inventory.collapsed && !app.ui.inventory.dragOpen);
   if (modules) renderInventoryContent(app, tray, false, (element, id) => bindPointerDrag(app, element, id));
@@ -2565,8 +2564,7 @@ function renderModal(app: App, live: RateSnapshot, projected: RateSnapshot): voi
                       // The tray sheet's face rides the global switch, and
                       // the World face re-reads the tray (issue #426).
                       app.ui.boardLayer,
-                      app.state.world.weapons.map((w) => `${w.id}:${w.pos}:${w.store}:${w.targetPriority}`),
-                      app.state.world.columns.map((c) => `${c.id}:${c.pos}`),
+                      worldPiecesOf(app.state),
                     ]
                   // The combine review's identity: the offered pair (issue
                   // #152). The terms are read fresh on rebuild.
@@ -2825,18 +2823,13 @@ function wireClose(app: App): void {
   app.listen(byId("close-modal"), "click", () => app.closeModal());
 }
 
-// The starter-weapon grant's one presentation (issue #426, priority 5):
-// the first World-eligible claim lands the Charge Blade at the moment it
-// banks, and this modal is where the player meets it — the plate, the
-// name, the one line that says where it waits. Once, ever: the granted
-// flag keeps the engine from minting a second, and the modal only ever
-// opens on the landing that set it.
+// The first positive bank discovers World and grants its unplaced kit.
 function renderGrantModal(app: App, content: HTMLElement): void {
   content.innerHTML = `
     ${modalTop("GRANTED")}
     <h2 id="modal-title">World discovered</h2>
-    <div class="grant-face" aria-hidden="true">${worldTileSvg("weapon")}</div>
-    <p class="lead">One ${termTipHtml("Charge Column")} and one ${termTipHtml("Charge Blade")} wait in the ${termTipHtml("World tray")}.</p>
+    <div class="grant-face" aria-hidden="true">${worldTileSvg("creature")}</div>
+    <p class="lead">Sentinel, Guard Plate, Pulse, ${termTipHtml("Charge Blade")}, ${termTipHtml("Charge Column")} and Conduit wait in the ${termTipHtml("World tray")}.</p>
     <div class="modal-actions">
       <button id="grant-close" class="primary">Continue</button>
     </div>`;
@@ -3382,12 +3375,11 @@ function catalogHoneRowHtml(app: App, type: WeaponType): string {
   const { state } = app;
   const rank = state.world.hone[type];
   const price = honeCostOf(state, type);
-  const perRank = BALANCE.world.honeAttackPerRank;
   const name = WORLD_META[type].name;
   const ladderLength = BALANCE.world.honeCosts.length;
   return `<article class="catalog-row">
-    <div><h3 class="t-condensed">${termTipHtml("Hone")} <span class="mono">${rank}/${ladderLength}</span></h3><p class="t-note">+${perRank} attack per rank · every ${termTipHtml(name as CatalogTerm)} · ${termTipHtml("memorized")}</p>${
-      price === null ? "" : `<p class="t-note mono">ATK ${BALANCE.world.attackBase + rank * perRank} → ${BALANCE.world.attackBase + (rank + 1) * perRank}</p>`
+    <div><h3 class="t-condensed">${termTipHtml("Hone")} <span class="mono">${rank}/${ladderLength}</span></h3><p class="t-note">Every ${termTipHtml(name as CatalogTerm)} · ${termTipHtml("memorized")}</p>${
+      `<p class="t-note mono">ATK ${attackPowerOf(state, type)}${price === null ? "" : ` → ${honePowerAt(rank + 1)}`}</p>`
     }</div>
     ${price === null ? catalogOwnedHtml("honed") : areteBuyButtonHtml(app, "buy-world-hone", price)}
   </article>`;
@@ -3541,7 +3533,7 @@ function renderForgeModal(app: App, content: HTMLElement, projected: RateSnapsho
         <div class="candidate-tile" data-type="${candidate.type}"><button class="candidate-pick" data-choice="${candidate.id}" data-offer="${offer.id}" aria-label="Take ${candidate.type === "column" ? "Column" : "Charge Blade"}" aria-describedby="forge-effect-${candidate.id}"></button>
           <span class="module-preview">${worldTileSvg(candidate.type === "column" ? "column" : "weapon")}</span>
           <span class="candidate-readout"><span class="candidate-name">${candidate.type === "column" ? "Column" : "Charge Blade"}</span>
-          <span id="forge-effect-${candidate.id}" class="candidate-effect">${forgeEffectHtml(candidate.type === "column" ? "Supply adjacent World weapons" : "Store charge → strike enemies")}</span></span>
+          <span id="forge-effect-${candidate.id}" class="candidate-effect">${forgeEffectHtml(candidate.type === "column" ? "Lift charge to World gear" : "Spend charge → armed Sentinel strikes")}</span></span>
         </div>` : `
         <div class="candidate-tile" data-rarity="${typeRarityOf(candidate.type)}" data-type="${candidate.type}"><button class="candidate-pick" data-choice="${candidate.id}" data-offer="${offer.id}" data-rarity="${typeRarityOf(candidate.type)}" data-type="${candidate.type}" aria-label="Take ${RARITY_LABEL[typeRarityOf(candidate.type)]} ${META[candidate.type].name} · ${tierWord(candidate.tier)}" aria-describedby="forge-effect-${candidate.id}"></button>
           <span class="module-preview">${inventoryTileSvg(candidate)}</span>
@@ -3677,7 +3669,7 @@ function renderMigrationModal(app: App, content: HTMLElement): void {
     ["Stands", `Practice history, ${termTipHtml("Habit class", "class development")}, ${termTipHtml("goals")}, notes, and feats`],
     ["Rebased", `<strong class="mono">${report.modulesCleared}</strong> module${report.modulesCleared === 1 ? "" : "s"} return${report.modulesCleared === 1 ? "s" : ""} to base — the tiers and placement stay`],
     ["Rebased", `${termTipHtml("nous", "Nous")} opens at the opening grant, in place of <strong class="mono">${formatNumber(report.nousCleared)} ν</strong>`],
-    ["Rebased", `The era's <strong class="mono">${formatNumber(report.eraEarnedCleared)} ν</strong> earned rebased, purchased ${termTipHtml("Harmonic capacity", "capacity")} returns to one voice, ${termTipHtml("charge")} empties, and the ${termTipHtml("Enemy", "enemies")}' era state restores`],
+    ["Rebased", `The era's <strong class="mono">${formatNumber(report.eraEarnedCleared)} ν</strong> earned rebased, purchased ${termTipHtml("Harmonic capacity", "capacity")} returns to one voice, ${termTipHtml("charge")} empties, and World pressure resets for the era`],
     ["Rebased", `The ${termTipHtml("Claimed frontier")} restarts at the calibrated curve — your next claims bank against what you earn from here`],
   ];
   if (report.bucketNousCleared > 0) {
@@ -3722,7 +3714,7 @@ function renderRecoveryModal(app: App, content: HTMLElement): void {
     ["Stands", `Practice history, ${termTipHtml("Habit class", "class development")}, ${termTipHtml("goals")}, notes, and feats`],
     ["Stands", `Your collection and its board — designs, ${termTipHtml("merge tier", "tiers")}, placement, and every earned ${termTipHtml("module rolls", "roll")}`],
     ["Stands", `<span class="recovery-purchases">${termTipHtml("memorized", "Memorized")} purchases — ${termTipHtml("Catalog")} unlocks, the ${termTipHtml("Arete")}-bought World purchases, the ${termTipHtml("Warp Beam")}'s rungs</span>`],
-    ["Rebases", `The economy opens calibrated: levels return to base, ${termTipHtml("nous")} at the opening grant, purchased ${termTipHtml("Harmonic capacity", "capacity")} to one voice, every ${termTipHtml("Enemy", "enemy")}'s era state restores, and the ${termTipHtml("Claimed frontier")} clears — claims bank against what you earn from here`],
+    ["Rebases", `The economy opens calibrated: levels return to base, ${termTipHtml("nous")} at the opening grant, purchased ${termTipHtml("Harmonic capacity", "capacity")} to one voice, World pressure resets for the era, and the ${termTipHtml("Claimed frontier")} clears — claims bank against what you earn from here`],
     ["Original", `Your save stays on this device, byte for byte`],
   ] as const;
   content.innerHTML = `
@@ -3781,7 +3773,7 @@ function renderPrestigeModal(app: App, content: HTMLElement): void {
     <p class="lead">${zero
       ? `This prestige banks no Arete (<strong>0 Arete</strong>)`
       : `Prestige banks <strong class="mono">${claim} Arete</strong>`} and starts the era over: module levels return to base${capacityClause}, and your nous and charge return to the opening.</p>
-    <p class="lead muted">Your board and its placement, the tray, banked Forge rolls and progress, feats, your whole life record, your Arete, your scrap, and lifetime nous all stay — as do your World columns, weapons, and ${termTipHtml("Hone")} ranks.</p>
+    <p class="lead muted">Your board and its placement, the tray, banked Forge rolls and progress, feats, your whole life record, your Arete, your scrap, and lifetime nous all stay — as do your World kit, ${termTipHtml("Hone")} ranks, victories and wounds.</p>
     <div class="modal-actions">
       <button id="prestige-cancel">Not yet</button>
       <button id="prestige-confirm" class="primary">${zero ? "Prestige anyway" : `Prestige and claim ${claim} Arete`}</button>

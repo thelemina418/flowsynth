@@ -150,7 +150,7 @@ describe("App lifetime", () => {
     app.state.catalogEntryOwned = true;
     app.state.eraEarned = BALANCE.world.entryNous * 1.5;
     app.state.world.unlocked = true;
-    app.state.world.weapons.push({ id: "owned-weapon", type: "chargeBlade", pos: { q: 1, r: 0 }, store: 0, cooldown: 0, targetPriority: [] });
+    app.state.world.weapons.push({ id: "owned-weapon", type: "chargeBlade", pos: { q: 1, r: 0 }, store: 0, cooldown: 0, bearer: null });
     app.ui.boardLayer = "world";
     app.render();
     const node = document.querySelector('[data-world-cell="1,0"]')!;

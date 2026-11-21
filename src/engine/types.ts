@@ -220,57 +220,39 @@ export interface WorldColumn {
   pos: Hex | null;
 }
 
-// A weapon copy (issue #425, ADR-0074): stores charge up to its type's
-// capped quantity (persists between sessions, resets on prestige), attacks
-// adjacent discovered undefeated enemies on the capped cadence, spending
-// the fixed cost per attack. `targetPriority` is the between-sessions
-// control: the ordered preference among authored enemy keys, resolved
-// against the authored roster order when unconfigured or exhausted.
-// `cooldown` is combat state — seconds accumulated toward the next attack;
-// lenient-defaulted to 0 at load.
-export interface WeaponCopy {
-  id: string;
-  type: WeaponType;
-  pos: Hex | null;
-  store: number;
-  cooldown: number;
-  targetPriority: string[];
+// One physical gear copy can serve one deployed adjacent creature. The
+// assignment is reconciled only during preparation; an absent bearer never
+// turns a contested copy into someone else's gear in flow.
+export interface WorldGear extends WorldColumn {
+  bearer: string | null;
+  chosenBearer?: string;
 }
 
-// One authored enemy's live World state (issue #425), keyed by the
-// authored roster key: discovered flips the moment era-earned crosses the
-// threshold (the penalty activates), `hp` carries damage between sessions
-// and restores at fixed stats on prestige. Defeat reads `hp <= 0` — the
-// era bonus replaces the penalty, never stored twice.
+export interface WeaponCopy extends WorldGear {
+  type: WeaponType;
+  store: number;
+  cooldown: number;
+}
+
+export interface WorldSpell extends WorldGear {
+  store: number;
+}
+
+export interface WorldConduit extends WorldColumn {
+  direction: number;
+}
+
+// Zero HP is a lifetime victory. `discovered` means the wall is current
+// in this era (or was cleared); a living inactive wall still heals.
 export interface WorldEnemyState {
   discovered: boolean;
   hp: number;
 }
 
-// The World layer's save surface (issue #425, ADR-0074): the claimed
-// frontier (the entitlement already banked against, advanced only on
-// prestige), the once-ever starter weapon flag, the placed and tray
-// occupants (Columns and weapons), the per-type Hone ranks, and the
-// enemies' live state. World purchases persist through prestige; enemy
-// encounters, damage, and stored World charge reset with the era.
-export interface WorldCombatCreature {
-  id: string;
-  pos: Hex | null;
+export interface WorldCombatCreature extends WorldColumn {
   hp: number;
   recovering: boolean;
   cooldown: number;
-}
-
-// Constructed exclusively by the isolated development scenario. The live
-// save loader never installs a proof, even if given a scenario export.
-export interface WorldCombatProof {
-  creature: WorldCombatCreature;
-  armor: WorldColumn;
-  spell: WorldColumn & { store: number };
-  conduit: WorldColumn & { direction: number };
-  enemies: Record<string, WorldEnemyState>;
-  enemyCooldown: number;
-  elapsed: number;
 }
 
 export interface WorldState {
@@ -278,11 +260,20 @@ export interface WorldState {
   starterColumnGranted: boolean;
   frontier: number;
   starterWeaponGranted: boolean;
+  starterCombatGranted: boolean;
   columns: WorldColumn[];
   weapons: WeaponCopy[];
+  creatures: WorldCombatCreature[];
+  armor: WorldGear[];
+  spells: WorldSpell[];
+  conduits: WorldConduit[];
   hone: Record<WeaponType, number>;
   enemies: Record<string, WorldEnemyState>;
-  proof?: WorldCombatProof;
+  enemyCooldown: number;
+  elapsed: number;
+  // Only the isolated development scenario installs the compressed two-wall
+  // timetable. The live loader never installs it from an export.
+  proof?: true;
 }
 
 export interface MutatorCandidate {

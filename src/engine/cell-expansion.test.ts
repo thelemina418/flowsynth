@@ -72,7 +72,7 @@ describe("distance-priced shared footprint", () => {
 
   it("keeps a deployed proof creature's cell even if an in-band replacement is available", () => {
     const state = createWorldCombatScenario();
-    const sentinel = state.world.proof!.creature;
+    const sentinel = state.world.creatures[0]!;
     state.cells = state.cells.filter(pos => pos.q !== 0 || pos.r !== -1);
     expect(placeWorldOccupant(state, sentinel.id, hex(-1, 1)).ok).toBe(true);
     const proposal = state.cells.map(pos => pos.q === -1 && pos.r === 1 ? hex(0, -1) : pos);
@@ -104,7 +104,7 @@ describe("distance-priced shared footprint", () => {
     expect(state.world).toEqual(before.world);
     expect(state).toMatchObject({ arete: 7, nous: 456, cellsBought: 2, achievements: { "first-row": 160 } });
     const next = serialize(state, 1);
-    expect(JSON.parse(next)).toMatchObject({ version: 14 });
+    expect(JSON.parse(next)).toMatchObject({ version: 15 });
     expect(next).not.toMatch(/gatedRows|unlockedRows/);
     expect(deserialize(next)).toEqual({ state });
     expect(buyRowUnlock(state, -2)).toMatchObject({ ok: false, reason: expect.stringContaining("retired") });

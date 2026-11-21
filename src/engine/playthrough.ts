@@ -15,16 +15,14 @@ import {
   placeModule,
   placeWorldOccupant,
   prestige,
-  retrieveWorldOccupant,
   startBreather,
   startSession,
   upgradeModuleLevels,
 } from "./actions";
 import type { ActionResult } from "./actions";
 import { frontier, seededRng } from "./capacity-calibration";
-import { BALANCE, CATEGORY_OF, isOscillatorType, RESPONSE_CURVES, responseCurveCandidateOf, SAVE_VERSION, SHELF_TYPES, WORLD_ENEMIES } from "./constants";
+import { BALANCE, CATEGORY_OF, isOscillatorType, RESPONSE_CURVES, responseCurveCandidateOf, SAVE_VERSION, SHELF_TYPES } from "./constants";
 import { isModuleCandidate } from "./types";
-import type { WorldEnemyDef } from "./constants";
 import { chargeLineCells, starterChargeLineMove } from "./playthrough-placement";
 import { affordableLevels, syncRates, wholeNous, levelsCost } from "./economy";
 import { activeGoalOf, createGoal, rollGoalOccurrences } from "./goals";
@@ -34,7 +32,7 @@ import { cellNoteOf } from "./lattice";
 import { writeNote } from "./notes";
 import { SCENARIOS, scenarioOf } from "./scenarios";
 import { deserialize, serialize } from "./save";
-import { columnCost, enemyDefAt, enemyDefeated, honeCostOf, worldOccupantAt, hasActiveWorldEnemy, eligibleTargetsOf } from "./world";
+import { activeWallOf, columnCost, enemyDefeated, honeCostOf, worldCellReserved, worldEnemiesOf, worldOccupantAt, hasActiveWorldEnemy } from "./world";
 import type { GameState, Hex, ModuleInstance, ModuleType, ResponseCurveId, WeaponType } from "./types";
 
 // The reproducible playthrough runner (issues #468/#469/#472, parent
@@ -506,16 +504,12 @@ export function checkpointRecipeOf(id: PlaythroughCheckpointId): PlaythroughReci
   return id === "approaching-prestige" ? APPROACHING_PRESTIGE_RECIPE : PUSHING_CHECKPOINT_RECIPE;
 }
 
-// The World decision pending (issue #471): a discovered enemy still lives
-// and an owned occupant — weapon or Column — waits in the tray. Read at
-// the between-sessions moment after the prestige door's check and before
-// any spending, placement, or recovery bookkeeping touches the era, so
-// the stopped state is the decision itself, unplayed.
+// The World checkpoint is unplayed: a current wall, a staged charge
+// line and the ready starter combatants in the tray.
 function worldDecisionPending(state: GameState): boolean {
   const living = hasActiveWorldEnemy(state);
-  const waiting =
-    state.world.weapons.some((weapon) => weapon.pos === null) ||
-    state.world.columns.some((column) => column.pos === null);
+  const waiting = state.world.creatures.some((copy) => copy.pos === null && !copy.recovering) &&
+    state.world.weapons.some((copy) => copy.pos === null) && state.world.columns.some((copy) => copy.pos !== null);
   return living && waiting;
 }
 
@@ -1187,9 +1181,8 @@ function pushTrajectory(ctx: RunContext, state: GameState): void {
 }
 
 // The run's discovery diffs: achievements and World enemies found since
-// the last check, recorded as milestones (story 24's foundation), plus
-// enemies defeated — the ×(1 + bonus) era bonus landing is the World
-// milestone the spending bought toward.
+// the last check, recorded as milestones. A lifetime victory belongs to
+// the era in which it happened, not whichever era later reads the board.
 function recordDiscoveries(ctx: RunContext, state: GameState): void {
   for (const id of Object.keys(state.achievements)) {
     if (!ctx.achievements.includes(id)) {
@@ -1199,7 +1192,7 @@ function recordDiscoveries(ctx: RunContext, state: GameState): void {
   }
   const era = ctx.eras[ctx.eras.length - 1]!;
   for (const [key, enemy] of Object.entries(state.world.enemies)) {
-    if (enemy.discovered && !era.discovered.includes(key)) {
+    if (enemy.discovered && (!enemyDefeated(state, key) || !ctx.defeated.includes(key)) && !era.discovered.includes(key)) {
       era.discovered.push(key);
       if (!ctx.discovered.includes(key)) ctx.discovered.push(key);
       record(ctx, {
@@ -1209,9 +1202,9 @@ function recordDiscoveries(ctx: RunContext, state: GameState): void {
         milestone: true,
       });
     }
-    if (enemy.discovered && enemyDefeated(state, key) && !era.defeated.includes(key)) {
+    if (enemy.discovered && enemyDefeated(state, key) && !ctx.defeated.includes(key)) {
       era.defeated.push(key);
-      if (!ctx.defeated.includes(key)) ctx.defeated.push(key);
+      ctx.defeated.push(key);
       record(ctx, {
         kind: "milestone",
         label: `World — enemy ${key} defeated`,
@@ -1225,7 +1218,7 @@ function recordDiscoveries(ctx: RunContext, state: GameState): void {
 // One management break: the prompt policy's decisions, each riding the
 // engine's own action gates. Every leg records its first decline and stops
 // — the record stays readable and the reasons stay the engine's own.
-function manage(ctx: RunContext, state: GameState): void {
+function manage(ctx: RunContext, state: GameState, checkpoint: PlaythroughCheckpointId | null): void {
   ctx.manageBreaks++;
   recordDiscoveries(ctx, state);
   // The one standing practice: the schedule's habit with its daily goal.
@@ -1272,10 +1265,10 @@ function manage(ctx: RunContext, state: GameState): void {
   // ADR-0089: buy usable seats, not a whole band of equally priced offers.
   // The first living enemy can justify buying beyond the Modules budget.
   const fight = state.world.unlocked && ctx.worldOrder !== "none"
-    ? WORLD_ENEMIES.find(def => state.world.enemies[def.key]?.discovered && !enemyDefeated(state, def.key))
+    ? activeWallOf(state)
     : undefined;
   for (let added = 0;; added++) {
-    const approaching = fight && !state.cells.some(cell => adjacent(cell, fight.pos) && !enemyDefAt(cell));
+    const approaching = fight && !state.cells.some(cell => adjacent(cell, fight.pos) && !worldCellReserved(state, cell));
     if (!approaching && (added >= seatBudget || state.cells.length >= state.modules.length)) break;
     const candidates = frontier(state, "compact");
     const pos = approaching
@@ -1426,11 +1419,8 @@ function manage(ctx: RunContext, state: GameState): void {
   }
   if (swept > 0) record(ctx, { kind: "upgrade", label: `Swept ${swept} levels`, ok: true });
 
-  // The World's door (story 24): a starter weapon granted, a claimed
-  // frontier, or a discovered enemy. Prestige restores every enemy to
-  // undiscovered, so a discovered-only gate would idle the whole next
-  // era's spending while the claim's Arete sits in the bank; the door,
-  // once entered, stays entered. The policy's spending order reads it.
+  // Permanent discovery, not the current wall's activation, gates the
+  // runner's preparation and spending.
   const worldEntered = state.world.unlocked;
 
   // Live Arete offerings have no retired Catalog-entry prerequisite.
@@ -1481,7 +1471,7 @@ function manage(ctx: RunContext, state: GameState): void {
       buyColumnsWhileAffordable(ctx, state);
       buyHoneWhileAffordable(ctx, state);
     }
-    placeWorldOccupants(ctx, state);
+    placeWorldOccupants(ctx, state, checkpoint === "world-enemy-active");
   }
   recordDiscoveries(ctx, state);
   settleRecovery(ctx, state);
@@ -1534,26 +1524,23 @@ function buyHoneWhileAffordable(ctx: RunContext, state: GameState): void {
   }
 }
 
-// The World placement leg (story 24, the charge-line seat repaired by
-// issue #491): the weapon deploys beside the fight — an owned cell
-// adjacent to a living discovered enemy, preferring one that also touches
-// a placed Column, nearest the enemy first — and the Column deploys on a
-// charge line: a cell whose module can receive charge beside a charge
-// source, preferring one that also touches the placed weapon, then the
-// strongest line. Every policy deploys the weapon's fight before the
-// charge line — a Column must never take the fight's only seat. Readable
-// preference ranks, board order breaking ties; the engine's own placement
-// action gates every seat (enemy-reserved cells refuse, one occupant per
-// cell).
-function placeWorldOccupants(ctx: RunContext, state: GameState): void {
-  const living = WORLD_ENEMIES.filter((def) => {
-    const live = state.world.enemies[def.key];
-    return live?.discovered === true && !enemyDefeated(state, def.key);
-  });
-  const distanceToFight = (pos: Hex): number =>
-    living.length > 0 ? Math.min(...living.map((def) => hexDistance(pos, def.pos))) : Number.POSITIVE_INFINITY;
-  const free = (): Hex[] =>
-    state.cells.filter((cell) => !enemyDefAt(cell) && !worldOccupantAt(state, cell));
+// Preparation for live combat. Reserve the melee seat for Sentinel;
+// weapons and other gear go around it, while a Column needs a real line.
+// The checkpoint stages only infrastructure and leaves combat unplayed.
+function placeWorldOccupants(ctx: RunContext, state: GameState, stageOnly: boolean): void {
+  const wall = activeWallOf(state);
+  const reach = (cell: Hex) => !!wall && adjacent(cell, wall.pos);
+  const available = (cell: Hex) => !worldCellReserved(state, cell) && !worldOccupantAt(state, cell);
+  const free = () => state.cells.filter(available);
+  const sentinel = state.world.creatures[0];
+  const stagedSeat = free().find(reach);
+  if (!stageOnly && sentinel && !sentinel.recovering && stagedSeat && (!sentinel.pos || !reach(sentinel.pos))) {
+    const result = placeWorldOccupant(state, sentinel.id, stagedSeat);
+    record(ctx, { kind: "world", label: `Placed Sentinel at ${stagedSeat.q},${stagedSeat.r}`, ...outcome(result) });
+  } else if (!stageOnly && wall && sentinel && !stagedSeat && !sentinel.pos && !sentinel.recovering) {
+    record(ctx, { kind: "world", label: "Sentinel stayed in the tray", ok: false, reason: "no free World cell beside the current wall" });
+  }
+  const front = sentinel?.pos && reach(sentinel.pos) ? sentinel.pos : null;
   // The charge line's read (issue #491's trap repair): the TOPOLOGY of a
   // line, not its instantaneous strength. A charge line is a cell whose
   // module can receive charge and that sits beside the board's charge
@@ -1569,7 +1556,6 @@ function placeWorldOccupants(ctx: RunContext, state: GameState): void {
   // The weapon seat's rank, one construction shared by the deploy leg and
   // the relocation read — the two can never disagree about preference.
   const weaponRank = (pos: Hex): readonly number[] => [
-    distanceToFight(pos),
     state.world.columns.some((column) => column.pos !== null && adjacent(pos, column.pos)) ? 0 : 1,
     pos.q, pos.r,
   ];
@@ -1598,34 +1584,32 @@ function placeWorldOccupants(ctx: RunContext, state: GameState): void {
     if (!result.ok) decline(ctx, name, result.reason ?? "declined");
     return result.ok;
   };
-  // Each leg is one occupant family's independent attempt: the original
-  // loops broke only their own iteration, never withheld the other's.
-  // Every policy deploys the weapon first — a Column must never take the
-  // fight's only seat (issue #491's repair) — then the Column takes a
-  // charge line: a cell whose module receives charge, preferring one that
-  // also touches the placed weapon, then the strongest line. The pair
-  // connects wherever the board can carry the line to the fight; where it
-  // cannot yet, the Column sits on its best line and relocates to the
-  // fight when the board grows one.
-  const weaponLeg = (): void => {
+  if (!stageOnly && front) {
+    const beside = (pos: Hex) => adjacent(pos, front);
     for (const weapon of state.world.weapons) {
-      if (weapon.pos !== null) continue;
-      if (!deploy(
-        weapon.id,
-        `the ${weapon.type}`,
-        free().filter((pos) => living.some((def) => adjacent(pos, def.pos))),
-        weaponRank,
-        "no free World cell beside a living discovered enemy",
-        "weapon",
-      )) break;
+      if (weapon.pos && beside(weapon.pos)) continue;
+      if (!deploy(weapon.id, `the ${weapon.type}`, free().filter(beside), weaponRank,
+        "no free World cell beside Sentinel", "weapon")) break;
     }
+    for (const [gear, name] of [[state.world.armor, "Guard Plate"], [state.world.spells, "Pulse"]] as const) {
+      for (const copy of gear) {
+        if (copy.pos && beside(copy.pos)) continue;
+        const pos = free().find(beside);
+        if (!pos) break;
+        const result = placeWorldOccupant(state, copy.id, pos);
+        record(ctx, { kind: "world", label: `Placed ${name} at ${pos.q},${pos.r}`, ...outcome(result) });
+      }
+    }
+  }
+  const anchor = (wall ?? worldEnemiesOf(state)[0]!).pos;
+  // Keep the only creature approach open when preparing the unplayed preset.
+  const columnSeats = () => {
+    const seats = free();
+    const approach = seats.filter((pos) => adjacent(pos, anchor));
+    return approach.length === 1 && !front ? seats.filter((pos) => !sameHex(pos, approach[0]!)) : seats;
   };
-  // Give the weapon the first seat claim. If all remaining charge lines
-  // are blocked, route one to a free World seat with a real Module move.
-  weaponLeg();
   if (state.world.columns.length > 0 && state.world.columns.every(column => column.pos === null)) {
-    const anchor = (living[0] ?? WORLD_ENEMIES[0]!).pos;
-    const seats = free().sort((a, b) => hexDistance(a, anchor) - hexDistance(b, anchor));
+    const seats = columnSeats().sort((a, b) => hexDistance(a, anchor) - hexDistance(b, anchor));
     const move = starterChargeLineMove(state, seats);
     if (move) {
       const module = state.modules.find(entry => entry.id === move.id)!;
@@ -1642,40 +1626,22 @@ function placeWorldOccupants(ctx: RunContext, state: GameState): void {
   const lineCells = new Set(chargeLineCells(state).map(seatKey));
   const lineAt = (pos: Hex): boolean => lineCells.has(seatKey(pos));
   const columnLeg = (): void => {
+    const reachesGear = (pos: Hex) => [...state.world.weapons, ...state.world.spells].some((gear) => gear.pos && adjacent(pos, gear.pos));
     for (const column of state.world.columns) {
-      if (column.pos !== null) continue;
-      if (!deploy(
-        column.id,
-        "a Charge Column",
-        free().filter((pos) => lineAt(pos)),
-        (pos) => [
-          state.world.weapons.some((weapon) => weapon.pos !== null && adjacent(pos, weapon.pos)) ? 0 : 1,
-          -receivedAt(pos),
-          pos.q, pos.r,
-        ],
-        "no free World cell on a charge line",
-        "column",
-      )) break;
+      if (column.pos && (stageOnly || reachesGear(column.pos))) continue;
+      const candidates = columnSeats().filter((pos) => lineAt(pos) && (!column.pos || reachesGear(pos)));
+      if (!candidates.length && column.pos) continue;
+      if (!deploy(column.id, "a Charge Column", candidates,
+        (pos) => [reachesGear(pos) ? 0 : 1, -receivedAt(pos), pos.q, pos.r],
+        "no free World cell on a charge line", "column")) break;
     }
   };
   columnLeg();
-  relocateWorldOccupants(ctx, state, { living, free, lineAt, receivedAt, weaponRank });
 }
 
 // The seat map's key: one coordinate, one string.
 function seatKey(pos: Hex): string {
   return `${pos.q},${pos.r}`;
-}
-
-// The relocation's shared seat reads (issue #491): the fight's shape, the
-// free cells, the charge line's topology and strength, and the weapon
-// seat's rank — one bundle, built once per placement leg.
-interface SeatReads {
-  readonly living: readonly WorldEnemyDef[];
-  readonly free: () => Hex[];
-  readonly lineAt: (pos: Hex) => boolean;
-  readonly receivedAt: (pos: Hex) => number;
-  readonly weaponRank: (pos: Hex) => readonly number[];
 }
 
 function bestRanked(candidates: readonly Hex[], rank: (pos: Hex) => readonly number[]): Hex | undefined {
@@ -1691,57 +1657,6 @@ function rankLessOf(a: readonly number[], b: readonly number[]): boolean {
     if (a[i] !== b[i]) return a[i]! < b[i]!;
   }
   return false;
-}
-
-// The relocation leg (issue #491's route at later frontiers): a weapon
-// whose fight is won — no eligible target remains adjacent — moves to the
-// next living discovered enemy, and a Column the fight left behind moves
-// to a charge line that touches the fight. Relocation is free between
-// sessions (the authored mechanic), every move rides the engine's own
-// retrieve and placement actions, and each leg only fires when the seat
-// has gone stale AND a genuinely better seat exists — a Column with no
-// fight-adjacent line to move to stays put, so the leg settles, never
-// churns.
-function relocateWorldOccupants(ctx: RunContext, state: GameState, seats: SeatReads): void {
-  const { living, free, lineAt, receivedAt, weaponRank } = seats;
-  for (const weapon of state.world.weapons) {
-    const current = weapon.pos;
-    if (current === null) continue;
-    if (eligibleTargetsOf(state, weapon).length > 0) continue;
-    if (living.length === 0) continue;
-    const seat = bestRanked(
-      free().filter((pos) => !sameHex(pos, current) && living.some((def) => adjacent(pos, def.pos))),
-      weaponRank,
-    );
-    if (!seat) continue;
-    if (!retrieveWorldOccupant(state, weapon.id).ok) continue;
-    const result = placeWorldOccupant(state, weapon.id, seat);
-    record(ctx, { kind: "world", label: `Relocated the ${weapon.type} to ${seat.q},${seat.r}`, ...outcome(result) });
-    if (!result.ok) {
-      // The retrieval landed, so the weapon must not sit out the era in
-      // a place the policy never chose: return it to its prior seat.
-      placeWorldOccupant(state, weapon.id, current);
-      decline(ctx, `relocate the ${weapon.type}`, result.reason ?? "declined");
-    }
-  }
-  for (const column of state.world.columns) {
-    const current = column.pos;
-    if (current === null) continue;
-    if (state.world.weapons.some((weapon) => weapon.pos !== null && adjacent(weapon.pos, current))) continue;
-    const seat = bestRanked(
-      free().filter((pos) => !sameHex(pos, current) && lineAt(pos) &&
-        state.world.weapons.some((weapon) => weapon.pos !== null && adjacent(pos, weapon.pos))),
-      (pos) => [-receivedAt(pos), pos.q, pos.r],
-    );
-    if (!seat) continue;
-    if (!retrieveWorldOccupant(state, column.id).ok) continue;
-    const result = placeWorldOccupant(state, column.id, seat);
-    record(ctx, { kind: "world", label: `Relocated a Charge Column to ${seat.q},${seat.r}`, ...outcome(result) });
-    if (!result.ok) {
-      placeWorldOccupant(state, column.id, current);
-      decline(ctx, "relocate a Charge Column", result.reason ?? "declined");
-    }
-  }
 }
 
 // The journey mark's both clocks (issue #490): elapsed and credited
@@ -2300,8 +2215,15 @@ export function* walkPlaythrough(
   // checkpoint whose moment is now, or null.
   const checkpointAfterDoor = (): PlaythroughCheckpointId | null => {
     if (checkpoint === "after-first-bank") return ctx.claims.length === 1 ? checkpoint : null;
-    if (checkpoint === "world-enemy-active") {
-      return ctx.claims.length >= 1 && worldDecisionPending(state) ? checkpoint : null;
+    if (checkpoint === "world-enemy-active" && ctx.claims.length >= 1 && hasActiveWorldEnemy(state)) {
+      // A large first rebuilding session may cross the threshold before
+      // the policy has found a legal line. Stage only the Column here;
+      // neither combat nor another session runs after this boundary.
+      if (!worldDecisionPending(state)) placeWorldOccupants(ctx, state, true);
+      if (worldDecisionPending(state)) {
+        if (ctx.openEvents.length > 0) snap(ctx, state);
+        return checkpoint;
+      }
     }
     return null;
   };
@@ -2347,7 +2269,7 @@ export function* walkPlaythrough(
     days = day + 1;
     for (let session = 0; session < recipe.schedule.sessionsPerDay; session++) {
       if (stopBetweenSessions()) break day;
-      manage(ctx, state);
+      manage(ctx, state, checkpoint);
       yield* runSession(ctx, state, day, session);
       if (stopBetweenSessions()) break day;
       // The between-sessions settlement: both recovery measures read here

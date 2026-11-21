@@ -1,11 +1,12 @@
 import { normalizeEncyclopedia } from "./encyclopedia";
-import { createInitialState, createWorldColumn, createWeapon, freshEnemyStates, normalizeChordDiscovery, normalizeModules, normalizeWorld, openingGrant } from "./state";
+import { createInitialState, createWorldColumn, createWeapon, freshEnemyStates, grantCombatStarter, normalizeChordDiscovery, normalizeModules, normalizeWorld, openingGrant } from "./state";
 import { classDefOf, freshClassPair, normalizeHabitClasses } from "./classes";
 import { activeGoals, normalizeGoals } from "./goals";
 import { DEFAULT_HABIT_COLOR, normalizeHabitColor } from "./habits";
 import { longGoalCost, mutatorSlotCost } from "./economy";
 import { generateOffer, type Rng } from "./rolls";
-import { BALANCE, SAVE_VERSION } from "./constants";
+import { BALANCE, SAVE_VERSION, WORLD_ENEMIES } from "./constants";
+import { syncWorldDiscoveries } from "./world";
 import type { BreatherState, GameState, Goal, Meter, SpecialDraftKind } from "./types";
 
 export interface SaveFile {
@@ -30,6 +31,7 @@ export interface LoadResult {
   // save/import flow explains. A v13 save reloads without it.
   migration?: MigrationReport;
   footprintMigration?: { areteRefunded: number };
+  combatMigration?: { oldClears: number; discovered: boolean };
   // The explicit lost-money recovery (issue #494): present exactly when
   // this load repaired unreadable monetary state. The choice was the
   // player's at the save/import destination; this report names what was
@@ -261,7 +263,7 @@ function readSave(text: string, rng: Rng, recovery: boolean): LoadResult {
   // lenient handling. Explicit recovery reads any supported version and
   // repairs the named losses in this same walk, before the refund.
   const areteRefunded = parsed.version < 14 ? rackExtenderRefund(raw.unlockedRows) : 0;
-  const lost = parsed.version < 13 || recovery || areteRefunded > 0
+  const lost = parsed.version < 13 || parsed.version === 14 || recovery || areteRefunded > 0
     ? lostMonetaryFigures(raw, recovery ? merged : undefined)
     : [];
   if (lost.length && !recovery) {
@@ -489,7 +491,7 @@ function readSave(text: string, rng: Rng, recovery: boolean): LoadResult {
   // explicit recovery applies the calibrated era reset here — the same
   // pass the boundary runs, once, never repeated (the figures it wrote
   // are finite). For pre-v13 sources the conversion above already did it.
-  if (recovery && lost.length > 0 && !migration) migrateV12ToV13(merged, parsed.version);
+  if (recovery && lost.length > 0 && !migration) migrateV12ToV13(merged, parsed.version, parsed.version >= 15);
   const recovered = recovery && lost.length > 0 ? { fromVersion: parsed.version, lost } : undefined;
   // The goals' live-share surface (ADR-0047, wave 5) lenient-defaults the
   // same way: a goal saved before the generators wave carries no live
@@ -539,6 +541,21 @@ function readSave(text: string, rng: Rng, recovery: boolean): LoadResult {
       world.starterWeaponGranted = true;
     }
   }
+  // v15 never credits old passive Blade hits as a lifetime combat win.
+  // Coordinates, stored Blade charge, and unrelated economy are retained.
+  let combatMigration: LoadResult["combatMigration"];
+  if (parsed.version < 15) {
+    const enemies = isRecord(raw.world) && isRecord(raw.world.enemies) ? raw.world.enemies : {};
+    const oldClears = WORLD_ENEMIES.filter(({ key }) => {
+      const entry = enemies[key];
+      return isRecord(entry) && entry.hp === 0;
+    }).length;
+    merged.world.enemies = freshEnemyStates();
+    for (const blade of world.weapons) blade.cooldown = 0;
+    if (world.unlocked) grantCombatStarter(merged);
+    combatMigration = { oldClears, discovered: world.unlocked };
+  }
+  syncWorldDiscoveries(merged);
   // ADR-0087: terminal retirement after the historical migration chain.
   // Historical refunds remain in their original version gate; no new payout
   // or era reset. Ordinary offers are preserved, including retired candidates
@@ -558,7 +575,7 @@ function readSave(text: string, rng: Rng, recovery: boolean): LoadResult {
   delete (merged as unknown as Record<string, unknown>).unlockedRows;
   const footprintMigration = parsed.version < 14 ? { areteRefunded } : undefined;
   if (areteRefunded > 0) merged.arete += areteRefunded;
-  return { state: merged, ...(footprintMigration && { footprintMigration }),
+  return { state: merged, ...(footprintMigration && { footprintMigration }), ...(combatMigration && { combatMigration }),
     ...(recovered ? { recovered } : migration ? { migration } : {}) };
 }
 
@@ -787,7 +804,7 @@ function migrateV11ToV12(merged: GameState): void {
 // Idempotence is structural: the version gate routes a v12 save (or a
 // v10/v11 save through its chain) here alone, and the save this pass
 // writes is v13 — the schema every later load reads untouched.
-function migrateV12ToV13(merged: GameState, fromVersion: number): MigrationReport {
+function migrateV12ToV13(merged: GameState, fromVersion: number, retainVictories = false): MigrationReport {
   let modulesCleared = 0;
   for (const module of merged.modules) {
     if (module.level !== 0 || module.invested) modulesCleared++;
@@ -809,7 +826,12 @@ function migrateV12ToV13(merged: GameState, fromVersion: number): MigrationRepor
   // The World's era state: enemies restore at their authored stats and
   // stored combat charge empties — the prestige rule's own pass. The
   // purchases above it stand.
-  merged.world.enemies = freshEnemyStates();
+  if (!retainVictories) merged.world.enemies = freshEnemyStates();
+  else {
+    merged.world.enemyCooldown = 0;
+    for (const creature of merged.world.creatures) creature.cooldown = 0;
+    for (const spell of merged.world.spells) spell.store = 0;
+  }
   for (const weapon of merged.world.weapons) {
     weapon.store = 0;
     weapon.cooldown = 0;
@@ -841,3 +863,4 @@ export const ORIGINAL_SAVE_KEY = "flowsynth.save.original.v1";
 // it is about to convert as the downloadable original.
 export const PRE_V13_ORIGINAL_SAVE_KEY = "flowsynth.save.original.pre-v13";
 export const PRE_V14_ORIGINAL_SAVE_KEY = "flowsynth.save.original.pre-v14";
+export const PRE_V15_ORIGINAL_SAVE_KEY = "flowsynth.save.original.pre-v15";

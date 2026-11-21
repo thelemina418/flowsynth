@@ -1,4 +1,5 @@
 import { BALANCE, WORLD_ENEMIES } from "../src/engine/constants";
+import { syncWorldDiscoveries } from "../src/engine/world";
 import { ARETE_HORIZON } from "../src/engine/accumulator";
 import {
   completeSnapshotsOf,
@@ -894,12 +895,10 @@ export function suppliedBoardState(): GameState {
       target: null,
     }) - 1]!);
   if (created.length !== SUPPLIED_BOARD_MODULE_COUNT) throw new Error("Supplied-board fixture: the mix fell short.");
-  // The reported face: every enemy discovered, none defeated — the
-  // postponed-combat position the parent investigates. The starter weapon
-  // stays ungranted; no Columns bought.
-  for (const def of WORLD_ENEMIES) {
-    state.world.enemies[def.key] = { discovered: true, hp: def.maxHp };
-  }
+  // Postponed combat on the current engine: the first wall alone applies
+  // pressure. This fixture is not a rerendering of the frozen baseline.
+  state.eraEarned = BALANCE.world.entryNous;
+  syncWorldDiscoveries(state);
   return state;
 }
 

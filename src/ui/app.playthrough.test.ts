@@ -442,7 +442,7 @@ describe("the pushing policy", () => {
       state.world.starterWeaponGranted = true;
       state.world.enemies.w0!.discovered = true;
       state.world.columns = [{ id: "column-test", pos: null }];
-      state.world.weapons = [{ id: "weapon-test", type: "chargeBlade", pos: null, store: 0, cooldown: 0, targetPriority: [] }];
+      state.world.weapons = [{ id: "weapon-test", type: "chargeBlade", pos: null, store: 0, cooldown: 0, bearer: null }];
       return state;
     });
     vi.spyOn(scenario, "assert").mockImplementation(() => {});
@@ -1198,7 +1198,7 @@ describe("historical snapshots and inspection on supplied records", () => {
           state.mutatorSlots = [{ q: 0, r: 0 }];
           state.mutators = [{ id: "historic-mutator", family: "power", rarity: "rare", pos: { q: 0, r: 0 } }];
           state.world.columns = [{ id: "historic-column", pos: { q: 0, r: 0 } }];
-          state.world.weapons = [{ id: "historic-weapon", type: "chargeBlade", pos: { q: 0, r: 1 }, store: 12, cooldown: 0, targetPriority: ["w0"] }];
+          state.world.weapons = [{ id: "historic-weapon", type: "chargeBlade", pos: { q: 0, r: 1 }, store: 12, cooldown: 0, bearer: null }];
           state.world.enemies.w0 = { discovered: true, hp: 123 };
         }),
         elapsed: 0,

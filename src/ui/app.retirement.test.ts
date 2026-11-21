@@ -14,7 +14,7 @@ it("loading legacy pending mechanics exposes only live Catalog and Forge choices
   old.catalogEntryOwned = true; old.rollPoolJoined = true;
   old.world.unlocked = true; old.world.starterColumnGranted = true; old.world.starterWeaponGranted = true;
   old.world.columns = [{ id: "retained-column", pos: old.cells[1]! }];
-  old.world.weapons = [{ id: "retained-blade", type: "chargeBlade", pos: old.cells[2]!, store: 9, cooldown: 0, targetPriority: [] }];
+  old.world.weapons = [{ id: "retained-blade", type: "chargeBlade", pos: old.cells[2]!, store: 9, cooldown: 0, bearer: null }];
   old.world.hone.chargeBlade = 1;
   old.mutatorSlots = [old.cells[0]!];
   old.mutators = [{ id: "old", family: "power", rarity: "rare", pos: old.cells[0]! }];
