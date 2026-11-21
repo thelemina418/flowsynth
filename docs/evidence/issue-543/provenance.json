@@ -1,0 +1,47 @@
+{
+  "app": "flowsynth",
+  "check": "capture-preflight",
+  "acceptedAt": "2026-11-21T05:11:03.419Z",
+  "url": "http://localhost:5173/",
+  "worktree": "/home/lem/.t3/worktrees/flowsynth/t3-aeea2d3f-d09a9ed8ff7b8001",
+  "branch": "t3/world-combat-pricing",
+  "commit": "bddaca87bbe7c4445412ae5b968b72c140b03a8b",
+  "source": {
+    "clean": true,
+    "changes": [],
+    "evidence": [
+      {
+        "path": "docs/evidence/issue-543/browser-checks.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-543/capture.mjs",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-543/desktop-add-keyboard.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-543/measure.mjs",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-543/opening-and-proof.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-543/phone-add-price-states.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-543/phone-world-add-entry.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-543/provenance.json",
+        "state": "??"
+      }
+    ]
+  }
+}

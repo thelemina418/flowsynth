@@ -1,0 +1,112 @@
+{
+  "url": "http://localhost:5173/?dev=1",
+  "browser": "155.0.8059.84",
+  "setup": "Fresh starter footprint. The test harness sets 32ν for a controlled mixed-affordability read; it is not an earning record.",
+  "errors": [],
+  "desktop": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "coarse": false,
+    "overflowing": false,
+    "priceOcclusions": 0,
+    "exitHeight": 44,
+    "exitObscuresLedger": false,
+    "exitObscuresZoom": false,
+    "priceAnimations": 0,
+    "prices": {
+      "near": "Add G3 for 30 nous",
+      "far": "Add D5 for 90 nous · Not enough whole nous.",
+      "nearVisual": "30 ν",
+      "farVisual": "90 ν",
+      "farState": "Short on ν"
+    },
+    "target": {
+      "x": 708.1932983398438,
+      "y": 372.78607177734375,
+      "width": 144.05078125,
+      "height": 164.40887451171875
+    },
+    "purchase": {
+      "layer": "modules",
+      "addStillOpen": true,
+      "nous": 2,
+      "arete": 0,
+      "cells": [
+        {
+          "q": 0,
+          "r": 0
+        },
+        {
+          "q": 1,
+          "r": 0
+        },
+        {
+          "q": 0,
+          "r": 1
+        },
+        {
+          "q": 1,
+          "r": -1
+        }
+      ],
+      "cellsBought": 1
+    },
+    "escapeCancels": true
+  },
+  "phone": {
+    "viewport": [
+      390,
+      844
+    ],
+    "coarse": true,
+    "overflowing": false,
+    "priceOcclusions": 0,
+    "exitHeight": 44,
+    "exitObscuresLedger": false,
+    "exitObscuresZoom": false,
+    "priceAnimations": 0,
+    "prices": {
+      "near": "Add G3 for 30 nous",
+      "far": "Add D5 for 90 nous · Not enough whole nous.",
+      "nearVisual": "30 ν",
+      "farVisual": "90 ν",
+      "farState": "Short on ν"
+    },
+    "target": {
+      "x": 235.14134216308594,
+      "y": 410.46783447265625,
+      "width": 84.79414367675781,
+      "height": 96.77774047851562
+    },
+    "fromWorld": true,
+    "purchase": {
+      "layer": "modules",
+      "addStillOpen": true,
+      "nous": 2,
+      "arete": 20,
+      "cells": [
+        {
+          "q": 0,
+          "r": 0
+        },
+        {
+          "q": 1,
+          "r": 0
+        },
+        {
+          "q": 0,
+          "r": 1
+        },
+        {
+          "q": 1,
+          "r": -1
+        }
+      ],
+      "cellsBought": 1
+    },
+    "cancel": true,
+    "ownedInWorld": true
+  }
+}
