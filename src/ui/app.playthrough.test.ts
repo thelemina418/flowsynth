@@ -444,8 +444,9 @@ describe("the pushing policy", () => {
       return state;
     });
     vi.spyOn(scenario, "assert").mockImplementation(() => {});
-    const record = app.devRunPlaythrough({ policyId: "pushing", budgetDays: 1,
+    const record = app.devRunPlaythrough({ policyId: "pushing", budgetDays: 1, claimTarget: 4,
       schedule: { sessionsPerDay: 1, sessionMinutes: 1, breatherMinutes: 0 } });
+    expect(record.claims).toEqual([]); // leave the wall active; a bank would reset era-earned
     expect(record.state.world.weapons[0]!.pos).toBeNull();
     expect(record.state.world.columns[0]!.pos).toBeNull();
     expect(record.events.some((event) => event.reason === "no free World cell beside the current wall")).toBe(true);
