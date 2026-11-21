@@ -12,7 +12,10 @@ import {
 } from "./playthrough";
 import { SCENARIOS, scenarioOf } from "./scenarios";
 import { horizonReached } from "./accumulator";
-import { sameHex } from "./hex";
+import { hex, sameHex } from "./hex";
+import { advance } from "./advance";
+import { placeModule, placeWorldOccupant, startSession } from "./actions";
+import { CATEGORY_OF } from "./constants";
 import { chargeLineCells } from "./playthrough-placement";
 import { worldCellReserved } from "./world";
 
@@ -129,6 +132,25 @@ describe("the walked presets", () => {
     expect(chargeLineCells(state).some(pos => sameHex(pos, column!.pos!))).toBe(true);
     expect(state.arete).toBeLessThanOrEqual(preset.record.claims[0]!);
     scenarioOf("world-enemy")!.assert(state, 0);
+  });
+
+  it("can win Shale from the earned World checkpoint with the starter kit, ordinary moves and no new grant", () => {
+    const { state } = playthroughCheckpointPreset("world-enemy-active");
+    const { creatures: [sentinel], armor: [armor], weapons: [blade], spells: [spell], columns: [column] } = state.world;
+    const host = state.modules.find((module) => CATEGORY_OF[module.type] === "oscillator")!;
+    const generator = state.modules.find((module) => module.type === "focusKeyed" && module.reserve > 20)!;
+    expect(generator).toBeDefined();
+    expect(placeModule(state, host.id, hex(1, -1))).toMatchObject({ ok: true });
+    expect(placeModule(state, generator.id, hex(1, 0)).ok).toBe(true);
+    for (const [id, q, r] of [
+      [column!.id, 1, -1], [sentinel!.id, 0, 0], [armor!.id, -1, 1],
+      [blade!.id, 1, 0], [spell!.id, 0, -1],
+    ] as const) expect(placeWorldOccupant(state, id, hex(q, r)), `${id} at ${q},${r}`).toMatchObject({ ok: true });
+    expect(startSession(state, null).ok).toBe(true);
+    expect(advance(state, 32, () => 0.3).fault).toBeUndefined();
+    expect(state.world.enemies.shale?.hp).toBe(0);
+    expect(sentinel!.hp).toBeGreaterThan(0);
+    expect(state.world.enemies.basalt?.discovered).toBe(false); // own threshold still unmet
   });
 
   it("carries the recipe and origin provenance on each preset descriptor", () => {

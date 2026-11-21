@@ -113,6 +113,35 @@ try {
   assert.equal(await desktop.page.locator(`${placement(desktop.origin)}:enabled`).count(), 0);
   await shot(desktop.page, 'desktop-flow');
 
+  // Compare the bare Sentinel with a real build from the identical earned
+  // checkpoint. No inventory, currency, reserve, or World state is granted.
+  report.desktop.fundedRig = await desktop.page.evaluate(async () => {
+    const app = window.__flowsynth;
+    await app.devLaunchScenario('world-enemy');
+    app.devScenarioAssert();
+    app.setBoardLayer('world');
+    const accept = (r) => { if (!r.ok) throw new Error(r.reason); };
+    const { creatures: [sentinel], armor: [plate], weapons: [blade], spells: [pulse], columns: [column] } = app.state.world;
+    const host = app.state.modules.find(({ type }) => type === 'additive');
+    const generator = app.state.modules.find(({ type, reserve }) => type === 'focusKeyed' && reserve > 20);
+    const arete = app.state.arete;
+    const reserve = generator.reserve;
+    accept(app.devActionPlace(host.id, 1, -1));
+    accept(app.devActionPlace(generator.id, 1, 0));
+    for (const [id, q, r] of [[column.id, 1, -1], [sentinel.id, 0, 0], [plate.id, -1, 1], [blade.id, 1, 0], [pulse.id, 0, -1]]) {
+      accept(app.devActionWorldPlace(id, q, r));
+    }
+    return { areteBefore: arete, areteAfter: app.state.arete, heldReserve: reserve,
+      setup: app.devInterventions.map(({ label }) => label) };
+  });
+  await hideConsole(desktop.page);
+  await shot(desktop.page, 'desktop-live-rig');
+  report.desktop.lifetimeClear = await step(desktop.page, 32, true);
+  assert.equal(report.desktop.lifetimeClear.wall, 0);
+  assert.ok(report.desktop.lifetimeClear.hp > 0);
+  assert.match(await shard(desktop.page, -1, 0).getAttribute('aria-label'), /Shale cleared/);
+  await shot(desktop.page, 'desktop-live-clear');
+
   await shot(phone.page, 'phone-board');
   await shard(phone.page, -1, 0).tap();
   const phoneFace = phone.page.locator('[data-detail-face="world"]');
@@ -136,8 +165,13 @@ try {
   report.phone.flow = await step(phone.page, 16, true);
   assert.equal(report.phone.flow.recovering, true);
   await showInventory();
-  await phone.page.locator(`#modal-content ${tray(phone.origin)}`).tap();
-  report.phone.recovery = await phone.page.locator('.inventory-inspection').innerText();
+  const recoveryRow = phone.page.locator(`#modal-content ${tray(phone.origin)}`);
+  const inspection = phone.page.locator('#modal-content .inventory-inspection');
+  await recoveryRow.tap();
+  // If the Inventory trigger was still disclosing after closing the
+  // summary, its outside tap dismisses that disclosure first.
+  if (!(await inspection.isVisible()) && await recoveryRow.isVisible()) await recoveryRow.tap();
+  report.phone.recovery = await inspection.innerText();
   assert.match(report.phone.recovery, /0\/24 HP · Recovering/);
   assert.equal(await phone.page.locator(`#modal-content ${placement(phone.origin)}`).isDisabled(), true);
   await shot(phone.page, 'phone-recovery');
