@@ -307,7 +307,7 @@ describe("the version gate (ADR-0017's pattern)", () => {
     expect(deserialize('{"app":"flowsynth","version":99,"state":{}}').error).toBeDefined();
     expect(deserialize('{"app":"flowsynth","version":9,"state":{"mode":"weird"}}').error).toBeDefined();
     expect(deserialize('{"app":"flowsynth","version":9}').error).toBeDefined();
-    expect(deserialize('{"app":"flowsynth","version":15,"state":{}}').error).toMatch(/newer than this build/i);
+    expect(deserialize(JSON.stringify({ app: "flowsynth", version: SAVE_VERSION + 1, state: {} })).error).toMatch(/newer than this build/i);
   });
 
   it("exported saves load unchanged", () => {

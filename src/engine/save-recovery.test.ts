@@ -162,15 +162,13 @@ describe("the lost-money recovery (issue #494)", () => {
     ]);
   });
 
-  it("a v13 source recovers through the same door: the era reset applies where no boundary conversion rides", () => {
-    // The recovery door reads any supported version's bytes. A v13 file's
-    // ordinary load keeps the established lenient schema resilience, but
-    // the door itself repairs the lost figures and — since no boundary
-    // conversion runs for v13 — applies the calibrated era reset itself,
-    // so the excessive levels clear exactly as a converted save's do.
+  it("a current save recovers its era without restoring lifetime wins or healing wounds", () => {
+    // Recovery resets calibrated era figures, but v15 World wounds and
+    // victories belong to the lifetime, not the damaged era ledger.
     const file = JSON.parse(serialize(overpowered(), 1_000));
     file.state.nous = null;
     file.state.modules[0].invested = null;
+    file.state.world.enemies.basalt = { discovered: true, hp: 14 };
     const loaded = recoverLostSave(JSON.stringify(file));
     expect(loaded.error).toBeUndefined();
     expect(loaded.recovered).toMatchObject({ fromVersion: SAVE_VERSION, lost: ["nous", "modules[0].invested"] });
@@ -179,7 +177,8 @@ describe("the lost-money recovery (issue #494)", () => {
     expect(state.modules[0]!.invested).toBe(0);
     expect(state.nous).toBe(openingGrant());
     expect(state.eraEarned).toBe(0);
-    expect(state.world.enemies).toEqual(freshEnemyStates());
+    expect(state.world.enemies.shale).toEqual({ discovered: true, hp: 0 });
+    expect(state.world.enemies.basalt).toEqual({ discovered: false, hp: 14 });
     expect(state.arete).toBe(4);
   });
 
