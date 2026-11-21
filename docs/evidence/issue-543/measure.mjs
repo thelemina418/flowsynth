@@ -74,6 +74,8 @@ async function measure(root, commit) {
       firstPlacement: placement ? { label: placement.label, creditedMinutes: placement.credited / 60 } : null,
       firstPlacementOnBoughtCell: placementAfterExpansion ? { label: placementAfterExpansion.label, creditedMinutes: placementAfterExpansion.credited / 60 } : null };
     if (process.argv.includes('--opening-only')) return { commit, source, proof, opening: openingResult };
+    const ordinaryRecipe = engine.composePlaythroughRecipe({ seed: recipeInput.seed, budgetDays: 15 });
+    const ordinary = engine.runPlaythroughCheckpoint(ordinaryRecipe, 'approaching-prestige', source);
     const world = engine.runPlaythroughCheckpoint(recipe, 'world-enemy-active', source);
     const eligibility = world.events.find(e => e.ok && e.label === 'First prestige eligibility reached');
     const bank = world.events.find(e => e.ok && e.kind === 'prestige');
@@ -82,11 +84,15 @@ async function measure(root, commit) {
     const bankDay = 1 + Math.floor(bank.at / 86_400);
     const firstFight = engine.WORLD_ENEMIES.find(e => world.state.world.enemies[e.key]?.discovered && world.state.world.enemies[e.key]?.hp > 0);
     return { commit, source, recipe, proof, opening: openingResult,
+      ordinaryEligibility: { recipe: ordinaryRecipe, runId: ordinary.runId, day: ordinary.days,
+        creditedMinutes: ordinary.creditedSeconds / 60, purchased: cells(ordinary) },
       eligibility: { creditedMinutes: eligibility.credited / 60 },
       bank: { day: bankDay, creditedMinutes: bank.credited / 60, claim: world.claims[0],
         purchased: cells({ events: world.events.slice(0, world.events.indexOf(bank)) }) },
       world: { runId: world.runId, day: world.days, creditedMinutes: world.creditedSeconds / 60, purchased: cells(world),
-        areteSpent: world.areteSpent, enemy: firstFight?.key, footprint: world.state.cells.map(({q,r}) => [q,r]) } };
+        areteSpent: world.areteSpent, enemy: firstFight?.key, footprint: world.state.cells.map(({q,r}) => [q,r]),
+        deployedColumns: world.state.world.columns.flatMap(({pos}) => pos ? [[pos.q, pos.r]] : []),
+        weaponStillInTray: world.state.world.weapons.some(weapon => weapon.pos === null) } };
   } finally { await unlink(entry); }
 }
 const root = process.cwd();

@@ -35,7 +35,9 @@ async function inspect(page) {
     const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
     const exit = box('#cell-arm-pill');
     const prices = [...document.querySelectorAll('.cell-price')];
+    const refusal = getComputedStyle(document.querySelector('.cell-price-state'));
     return { viewport: [innerWidth, innerHeight], coarse: matchMedia('(pointer:coarse)').matches,
+      refusalFont: refusal.fontFamily, refusalFontSize: refusal.fontSize,
       overflowing: document.documentElement.scrollWidth > innerWidth,
       priceOcclusions: prices.filter(node => {
         const r = node.getBoundingClientRect();
@@ -56,6 +58,8 @@ async function inspect(page) {
   assert.equal(prices.farVisual, '90 ν');
   assert.equal(prices.farState, 'Short on ν');
   assert.match(prices.far, /Not enough whole nous/);
+  assert.match(info.refusalFont, /Arial Narrow/);
+  assert.equal(info.refusalFontSize, '13px');
   assert.ok(target && target.width >= 44 && target.height >= 44);
   assert.equal(info.overflowing, false);
   assert.equal(info.exitObscuresZoom, false);
