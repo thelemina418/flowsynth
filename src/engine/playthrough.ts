@@ -84,7 +84,7 @@ import type { GameState, Hex, ModuleInstance, ModuleType, ResponseCurveId, Weapo
 // policies (issue #491) join both. The declared credited-flow stop
 // (issue #492) — a century walk's terminal and its banking gates — joins
 // them too.
-export const PLAYTHROUGH_RUNNER_VERSION = 17;
+export const PLAYTHROUGH_RUNNER_VERSION = 18;
 
 // The acceleration step (seconds): production is exact at any step; this
 // only coarsens crossing granularity. 60 matches the calibration walk.
@@ -1533,7 +1533,9 @@ function placeWorldOccupants(ctx: RunContext, state: GameState, stageOnly: boole
   const available = (cell: Hex) => !worldCellReserved(state, cell) && !worldOccupantAt(state, cell);
   const free = () => state.cells.filter(available);
   const sentinel = state.world.creatures[0];
-  const stagedSeat = free().find(reach);
+  const anchor = (wall ?? worldEnemiesOf(state)[0]!).pos;
+  const approachRoom = (pos: Hex) => state.cells.filter((cell) => adjacent(pos, cell) && !worldCellReserved(state, cell)).length;
+  const stagedSeat = free().filter(reach).sort((a, b) => approachRoom(b) - approachRoom(a))[0];
   if (!stageOnly && sentinel && !sentinel.recovering && stagedSeat && (!sentinel.pos || !reach(sentinel.pos))) {
     const result = placeWorldOccupant(state, sentinel.id, stagedSeat);
     record(ctx, { kind: "world", label: `Placed Sentinel at ${stagedSeat.q},${stagedSeat.r}`, ...outcome(result) });
@@ -1584,6 +1586,49 @@ function placeWorldOccupants(ctx: RunContext, state: GameState, stageOnly: boole
     if (!result.ok) decline(ctx, name, result.reason ?? "declined");
     return result.ok;
   };
+  // Leave the most useful creature approach open when staging the rig.
+  // Counting adjacent owned cells also accounts for armor and a spell,
+  // instead of blindly choosing a corner from the footprint's buy order.
+  const columnSeats = () => {
+    const seats = free();
+    if (front) return seats;
+    const approach = seats.filter((pos) => adjacent(pos, anchor)).sort((a, b) => approachRoom(b) - approachRoom(a))[0];
+    return approach ? seats.filter((pos) => !sameHex(pos, approach)) : seats;
+  };
+  // Stage the Column before filling its host seat with gear. A useful
+  // host must reach a seat that can actually equip to the deployed creature.
+  const gearSeats = () => front ? state.cells.filter((pos) => {
+    const occupant = worldOccupantAt(state, pos);
+    return adjacent(pos, front) && !worldCellReserved(state, pos) &&
+      (!occupant || occupant.kind === "weapon" || occupant.kind === "spell");
+  }) : [];
+  for (const column of state.world.columns) {
+    const reachesGear = (pos: Hex) => gearSeats().some((seat) => !sameHex(pos, seat) && adjacent(pos, seat));
+    const current = column.pos && !worldCellReserved(state, column.pos) ? [column.pos] : [];
+    const seats = [...current, ...columnSeats()].sort((a, b) => hexDistance(a, anchor) - hexDistance(b, anchor));
+    const reaching = seats.filter(reachesGear);
+    const lineAt = (pos: Hex) => chargeLineCells(state).some((seat) => sameHex(pos, seat));
+    // Preserve occupied positions when a route still works. Otherwise try a
+    // normal module move before falling back to any structurally fed line.
+    const preferred = reaching.length ? reaching : seats;
+    const move = starterChargeLineMove(state, preferred);
+    if (move) {
+      const module = state.modules.find(entry => entry.id === move.id)!;
+      const result = placeModule(state, move.id, move.pos);
+      record(ctx, { kind: "placement", label: `Routed ${module.type} at ${move.pos.q},${move.pos.r}`, ...outcome(result) });
+    }
+    if (column.pos && lineAt(column.pos) && (!reaching.length || reachesGear(column.pos))) continue;
+    const chargeSnapshot = syncRates(state, true);
+    const receivedAt = (pos: Hex): number => {
+      const module = state.modules.find((entry) => entry.pos && sameHex(entry.pos, pos));
+      return module ? (chargeSnapshot.chargeStrength.get(module.id) ?? 0) : 0;
+    };
+    const candidates = seats.filter(lineAt);
+    if (!candidates.length && column.pos) continue;
+    if (!deploy(column.id, "a Charge Column", candidates,
+      (pos) => [reachesGear(pos) ? 0 : 1, -receivedAt(pos), pos.q, pos.r],
+      "no free World cell on a charge line", "column")) break;
+  }
   if (!stageOnly && front) {
     const beside = (pos: Hex) => adjacent(pos, front);
     for (const weapon of state.world.weapons) {
@@ -1601,47 +1646,6 @@ function placeWorldOccupants(ctx: RunContext, state: GameState, stageOnly: boole
       }
     }
   }
-  const anchor = (wall ?? worldEnemiesOf(state)[0]!).pos;
-  // Keep the only creature approach open when preparing the unplayed preset.
-  const columnSeats = () => {
-    const seats = free();
-    const approach = seats.filter((pos) => adjacent(pos, anchor));
-    return approach.length === 1 && !front ? seats.filter((pos) => !sameHex(pos, approach[0]!)) : seats;
-  };
-  if (state.world.columns.length > 0 && state.world.columns.every(column => column.pos === null)) {
-    const seats = columnSeats().sort((a, b) => hexDistance(a, anchor) - hexDistance(b, anchor));
-    const move = starterChargeLineMove(state, seats);
-    if (move) {
-      const module = state.modules.find(entry => entry.id === move.id)!;
-      const result = placeModule(state, move.id, move.pos);
-      record(ctx, { kind: "placement", label: `Routed ${module.type} at ${move.pos.q},${move.pos.r}`, ...outcome(result) });
-    }
-  }
-  const chargeSnapshot = syncRates(state, true);
-  const moduleAt = new Map(state.modules.filter((entry) => entry.pos !== null).map((entry) => [seatKey(entry.pos!), entry]));
-  const receivedAt = (pos: Hex): number => {
-    const module = moduleAt.get(seatKey(pos));
-    return module ? (chargeSnapshot.chargeStrength.get(module.id) ?? 0) : 0;
-  };
-  const lineCells = new Set(chargeLineCells(state).map(seatKey));
-  const lineAt = (pos: Hex): boolean => lineCells.has(seatKey(pos));
-  const columnLeg = (): void => {
-    const reachesGear = (pos: Hex) => [...state.world.weapons, ...state.world.spells].some((gear) => gear.pos && adjacent(pos, gear.pos));
-    for (const column of state.world.columns) {
-      if (column.pos && (stageOnly || reachesGear(column.pos))) continue;
-      const candidates = columnSeats().filter((pos) => lineAt(pos) && (!column.pos || reachesGear(pos)));
-      if (!candidates.length && column.pos) continue;
-      if (!deploy(column.id, "a Charge Column", candidates,
-        (pos) => [reachesGear(pos) ? 0 : 1, -receivedAt(pos), pos.q, pos.r],
-        "no free World cell on a charge line", "column")) break;
-    }
-  };
-  columnLeg();
-}
-
-// The seat map's key: one coordinate, one string.
-function seatKey(pos: Hex): string {
-  return `${pos.q},${pos.r}`;
 }
 
 function bestRanked(candidates: readonly Hex[], rank: (pos: Hex) => readonly number[]): Hex | undefined {

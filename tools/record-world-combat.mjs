@@ -1,4 +1,4 @@
-// #542 fixed-kit proof, not live-economy calibration. Every walk takes seconds.
+// #542 fixed-kit proof and #544 constructed scale branch. Neither is live-economy calibration.
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -34,6 +34,7 @@ try {
     recordingCommit: before.commit,
     engineSha256,
     ...walks,
+    scale: engine.walkWorldCombatScale(),
   });
   if (smoke) await writeSmokeArtifact(output, report, "World combat smoke");
   else await writeJsonAtomic(output, report);

@@ -1,12 +1,13 @@
 // After capture preflight against this worktree, run from the repo root:
 // PLAYWRIGHT_MODULE=playwright CHROMIUM_BIN=/usr/bin/chromium node tools/run-supported.mjs docs/evidence/issue-542/capture.mjs http://localhost:5174/
 import assert from 'node:assert/strict';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? 'playwright');
-const output = fileURLToPath(new URL('.', import.meta.url));
+const output = process.env.CAPTURE_DIR ?? fileURLToPath(new URL('.', import.meta.url));
+await mkdir(output, { recursive: true });
 const url = new URL('?dev=1', process.argv[2]).href;
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_BIN, headless: true });
 const results = { url, browser: browser.version(), desktop: {}, phone: {}, errors: [] };
@@ -30,10 +31,11 @@ async function hideConsole(page) {
 async function arrange(page, kind) {
   await page.evaluate((kind) => {
     const app = window.__flowsynth;
-    const { proof, columns, weapons } = app.state.world;
+    const { proof, columns, weapons, creatures, armor, spells, conduits } = app.state.world;
+    const kit = proof === true ? { creature: creatures[0], armor: armor[0], spell: spells[0], conduit: conduits[0] } : proof;
     const rig = kind === 'strong'
-      ? [[proof.creature.id, 0, 0], [proof.armor.id, -1, 1], [proof.conduit.id, 1, 0], [proof.spell.id, 0, 1], [columns[0].id, 1, 1], [weapons[0].id, 1, -1]]
-      : [[proof.creature.id, 0, 0], [proof.conduit.id, 1, 0]];
+      ? [[kit.creature.id, 0, 0], [kit.armor.id, -1, 1], [kit.conduit.id, 1, 0], [kit.spell.id, 0, 1], [columns[0].id, 1, 1], [weapons[0].id, 1, -1]]
+      : [[kit.creature.id, 0, 0], [kit.conduit.id, 1, 0]];
     for (const [id, q, r] of rig) {
       const result = app.devActionWorldPlace(id, q, r);
       if (!result.ok) throw new Error(result.reason);
@@ -138,7 +140,9 @@ try {
   await inventory.tap(); // Second touch opens the Inventory sheet.
   results.phone.beforeInspection = await phone.evaluate(() => {
     const app = window.__flowsynth;
-    return { mode: app.state.mode, layer: app.ui.boardLayer, modal: app.ui.modal, hp: app.state.world.proof.creature.hp, recovering: app.state.world.proof.creature.recovering, tray: document.getElementById('modal-content')?.innerText };
+    const { proof, creatures } = app.state.world;
+    const sentinel = proof === true ? creatures[0] : proof.creature;
+    return { mode: app.state.mode, layer: app.ui.boardLayer, modal: app.ui.modal, hp: sentinel.hp, recovering: sentinel.recovering, tray: document.getElementById('modal-content')?.innerText };
   });
   await phone.locator('#modal-content [data-world-tray="sentinel"]').tap();
   results.phone.recovering = await phone.locator('#modal-content .inventory-inspection').innerText();

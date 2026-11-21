@@ -1,11 +1,12 @@
 // A bounded, deterministic evaluation of the fixed World-combat proof.
 // Every change after fixture construction uses normal game actions and
 // the existing trusted session walk, not a second combat simulator.
-import { buyHoneRank, endSession, placeWorldOccupant, prestige, retrieveWorldOccupant, startSession, type ActionResult } from "./actions";
+import { buyCell, buyHoneRank, endSession, placeWorldOccupant, prestige, retrieveWorldOccupant, startSession, type ActionResult } from "./actions";
 import { advance } from "./advance";
 import { hex } from "./hex";
 import type { GameState, Hex } from "./types";
-import { attackPowerOf, enemyStateOf, worldPiecesOf } from "./world";
+import { attackPowerOf, enemyStateOf, syncWorldDiscoveries, worldEnemiesOf, worldPiecesOf } from "./world";
+import { createInitialState, createWeapon } from "./state";
 import { createWorldCombatScenario } from "./world-combat-scenario";
 
 const EPOCH = Date.UTC(2026, 10, 21, 12);
@@ -105,6 +106,53 @@ function basaltWalk(origin: GameState, invest: boolean) {
     outcome: wall.hp === 0 ? "won" : creature.recovering ? "defeated" : "not cleared",
     honeRank: state.world.hone.chargeBlade, bladeDamage: attackPowerOf(state, "chargeBlade"),
     areteBeforeBuy, areteAfterBuy: state.arete,
+  };
+}
+
+// The production schedule and real action prices, but NOT an acquisition
+// walk. Both branches start at the same constructed frontier and reserves.
+export function walkWorldCombatScale() {
+  const origin = createInitialState();
+  origin.eraEarned = 20_000_000;
+  accept("Discover World", prestige(origin));
+  origin.eraEarned = 2e15;
+  origin.nous = 30_000;
+  origin.arete = 15;
+  const walls = worldEnemiesOf(origin);
+  const wall = walls.at(-1)!;
+  for (const earlier of walls.slice(0, -1)) {
+    origin.world.enemies[earlier.key] = { discovered: true, hp: 0 };
+  }
+  syncWorldDiscoveries(origin);
+  for (const [q, r] of [[1, -1], [2, -1], [2, -2], [1, -2]] as const) accept("Buy seat", buyCell(origin, hex(q, r)));
+  const blade2 = createWeapon(origin, "chargeBlade");
+  origin.world.weapons.push(blade2);
+  land(origin, origin.world.creatures[0]!.id, hex(2, -2));
+  land(origin, origin.world.armor[0]!.id, hex(1, -2));
+  land(origin, origin.world.weapons[0]!.id, hex(2, -1));
+  land(origin, blade2.id, hex(1, -1));
+  for (const blade of origin.world.weapons) blade.store = 6;
+  const baseHit = attackPowerOf(origin, "chargeBlade");
+  for (let i = 0; i < 3; i++) accept("Buy shared Hone rank", buyHoneRank(origin, "chargeBlade"));
+  const read = (state: GameState) => ({
+    seconds: state.world.elapsed, wallHp: enemyStateOf(state, wall.key).hp,
+    sentinelHp: state.world.creatures[0]!.hp, recovering: state.world.creatures[0]!.recovering,
+    hit: attackPowerOf(state, "chargeBlade"), stores: state.world.weapons.map(({ store }) => store),
+    arete: state.arete, nous: state.nous,
+  });
+  const start = read(origin);
+  const play = (state: GameState) => {
+    accept("Start scale fight", startSession(state, null, EPOCH));
+    const { fault } = advance(state, 24, rng);
+    if (fault) throw new Error(`Scale fight: ${fault}`);
+    return read(state);
+  };
+  const invested = structuredClone(origin);
+  accept("Buy final Hone rank", buyHoneRank(invested, "chargeBlade"));
+  return {
+    scope: "constructed production Corundum; not live acquisition, pacing, or balance calibration",
+    wall: wall.name, oppositionRatioFromBasalt: wall.maxHp / walls[1]!.maxHp, baseHit,
+    layout: layout(origin), start, rank3: play(origin), rank4: play(invested),
   };
 }
 

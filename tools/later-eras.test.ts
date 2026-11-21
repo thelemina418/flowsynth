@@ -206,13 +206,13 @@ describe("the era view and the route probe on real walks", () => {
   });
 
   it("demonstrates the combat route surpassing the first frontier's resistance", () => {
-    // The recorded defeat is the demonstration: the deployed starter rig
-    // — blade, Column, charge line — killed the first enemy through the
-    // engine's own combat, with no grant and no refund.
-    expect(pushingWalk.worldDefeats).toContain("w0");
+    // A live starter rig, including its bearer, must defeat Shale under
+    // the new engine; the historical w0 event is not a lifetime win.
+    expect(pushingWalk.worldDefeats).toContain("shale");
+    expect(pushingWalk.state.world.enemies.shale?.hp).toBe(0);
     const row = laterEraRow(23, BASELINE_SESSION_MINUTES, pushingWalk);
     expect(row.noGrant).toBe(true);
-    const defeatViews = row.eras.filter((era) => era.defeats.includes("w0"));
+    const defeatViews = row.eras.filter((era) => era.defeats.includes("shale"));
     expect(defeatViews.length).toBeGreaterThan(0);
     // The era that killed carried the route's purchases and placements.
     const route = defeatViews[0]!;

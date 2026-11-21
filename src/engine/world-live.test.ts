@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { buyCell, buyHoneRank, endSession, pauseSession, placeWorldOccupant, prestige, resumeSession, retrieveWorldOccupant, setWorldGearBearer, startBreather, startSession } from "./actions";
+import { buyCell, buyShelfModule, endSession, pauseSession, placeModule, placeWorldOccupant, prestige, resumeSession, retrieveWorldOccupant, setWorldGearBearer, startBreather, startSession } from "./actions";
 import { advance, advanceBreather } from "./advance";
 import { syncRates } from "./economy";
 import { give } from "./fixtures";
@@ -8,7 +8,9 @@ import { deserialize, serialize } from "./save";
 import { createInitialState, createWeapon } from "./state";
 import { applyGap, flushPendingAway, resolveHonestyReport } from "./trust";
 import type { GameState } from "./types";
-import { activeWallOf, attackPowerOf, columnLiftsOf, enemyPenaltyOf, worldCellReserved, worldEnemiesOf, worldFactorOf, worldPiecesOf } from "./world";
+import { activeWallOf, columnLiftsOf, enemyPenaltyOf, worldCellReserved, worldEnemiesOf, worldFactorOf, worldPiecesOf } from "./world";
+
+import { walkWorldCombatScale } from "./world-combat-walks";
 
 const rng = () => 0.3;
 const reload = (state: GameState): GameState => deserialize(serialize(state, 5_000)).state!;
@@ -142,8 +144,17 @@ it("fits defense first or a fueled Blade first on the same starter triangle with
   const initial = banked();
   initial.eraEarned = 20_000_000;
   const state = reload(initial);
-  give(state, "additive", hex(0, 1));
-  give(state, "focusKeyed", hex(1, 0)).reserve = 60;
+  // Fund the opening shelf at this constructed era checkpoint. Route
+  // the starter oscillator and buy the ordinary, guaranteed Flywheel.
+  state.nous = 500;
+  expect(buyShelfModule(state, "generator").ok).toBe(true);
+  const [osc, flywheel] = state.modules;
+  expect(placeModule(state, osc!.id, hex(0, 1)).ok).toBe(true);
+  expect(placeModule(state, flywheel!.id, hex(1, 0)).ok).toBe(true);
+  expect(startSession(state, null).ok).toBe(true);
+  advanceLive(state, 600);
+  expect(endSession(state, 600_000).ok).toBe(true);
+  expect(flywheel!.reserve).toBeCloseTo(60);
   place(state, state.world.creatures[0]!.id, 0, 0);
   const defense = structuredClone(state);
   const charge = structuredClone(state);
@@ -221,38 +232,14 @@ it("resolves two staggered Blades and two layers of armor, and never gives falle
 });
 
 it("turns late-wall defeat into a clear at the same cadence with paid high-scale Hone", () => {
-  const initial = banked();
-  // Constructed late frontier, not a claim that a representative player
-  // or the runner reached it. Prices are paid by the real command.
-  initial.eraEarned = 2e15;
-  initial.nous = 30_000;
-  initial.arete = 15;
-  for (const wall of worldEnemiesOf(initial).slice(0, -1)) initial.world.enemies[wall.key]!.hp = 0;
-  const state = reload(initial);
-  expect(activeWallOf(state)?.key).toBe("corundum");
-  expect(state.world.enemies.corundum!.hp).toBe(3600);
-  for (const [q, r] of [[1, -1], [2, -1], [2, -2], [1, -2]] as const) expect(buyCell(state, hex(q, r)).ok).toBe(true);
-  const blade2 = createWeapon(state, "chargeBlade");
-  state.world.weapons.push(blade2);
-  place(state, state.world.creatures[0]!.id, 2, -2);
-  place(state, state.world.armor[0]!.id, 1, -2);
-  place(state, state.world.weapons[0]!.id, 2, -1);
-  place(state, blade2.id, 1, -1);
-  for (const blade of state.world.weapons) blade.store = 6;
-  const base = attackPowerOf(state, "chargeBlade");
-  for (let i = 0; i < 3; i++) expect(buyHoneRank(state, "chargeBlade").ok).toBe(true);
-  const tuned = structuredClone(state);
-  expect(buyHoneRank(tuned, "chargeBlade").ok).toBe(true);
-  expect(tuned.arete).toBe(0);
-  expect(attackPowerOf(tuned, "chargeBlade") / base).toBe(128);
-  for (const branch of [state, tuned]) {
-    startSession(branch, null);
-    advanceLive(branch, 24);
-    expect(Number.isFinite(branch.nous)).toBe(true);
-  }
-  expect(state.world.creatures[0]!.recovering).toBe(true);
-  expect(state.world.enemies.corundum!.hp).toBeGreaterThan(3500);
-  expect(tuned.world.enemies.corundum!.hp).toBe(0);
-  expect(tuned.world.creatures[0]!.hp).toBe(8);
-  expect(tuned.world.weapons.map(({ store }) => store)).toEqual([2, 2]);
+  const { wall, oppositionRatioFromBasalt, baseHit, start, rank3, rank4 } = walkWorldCombatScale();
+  expect(wall).toBe("Corundum");
+  expect(start.wallHp).toBe(3600);
+  expect(oppositionRatioFromBasalt).toBeGreaterThan(100);
+  expect(rank4.hit / baseHit).toBe(128);
+  expect(rank3.seconds).toBe(rank4.seconds);
+  expect(Number.isFinite(rank3.nous) && Number.isFinite(rank4.nous)).toBe(true);
+  expect(rank3.recovering).toBe(true);
+  expect(rank3.wallHp).toBeGreaterThan(3500);
+  expect(rank4).toMatchObject({ wallHp: 0, sentinelHp: 8, recovering: false, stores: [2, 2], arete: 0 });
 });

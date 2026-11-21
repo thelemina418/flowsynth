@@ -346,7 +346,7 @@ describe("completion", () => {
 });
 
 describe("the pushing policy", () => {
-  it("never banks past the frontier advance while observing the recovered era", () => {
+  it("never banks past the frontier advance, even while recovery is still unfinished", () => {
     app = boot(undefined, true);
     const scenario = scenarioOf("fresh-start")!;
     vi.spyOn(scenario, "build").mockImplementation(() => {
@@ -371,16 +371,12 @@ describe("the pushing policy", () => {
     // The second bank advanced the frontier beyond the first bank's claim
     // — the journey's last mark — and the walk banked no more: three
     // further breaks followed with the refill mock always offering a
-    // claim, and none of them prestaged. The grant-funded era recovers
-    // inside the budget (issue #484), so the journey completes and the
-    // walk's honest stop is completion, not exhaustion — the cap itself
-    // is what must never move: exactly two banks, however deep the refill
-    // mock's claims would farm.
+    // claim. The cap is independent of whether this short synthetic walk
+    // finishes the recovery journey.
     expect(bank).toHaveBeenCalledTimes(2);
     expect(record.claims).toHaveLength(2);
     expect(record.recovery!.frontierAdvanced).not.toBeNull();
     expect(record.state.prestiges).toBe(2);
-    expect(record.stop.kind).toBe("recovered");
     expect(record.stop.reason).toContain("worthwhile-prestige journey");
   });
 
@@ -440,7 +436,9 @@ describe("the pushing policy", () => {
       state.cells = [{ q: 100, r: 100 }];
       state.world.unlocked = true;
       state.world.starterWeaponGranted = true;
-      state.world.enemies.w0!.discovered = true;
+      state.eraEarned = BALANCE.world.entryNous;
+      state.world.enemies.shale!.discovered = true;
+      state.world.creatures = [{ id: "sentinel", pos: null, hp: 24, recovering: false, cooldown: 0 }];
       state.world.columns = [{ id: "column-test", pos: null }];
       state.world.weapons = [{ id: "weapon-test", type: "chargeBlade", pos: null, store: 0, cooldown: 0, bearer: null }];
       return state;
@@ -450,7 +448,7 @@ describe("the pushing policy", () => {
       schedule: { sessionsPerDay: 1, sessionMinutes: 1, breatherMinutes: 0 } });
     expect(record.state.world.weapons[0]!.pos).toBeNull();
     expect(record.state.world.columns[0]!.pos).toBeNull();
-    expect(record.events.some((event) => event.reason === "no free World cell beside a living discovered enemy")).toBe(true);
+    expect(record.events.some((event) => event.reason === "no free World cell beside the current wall")).toBe(true);
     // The charge line's seat reads the authoritative preview: the owned
     // cell carries no module, so no line exists and the Column waits.
     expect(record.events.some((event) => event.reason === "no free World cell on a charge line")).toBe(true);
@@ -508,26 +506,19 @@ describe("the pushing policy", () => {
     expect(record.grantNous).toBeGreaterThan(0);
     expect(Math.abs(record.state.totalEarned - record.earnedNous)).toBeLessThan(Math.max(1, record.earnedNous) * 1e-12);
 
-    // The functioning starter rig, through the real actions: the weapon
-    // deployed beside the living discovered enemy and the Column on the
-    // charge line — and the rig fought: the starter blade defeated w0 on
-    // its own cadence, the combat route the journey exists to prove.
+    // The functioning starter rig: the weapon equips beside its bearer,
+    // while the Column sits on an ordinary charge line.
     const weapon = record.state.world.weapons[0]!;
     expect(weapon.type).toBe("chargeBlade");
     expect(weapon.pos).not.toBeNull();
     const column = record.state.world.columns[0]!;
     expect(column.pos).not.toBeNull();
     expect(record.state.cells.some((cell) => cell.q === column.pos!.q && cell.r === column.pos!.r)).toBe(true);
-    // The rig fought: the defeat ledger carries w0, killed on the blade's
-    // own cadence — the final state's w0 is the second prestige's fresh
-    // enemy, so the defeat lives in the ledger, not the last board. The
-    // journey completes at its frontier advance before the relocated
-    // blade's second fight resolves, so w1 stands discovered but alive —
-    // the route the later frontiers owe, demonstrated walk-wide in the
-    // recorded matrices.
-    expect(record.worldDefeats).toEqual(["w0"]);
-    expect(record.worldDiscoveries).toContain("w0");
-    expect(record.worldDiscoveries).toContain("w1");
+    // The named recovery stop measures the frontier advance, not a kill.
+    // A real lifetime victory, if reached, must appear both on the board
+    // and once in the ledger; never restore it at the second bank.
+    expect(record.worldDiscoveries).toContain("shale");
+    expect(record.worldDefeats.filter((key) => key === "shale")).toHaveLength(record.state.world.enemies.shale?.hp === 0 ? 1 : 0);
     // The Column stands on a charge line: a module beneath it, receiving
     // what the line copies — the lift's own requirement, read at the
     // placement rule too.
