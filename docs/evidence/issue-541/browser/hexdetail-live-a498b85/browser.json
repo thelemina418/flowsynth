@@ -1,0 +1,311 @@
+{
+  "source": "a498b85ca9676ffd25cf58da8078d9dc3f848d76",
+  "url": "http://localhost:5173/",
+  "browser": "149.0.7827.55",
+  "errors": [],
+  "desktop": {
+    "origin": {
+      "note": "World enemy ✓ day 3 of the declared walk · fresh-start-s468-fcb84371 · a living discovered enemy with the placement decision unplayed (#471) · recipe checkpoint · isolated save · modified — 2 interventions",
+      "seat": {
+        "q": 0,
+        "r": 0
+      },
+      "mode": "flow",
+      "coarse": false
+    },
+    "opened": {
+      "expanded": "false",
+      "selected": "false",
+      "tip": "Sentinel · 24/24 HP · Deployed",
+      "tipShown": false,
+      "focused": false,
+      "box": {
+        "x": 272.9721374511719,
+        "y": 300.6734619140625,
+        "width": 71.10049438476562,
+        "height": 71.10052490234375,
+        "top": 300.6734619140625,
+        "right": 344.0726318359375,
+        "bottom": 371.77398681640625,
+        "left": 272.9721374511719
+      },
+      "face": "modules"
+    },
+    "focus": {
+      "expanded": "true",
+      "selected": "false",
+      "tip": "Sentinel · 24/24 HP · Deployed",
+      "tipShown": true,
+      "focused": true,
+      "box": {
+        "x": 272.0592346191406,
+        "y": 300.1825866699219,
+        "width": 71.26565551757812,
+        "height": 71.26565551757812,
+        "top": 300.1825866699219,
+        "right": 343.32489013671875,
+        "bottom": 371.4482421875,
+        "left": 272.0592346191406
+      },
+      "face": "modules",
+      "elapsedAfterRebuild": 181500.165
+    },
+    "focusAfterRebuild": {
+      "expanded": "true",
+      "selected": "false",
+      "tip": "Sentinel · 24/24 HP · Deployed",
+      "tipShown": true,
+      "focused": true,
+      "box": {
+        "x": 269.14569091796875,
+        "y": 298.61602783203125,
+        "width": 71.792724609375,
+        "height": 71.792724609375,
+        "top": 298.61602783203125,
+        "right": 340.93841552734375,
+        "bottom": 370.40875244140625,
+        "left": 269.14569091796875
+      },
+      "face": "modules"
+    },
+    "escape": {
+      "expanded": "false",
+      "selected": "false",
+      "tip": "Sentinel · 24/24 HP · Deployed",
+      "tipShown": false,
+      "focused": true,
+      "box": {
+        "x": 268,
+        "y": 298,
+        "width": 72,
+        "height": 72,
+        "top": 298,
+        "right": 340,
+        "bottom": 370,
+        "left": 268
+      },
+      "face": "modules"
+    },
+    "selected": {
+      "expanded": "false",
+      "selected": "true",
+      "tip": "Sentinel · 24/24 HP · Deployed",
+      "tipShown": true,
+      "focused": false,
+      "box": {
+        "x": 268,
+        "y": 298,
+        "width": 72,
+        "height": 72,
+        "top": 298,
+        "right": 340,
+        "bottom": 370,
+        "left": 268
+      },
+      "face": "world"
+    },
+    "selectedFocus": {
+      "expanded": "true",
+      "selected": "true",
+      "tip": "Sentinel · 24/24 HP · Deployed",
+      "tipShown": true,
+      "focused": true,
+      "box": {
+        "x": 268,
+        "y": 298,
+        "width": 72,
+        "height": 72,
+        "top": 298,
+        "right": 340,
+        "bottom": 370,
+        "left": 268
+      },
+      "face": "world"
+    },
+    "hoverModules": {
+      "expanded": "true",
+      "selected": "false",
+      "tip": "Scribe · Lv. 20 · ⌁38.34",
+      "tipShown": true,
+      "focused": false,
+      "box": {
+        "x": 268,
+        "y": 382,
+        "width": 72,
+        "height": 72,
+        "top": 382,
+        "right": 340,
+        "bottom": 454,
+        "left": 268
+      },
+      "face": "world"
+    },
+    "reducedMotion": {
+      "animations": [],
+      "grid": []
+    },
+    "overflow": false
+  },
+  "phone": {
+    "origin": {
+      "note": "World enemy ✓ day 3 of the declared walk · fresh-start-s468-fcb84371 · a living discovered enemy with the placement decision unplayed (#471) · recipe checkpoint · isolated save · modified — 2 interventions",
+      "seat": {
+        "q": 0,
+        "r": 0
+      },
+      "mode": "flow",
+      "coarse": true
+    },
+    "opened": {
+      "expanded": "false",
+      "selected": "false",
+      "tip": "Sentinel · 24/24 HP · Deployed",
+      "tipShown": false,
+      "focused": false,
+      "box": {
+        "x": 38.38500213623047,
+        "y": 321.92498779296875,
+        "width": 70.91999816894531,
+        "height": 70.91998291015625,
+        "top": 321.92498779296875,
+        "right": 109.30500030517578,
+        "bottom": 392.844970703125,
+        "left": 38.38500213623047
+      },
+      "face": "modules"
+    },
+    "firstTap": {
+      "expanded": "true",
+      "selected": "false",
+      "tip": "Sentinel · 24/24 HP · Deployed",
+      "tipShown": true,
+      "focused": true,
+      "box": {
+        "x": 36,
+        "y": 319,
+        "width": 72,
+        "height": 72,
+        "top": 319,
+        "right": 108,
+        "bottom": 391,
+        "left": 36
+      },
+      "face": "modules",
+      "elapsedAfterRebuild": 181500.59400000004
+    },
+    "afterRebuild": {
+      "expanded": "true",
+      "selected": "false",
+      "tip": "Sentinel · 24/24 HP · Deployed",
+      "tipShown": true,
+      "focused": true,
+      "box": {
+        "x": 36,
+        "y": 319,
+        "width": 72,
+        "height": 72,
+        "top": 319,
+        "right": 108,
+        "bottom": 391,
+        "left": 36
+      },
+      "face": "modules"
+    },
+    "tapAway": {
+      "expanded": "false",
+      "selected": "false",
+      "tip": "Sentinel · 24/24 HP · Deployed",
+      "tipShown": false,
+      "focused": false,
+      "box": {
+        "x": 36,
+        "y": 319,
+        "width": 72,
+        "height": 72,
+        "top": 319,
+        "right": 108,
+        "bottom": 391,
+        "left": 36
+      },
+      "face": "modules"
+    },
+    "tapAwayAfterRebuild": {
+      "expanded": "false",
+      "selected": "false",
+      "tip": "Sentinel · 24/24 HP · Deployed",
+      "tipShown": false,
+      "focused": false,
+      "box": {
+        "x": 36,
+        "y": 319,
+        "width": 72,
+        "height": 72,
+        "top": 319,
+        "right": 108,
+        "bottom": 391,
+        "left": 36
+      },
+      "face": "modules"
+    },
+    "escape": {
+      "expanded": "false",
+      "selected": "false",
+      "tip": "Sentinel · 24/24 HP · Deployed",
+      "tipShown": false,
+      "focused": true,
+      "box": {
+        "x": 36,
+        "y": 319,
+        "width": 72,
+        "height": 72,
+        "top": 319,
+        "right": 108,
+        "bottom": 391,
+        "left": 36
+      },
+      "face": "modules"
+    },
+    "selected": {
+      "expanded": "false",
+      "selected": "true",
+      "tip": "Sentinel · 24/24 HP · Deployed",
+      "tipShown": true,
+      "focused": false,
+      "box": {
+        "x": 36,
+        "y": 319,
+        "width": 72,
+        "height": 72,
+        "top": 319,
+        "right": 108,
+        "bottom": 391,
+        "left": 36
+      },
+      "face": "world"
+    },
+    "layer": "world",
+    "selectedTap": {
+      "expanded": "true",
+      "selected": "true",
+      "tip": "Sentinel · 24/24 HP · Deployed",
+      "tipShown": true,
+      "focused": true,
+      "box": {
+        "x": 36,
+        "y": 319,
+        "width": 72,
+        "height": 72,
+        "top": 319,
+        "right": 108,
+        "bottom": 391,
+        "left": 36
+      },
+      "face": "world"
+    },
+    "reducedMotion": {
+      "animations": [],
+      "grid": []
+    },
+    "overflow": false
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "source": "a498b85ca9676ffd25cf58da8078d9dc3f848d76",
+  "url": "http://localhost:5173/",
+  "browser": "149.0.7827.55",
+  "desktop": {
+    "origin": {
+      "note": "World enemy ✓ day 3 of the declared walk · fresh-start-s468-fcb84371 · a living discovered enemy with the placement decision unplayed (#471) · recipe checkpoint · isolated save",
+      "proof": false,
+      "bank": 2,
+      "viewport": [
+        1280,
+        800
+      ],
+      "coarse": false
+    },
+    "partial": "6:00 / 10:00 credited",
+    "fill": {
+      "mode": "flow",
+      "modal": null,
+      "time": 600,
+      "rolls": 0,
+      "weapons": [
+        "chargeBlade"
+      ]
+    },
+    "control": {
+      "borderRadius": "0px",
+      "height": 44,
+      "sheetScroll": 558,
+      "sheetWidth": 558,
+      "reducedMotion": true,
+      "animations": 0
+    },
+    "worldFacts": "Maul\n\n⌁0/30\n\n12 HP unfed · 24 HP for 2 charge · every 8 s · needs an adjacent Sentinel\n\nPlace",
+    "choiceConsumed": true,
+    "disclosureOpenedAndDismissed": true,
+    "selectedInset": "rgb(233, 234, 232) 0px -3px 0px 0px inset"
+  },
+  "phone": {
+    "origin": {
+      "note": "World enemy ✓ day 3 of the declared walk · fresh-start-s468-fcb84371 · a living discovered enemy with the placement decision unplayed (#471) · recipe checkpoint · isolated save",
+      "proof": false,
+      "bank": 2,
+      "viewport": [
+        390,
+        844
+      ],
+      "coarse": true
+    },
+    "partial": "6:00 / 10:00 credited",
+    "fill": {
+      "mode": "flow",
+      "modal": null,
+      "time": 600,
+      "rolls": 0,
+      "weapons": [
+        "chargeBlade"
+      ]
+    },
+    "control": {
+      "borderRadius": "0px",
+      "height": 44,
+      "sheetScroll": 356,
+      "sheetWidth": 356,
+      "reducedMotion": true,
+      "animations": 0
+    },
+    "worldFacts": "Maul\n\n⌁0/30\n\n12 HP unfed · 24 HP for 2 charge · every 8 s · needs an adjacent Sentinel\n\nPlace",
+    "choiceConsumed": true,
+    "disclosureOpenedAndDismissed": true,
+    "selectedInset": "rgb(233, 234, 232) 0px -3px 0px 0px inset"
+  },
+  "errors": []
+}

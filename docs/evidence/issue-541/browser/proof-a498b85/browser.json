@@ -1,0 +1,68 @@
+{
+  "url": "http://localhost:5173/?dev=1",
+  "browser": "149.0.7827.55",
+  "desktop": {
+    "launch": {
+      "note": "World combat proof ✓ Shale active · fixed kit in tray · two ordered walls and one fixed kit (#542) · constructed fixture · isolated save",
+      "viewport": [
+        1280,
+        800
+      ],
+      "coarse": false
+    },
+    "outlet": {
+      "pressed": "true",
+      "focused": true,
+      "marker": "rgb(233, 234, 232) 0px -3px 0px 0px inset",
+      "focus": "solid",
+      "target": {
+        "x": 513.923828125,
+        "y": 616.4884033203125,
+        "width": 77.02557373046875,
+        "height": 43.45037841796875,
+        "top": 616.4884033203125,
+        "right": 590.9494018554688,
+        "bottom": 659.9387817382812,
+        "left": 513.923828125
+      }
+    },
+    "keyboardDisclosure": {
+      "opened": true,
+      "dismissed": true
+    },
+    "flowPressure": "Shale · 26/48 HP · −20% ν · F3",
+    "nextPressure": "Basalt · 35/35 HP · −35% ν · D4",
+    "reducedMotion": {
+      "enabled": true,
+      "armedTargets": 5,
+      "worldAnimations": 0
+    }
+  },
+  "phone": {
+    "launch": {
+      "note": "World combat proof ✓ Shale active · fixed kit in tray · two ordered walls and one fixed kit (#542) · constructed fixture · isolated save",
+      "viewport": [
+        390,
+        844
+      ],
+      "coarse": true
+    },
+    "desktopTrayHidden": true,
+    "touchDisclosure": {
+      "opened": true,
+      "text": "Hits for 6 HP / 4 s · heals 0.35 HP/s",
+      "dismissed": true
+    },
+    "outletPressed": "true",
+    "beforeInspection": {
+      "mode": "upgrade",
+      "layer": "world",
+      "modal": "inventory",
+      "hp": 0,
+      "recovering": true,
+      "tray": "INVENTORY\n✕\nWorld tray 5×\nCharge Blade\n⌁0/30\nSentinel\n0/24 HP · Recovering\nGuard Plate\n−50% damage\nPulse\n⌁0/6\nCharge Column"
+    },
+    "recovering": "Sentinel\n\n0/24 HP · Recovering\n\nRequires full HP to deploy\n\nPlace"
+  },
+  "errors": []
+}

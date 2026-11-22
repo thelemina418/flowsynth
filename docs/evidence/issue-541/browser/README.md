@@ -13,12 +13,21 @@ The fix acts only while Add is armed: `renderUpgradeAll` stays hidden while `ui.
 | Upgrade All hidden while Add is armed (`hidden`, no focusable chips), and back after Escape (desktop) or the Cancel pill (phone) | `add-outer-a498b85/*-cancelled-upgrade-all-back` | Pass |
 | F4: with Add armed, `upgradeAllAction(1, 5, 10, 'max')` leaves nous and levels unchanged; the chips cannot be reached | `add-outer-a498b85/browser.json` (`f4`) | Pass (F4 fixed) |
 | Return to the same owned cell on World (C13 opens in Hex detail, World face) | `*-world-same-cell` | Pass |
+| Pre-discovery pressure in the Ledger and discovery (grant sheet, new-era walls reserved) | `discovery-a498b85/` | Pass |
+| Isolated proof journey | `proof-a498b85/` | Pass |
+| Combat read-only in flow, HP/pressure, recovery and placement, keyboard disclosure and Escape, reduced motion, greyscale recovery | `live-a498b85/` | Pass |
+| v14 migration (status note once, exact bytes kept) and lost-Arete recovery | `migration-a498b85/` | Pass (F3, #11, unchanged) |
+| Focus Blacksmith class, meter and choice; World tray unfed vs powered hits (Maul) | `blacksmith-a498b85/` | Pass |
+| Common silhouette, greyscale comparison, the four World states, hit geometry, two-tap phone miniature | `silhouette-a498b85/` | Pass |
+| Live Hex-detail touch: pin through a live rebuild, tap-away and Escape, second tap selects; desktop focus and Escape; selected-miniature facts; reduced motion | `hexdetail-live-a498b85/` | Pass (F2, #10, still visible in `phone-pin-after-live-rebuild.png`) |
 
-The phone target is still 43×50 px with this constructed spur's fit. Its size depends on the fit, so it is recorded, not judged.
+The full `a498b85` pass used launch output [`dev-launch-a498b85-full.txt`](dev-launch-a498b85-full.txt) and the accepted preflight [`provenance-a498b85-full.json`](provenance-a498b85-full.json). Each of the seven area scripts re-checks the served commit and cleanliness against that record (`proof` and `live` gained the check in their copies). Every area ran with no errors and no new defects; findings F2, F3 and F5 are unchanged.
 
-**Superseded:** the `add/` and `add-outer/` results below are superseded at `4d81a59` by the two folders above. **Still valid at `4d81a59`:** every other area (`discovery`, `proof`, `live`, `migration`, `blacksmith`, `silhouette`, `hexdetail-live`). The `a498b85` change acts only while Add is armed, and none of those walks arm Add.
+**Measured observation for the owner:** the phone outer-Add target at C13 measures 43×50 px with this constructed spur's default board fit. That is 1 px under the 44 px target width. It shares the unchanged cell polygon of its neighbours and scales with zoom.
 
-## Original capture at `4d81a59`
+**Superseded:** every `4d81a59` area below (`add`, `add-outer`, `discovery`, `proof`, `live`, `migration`, `blacksmith`, `silhouette`, `hexdetail-live`) is superseded by its `<area>-a498b85/` recapture. The `4d81a59` files are kept for history only and do not verify the current source.
+
+## Original capture at `4d81a59` (superseded)
 
 **Source:** `4d81a5908794f426ff797f2f3632b59255b9f936` (source-identical to `5bc3e0a`), served clean from `/home/lem/.t3/worktrees/flowsynth/541-capture`. [`dev-launch.txt`](dev-launch.txt) is the launcher's output; [`provenance.json`](provenance.json) is the accepted capture preflight. The newer scripts re-verify the served worktree, commit and cleanliness before and after their walks.
 
@@ -47,7 +56,6 @@ The phone target is still 43×50 px with this constructed spur's fit. Its size d
 **Unavailable:**
 - Real-device touch, pinch, and two-finger pan were not run.
 - Screen-reader output was not checked beyond accessible names and live-region text.
-- The pixel size of the phone outer-Add target depends on the board fit. With the constructed spur it is 43×50 px, which is below 44 px wide. This was recorded, not judged.
 
 ## Findings (source not changed)
 

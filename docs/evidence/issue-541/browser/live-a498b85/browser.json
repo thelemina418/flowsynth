@@ -1,0 +1,182 @@
+{
+  "url": "http://localhost:5173/?dev=1",
+  "browser": "149.0.7827.55",
+  "errors": [],
+  "desktop": {
+    "origin": {
+      "note": "World enemy ✓ day 3 of the declared walk · fresh-start-s468-fcb84371 · a living discovered enemy with the placement decision unplayed (#471) · recipe checkpoint · isolated save",
+      "proof": false,
+      "claims": 2,
+      "eraEarned": 32703818.940745737,
+      "column": {
+        "q": -1,
+        "r": 1
+      },
+      "sentinelId": "m397",
+      "cells": [
+        {
+          "q": 0,
+          "r": 0
+        },
+        {
+          "q": 1,
+          "r": 0
+        },
+        {
+          "q": 0,
+          "r": 1
+        },
+        {
+          "q": 0,
+          "r": -1
+        },
+        {
+          "q": 0,
+          "r": 2
+        },
+        {
+          "q": -1,
+          "r": 1
+        },
+        {
+          "q": -1,
+          "r": 2
+        },
+        {
+          "q": 1,
+          "r": 1
+        },
+        {
+          "q": -1,
+          "r": 0
+        },
+        {
+          "q": -1,
+          "r": 3
+        },
+        {
+          "q": 1,
+          "r": -1
+        }
+      ],
+      "viewport": [
+        1280,
+        800
+      ],
+      "coarse": false
+    },
+    "wall": "Shale · 48/48 HP · −20% ν · F3",
+    "reducedMotion": {
+      "reduced": true,
+      "marked": 6,
+      "animations": 0
+    },
+    "flow": {
+      "hp": 12,
+      "recovering": false,
+      "pos": {
+        "q": 0,
+        "r": 0
+      },
+      "wall": 45.7,
+      "mode": "flow"
+    },
+    "fundedRig": {
+      "areteBefore": 1,
+      "areteAfter": 1,
+      "heldReserve": 3768,
+      "setup": [
+        "Place m1 at 1,-1",
+        "Place m99 at 1,0",
+        "Place World m395 at 1,-1",
+        "Place World m397 at 0,0",
+        "Place World m398 at -1,1",
+        "Place World m396 at 1,0",
+        "Place World m399 at 0,-1"
+      ]
+    },
+    "lifetimeClear": {
+      "hp": 24,
+      "recovering": false,
+      "pos": {
+        "q": 0,
+        "r": 0
+      },
+      "wall": 0,
+      "mode": "upgrade"
+    }
+  },
+  "phone": {
+    "origin": {
+      "note": "World enemy ✓ day 3 of the declared walk · fresh-start-s468-fcb84371 · a living discovered enemy with the placement decision unplayed (#471) · recipe checkpoint · isolated save",
+      "proof": false,
+      "claims": 2,
+      "eraEarned": 32703818.940745737,
+      "column": {
+        "q": -1,
+        "r": 1
+      },
+      "sentinelId": "m397",
+      "cells": [
+        {
+          "q": 0,
+          "r": 0
+        },
+        {
+          "q": 1,
+          "r": 0
+        },
+        {
+          "q": 0,
+          "r": 1
+        },
+        {
+          "q": 0,
+          "r": -1
+        },
+        {
+          "q": 0,
+          "r": 2
+        },
+        {
+          "q": -1,
+          "r": 1
+        },
+        {
+          "q": -1,
+          "r": 2
+        },
+        {
+          "q": 1,
+          "r": 1
+        },
+        {
+          "q": -1,
+          "r": 0
+        },
+        {
+          "q": -1,
+          "r": 3
+        },
+        {
+          "q": 1,
+          "r": -1
+        }
+      ],
+      "viewport": [
+        390,
+        844
+      ],
+      "coarse": true
+    },
+    "disclosure": "Hits for 6 HP / 4 s · heals 0.35 HP/s",
+    "flow": {
+      "hp": 0,
+      "recovering": true,
+      "pos": null,
+      "wall": 45.5,
+      "mode": "upgrade"
+    },
+    "recovery": "Sentinel\n\n0/24 HP · Recovering\n\nRequires full HP to deploy\n\nPlace"
+  }
+}
