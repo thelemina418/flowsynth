@@ -11,7 +11,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { compileEngineTo } from '../../../tools/dev/compile-engine.mjs';
 import { devProvenance } from '../../../tools/dev/provenance.mjs';
 import { recordingEnvironment, requireRuntimeEnvironment } from '../../../tools/dev/runtime.mjs';
-const baselineCommit = '7da4007dee8f2343f9526c96a4dc930c66881683';
+// Live-lineage baseline. The historical opening-and-world.json was measured
+// against legacy 7da4007dee8f2343f9526c96a4dc930c66881683; after the repository
+// migration 211267b is its live ancestor, with identical src/ (only a ticket
+// URL in tools/ differs).
+const baselineCommit = '211267b81442954565b53c4f68761df04e74b87f';
 const recipeInput = { seed: 468, policyId: 'pushing', budgetDays: 10, claimTarget: 2,
   schedule: { sessionsPerDay: 2, sessionMinutes: 600, breatherMinutes: 5 } };
 const comparatorPath = 'docs/evidence/issue-543/measure.mjs';
