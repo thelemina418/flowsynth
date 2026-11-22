@@ -127,6 +127,27 @@ it("trusted away time to plan fills the meter but a planned answer adds no overr
   expect(habit.classes.blacksmith!.rollMeter.progress).toBe(0);
 });
 
+it("banks at the same 600 credited seconds after fractional ticks and reload, but not before", () => {
+  const { state, habit } = selectedBlacksmith();
+  start(state);
+  const long = structuredClone(state);
+  tick(long, 600);
+  let fine = state;
+  for (let i = 0; i < 2999; i++) {
+    tick(fine, 0.2);
+    if (i === 1499) fine = reload(fine);
+  }
+  tick(fine, 0.19999999);
+  expect(weaponChoicesOf(fine.habits[0]!)).toBe(0);
+  tick(fine, 0.00000001);
+  expect(weaponChoicesOf(long.habits[0]!)).toBe(1);
+  expect(weaponChoicesOf(fine.habits[0]!)).toBe(1);
+  expect(fine.habits[0]!.classes.blacksmith!.rollMeter.progress).toBeCloseTo(0, 9);
+  finish(fine);
+  expect(claimForgedWeapon(fine, habit.id, "striker").ok).toBe(true);
+  expect(claimForgedWeapon(fine, habit.id, "striker").ok).toBe(false);
+});
+
 it("refuses an unrepresentable fill without partial credit or a duplicated choice", () => {
   const { state, habit } = selectedBlacksmith();
   // Construct the representable edge of the persisted count; a carried

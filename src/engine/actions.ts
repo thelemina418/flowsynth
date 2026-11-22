@@ -148,6 +148,7 @@ export function endSession(state: GameState, now: number = 0): ActionResult {
     return fail("The generator charge cannot bank safely, so the session is still open.");
   }
   state.mode = "upgrade";
+  reconcileWorldGear(state);
   // The departed session's final clock (docs/breather-spec.md §1): the
   // temporal base a following breather advances — a breather keeps the
   // Afterglow warm and the Pulsewell cycling from where the session left
@@ -279,6 +280,7 @@ export function endBreather(state: GameState): ActionResult {
   if (record) record.breather = { seconds: breather.elapsed, completed };
   state.mode = "upgrade";
   state.breather = null;
+  reconcileWorldGear(state);
   return ok;
 }
 

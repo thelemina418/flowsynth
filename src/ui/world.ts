@@ -249,23 +249,20 @@ export function worldLensCoordinates(state: GameState): Hex[] {
 
 /* ── The reserved readout's ask ─────────────────────── */
 
-// Hovering a plate asks its deeper routing and reset facts into the reserved
-// readout — one spot, never floating over the board. The weapons carry
-// their routing (fed, by whom); the enemies their threat; the reserved
-// cells their silence.
+// The reserved readout carries deeper mechanics, not a second copy of the
+// plate's identity or state.
 export function worldAskHtml(app: App, pos: Hex, snapshot: RateSnapshot): string {
   const { state } = app;
   const def = worldEnemyAt(state, pos);
   const occupant = worldOccupantAt(state, pos);
-  let read = `Open World cell · ${cellNoteOf(pos)}`;
+  let read: string | undefined;
   if (def && worldCellReserved(state, pos)) {
-    read = enemyStateOf(state, def.key).discovered ? wallMechanic(def) : "Reserved cell";
+    if (enemyStateOf(state, def.key).discovered) read = wallMechanic(def);
   } else if (occupant) {
     const item = worldPieceOf(state, occupant.id)!;
-    const facts = worldPieceRead(state, item, columnLiftsOf(state, snapshot));
-    read = `${worldPieceName(item)} · ${facts.tip}`;
-  } else if (def) read = `${def.name} cleared · open World cell`;
-  return `<span class="chord-readout-chip mono" style="--cc:var(--world)">${read}</span>`;
+    read = worldPieceRead(state, item, columnLiftsOf(state, snapshot)).tip;
+  }
+  return read ? `<span class="chord-readout-chip mono" style="--cc:var(--world)">${read}</span>` : "";
 }
 
 /* ── The placement preview ────────────────────────────
@@ -584,13 +581,14 @@ export function worldCountBadge(app: App): number {
 
 const WORLD_DETAIL_MARKER = `<polygon class="hex-stack-marker" points="${hexPoints(HEX_RADIUS - 3)}"/>`;
 
-// The Hex detail's World chassis: the coordinate's plate at readable
-// scale, its state spoken once in the tooltip. Pre-reveal the plate is
-// the locked one — the layer has not arrived, whatever the coordinate.
-export function worldChassisHtml(state: GameState, pos: Hex, snapshot: RateSnapshot): { chassis: string; tip: string } {
+// The engraving supplies the chassis' accessible name. Only details not
+// engraved on the plate belong in its mechanics tooltip. The miniature
+// may use the label while the full-sized World face is not visible.
+export function worldChassisHtml(state: GameState, pos: Hex, snapshot: RateSnapshot): { chassis: string; label: string; tip?: string; preview?: boolean } {
   if (!worldEntered(state)) {
     return {
       chassis: `<svg class="world-stack locked" viewBox="-70 -70 140 140" aria-hidden="true">${plate("locked")}<g class="world-glyph dimmed" transform="translate(0,-6) scale(1.6)"><rect x="-4.5" y="-1" width="9" height="7"/><path d="M-2.6-1v-2.2a2.6 2.6 0 0 1 5.2 0V-1"/></g><text class="world-word" y="22" text-anchor="middle">LOCKED</text>${WORLD_DETAIL_MARKER}</svg>`,
+      label: "World locked",
       tip: "A prestige that banks Arete discovers World",
     };
   }
@@ -598,15 +596,15 @@ export function worldChassisHtml(state: GameState, pos: Hex, snapshot: RateSnaps
   const reserved = worldCellReserved(state, pos);
   const wrap = (content: string) => `<svg class="world-stack" viewBox="-70 -70 140 140" aria-hidden="true">${content}${WORLD_DETAIL_MARKER}</svg>`;
   if (def && reserved) {
-    if (!enemyStateOf(state, def.key).discovered) return { chassis: wrap(plate("reserved") + `<text class="world-word" y="-7" text-anchor="middle">RESERVED</text>`), tip: "Reserved for a future wall" };
-    const { inner } = wallEngraving(state, def, true);
-    return { chassis: wrap(inner), tip: wallMechanic(def) };
+    if (!enemyStateOf(state, def.key).discovered) return { chassis: wrap(plate("reserved") + `<text class="world-word" y="-7" text-anchor="middle">RESERVED</text>`), label: "Reserved World cell" };
+    const { inner, label } = wallEngraving(state, def, true);
+    return { chassis: wrap(inner), label, tip: wallMechanic(def), preview: true };
   }
   const occupant = worldOccupantAt(state, pos);
   if (!occupant) return def
-    ? { chassis: wrap(clearedFaceHtml(def)), tip: "Lifetime victory · released for World placement" }
-    : { chassis: wrap(plate("open")), tip: "Open World cell" };
+    ? { chassis: wrap(clearedFaceHtml(def)), label: `${def.name} cleared`, preview: true }
+    : { chassis: wrap(plate("open")), label: "Open World cell" };
   const lift = columnLiftsOf(state, snapshot);
-  const { inner, tip } = pieceEngraving(state, worldPieceOf(state, occupant.id)!, lift, true);
-  return { chassis: wrap(inner), tip };
+  const { inner, name, read, stateWord, tip } = pieceEngraving(state, worldPieceOf(state, occupant.id)!, lift, true);
+  return { chassis: wrap(inner), label: [name, read, stateWord].filter(Boolean).join(" · "), tip, preview: true };
 }

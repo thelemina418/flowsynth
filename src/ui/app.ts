@@ -97,7 +97,7 @@ import { BALANCE } from "../engine/constants";
 import type { FocusApp } from "../engine/apps";
 import { writeNote } from "../engine/notes";
 import { achievementName, syncAchievements } from "../engine/achievements";
-import { CATEGORY_OF, SHELF_MODULE, CHIME } from "../engine/constants";
+import { CATEGORY_OF, SHELF_MODULE, CHIME, DRIFT_NOISE_SECONDS } from "../engine/constants";
 import { cellNoteOf } from "../engine/lattice";
 import {
   activeHabit,
@@ -731,7 +731,7 @@ export class App {
       // deadline; past it the phase completed itself and the return finds
       // upgrade mode with the completion read.
       const gapSeconds = Math.max(0, (Date.now() - loaded.savedAt) / 1000);
-      const { result, completed } = applyBreatherGap(this.state, gapSeconds);
+      const { result, completed } = applyBreatherGap(this.state, gapSeconds, Math.random, gapSeconds);
       this.reportAdvance(result);
       this.syncBoundaryClock(Date.now());
       if (completed) {
@@ -746,7 +746,7 @@ export class App {
     // document.wasDiscarded only records that it happened.
     this.resumedFromDiscard = (document as Document & { wasDiscarded?: boolean }).wasDiscarded === true;
     const gapSeconds = Math.max(0, (Date.now() - loaded.savedAt) / 1000);
-    applyGap(this.state, gapSeconds, "away", 0);
+    applyGap(this.state, gapSeconds, "offline", 0);
     this.reportAdvance(flushPendingAway(this.state));
     this.syncBoundaryClock(Date.now());
     // The report fires at this return when the pool is outstanding, and
@@ -774,16 +774,21 @@ export class App {
   // advances by it — never by tick count, which throttling falsifies. The
   // breather runs its own boundary (docs/breather-spec.md §4): pre-trusted,
   // presence classifies nothing, and the deadline completes the phase.
-  private applyBoundary(now: number): void {
+  private applyBoundary(now: number, offline = false): void {
     if (this.state.mode === "breather") {
       if (this.lastWall === null) {
         this.syncBoundaryClock(now);
         return;
       }
       const gapSeconds = (now - this.lastWall) / 1000;
+      const driftStepSeconds = (dualDriftMs() - this.lastDrift) / 1000;
       this.syncBoundaryClock(now);
       if (gapSeconds <= 0) return;
-      const { result, completed } = applyBreatherGap(this.state, gapSeconds);
+      // Breather production still banks against wall time. The portion
+      // spent asleep or suspended is not time the World actually ran.
+      const offlineSeconds = offline || driftStepSeconds < -DRIFT_NOISE_SECONDS ? gapSeconds
+        : driftStepSeconds > DRIFT_NOISE_SECONDS ? Math.min(gapSeconds, driftStepSeconds) : 0;
+      const { result, completed } = applyBreatherGap(this.state, gapSeconds, Math.random, offlineSeconds);
       this.reportAdvance(result);
       if (completed) {
         this.completeBreather();
@@ -805,18 +810,19 @@ export class App {
     const gapSeconds = (now - this.lastWall) / 1000;
     const driftStepSeconds = (dualDriftMs() - this.lastDrift) / 1000;
     this.syncBoundaryClock(now);
-    if (gapSeconds <= 0 && driftStepSeconds <= 0) return;
+    if (!offline && gapSeconds <= 0 && driftStepSeconds <= 0) return;
     rollGoalOccurrences(this.state, now);
-    const result = applyGap(this.state, gapSeconds, this.presence ? "visible" : "away", driftStepSeconds);
+    const result = applyGap(this.state, gapSeconds, offline ? "offline" : this.presence ? "visible" : "away", driftStepSeconds);
     this.reportAdvance(result);
     if (now - this.lastSaveWall > 5000) this.save(now);
   }
 
   // A return (§1): the buffered absence — the hidden stretch, reconciled
   // whole — classifies once, then live presence resumes banking behind it.
-  private processReturn(now: number): void {
-    this.applyBoundary(now);
-    if (document.visibilityState === "visible") {
+  private processReturn(now: number, offline = false): void {
+    this.applyBoundary(now, offline);
+    this.presence = document.visibilityState === "visible";
+    if (this.presence) {
       this.reportAdvance(flushPendingAway(this.state));
     }
     this.tick();
@@ -1042,7 +1048,6 @@ export class App {
         this.presence = false;
         this.save();
       } else {
-        this.presence = true;
         // The return catch-up (#128): a save another tab wrote while we
         // were hidden is adopted before this tab's own reconcile runs, so
         // the stale in-memory copy never clobbers what the slot gained.
@@ -1055,9 +1060,8 @@ export class App {
     // through the same reconcile path (#128).
     window.addEventListener("pageshow", (event) => {
       if (!this.ownsBoard() || !(event as PageTransitionEvent).persisted) return;
-      this.presence = document.visibilityState === "visible";
       this.adoptNewerSave();
-      this.processReturn(Date.now());
+      this.processReturn(Date.now(), true);
     }, { signal: this.signal });
     // Another tab's save, announced here in every tab but the writer
     // (#128): outside a live session the tab adopts a save newer than
@@ -2876,7 +2880,7 @@ export class App {
       return;
     }
     try {
-      if (!this.sharedSave.adoptRecovered(offer.raw, parsed.state, parsed.savedAt, parsed.recovered?.fromVersion)) {
+      if (!this.sharedSave.adoptRecovered(offer.raw, parsed.state, parsed.savedAt, { from: offer.from, version: parsed.recovered?.fromVersion })) {
         this.ui.recovery = { ...offer, error: "The original could not be retained or the recovered save could not be saved. Nothing was adopted; retry after making storage available." };
         this.render();
         return;

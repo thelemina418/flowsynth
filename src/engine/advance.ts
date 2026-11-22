@@ -9,15 +9,13 @@ import { addForgeProgress, addMutatorForgeProgress, type Rng } from "./rolls";
 import { accrueLivePractice } from "./habits";
 import { accrueGoalProgress, accrueGoalFuel, secondsUntilGoalCompletion } from "./goals";
 import { accrueClassDevelopment } from "./classes";
-import { advanceWorldCharge, advanceWorldCombat, syncWorldDiscoveries, worldBoundarySeconds } from "./world";
+import { advanceWorldCharge, advanceWorldCombat, discoverySecondsOf, syncWorldDiscoveries, worldBoundarySeconds } from "./world";
 import type { AdvanceResult, GameState, ModuleInstance, RateSnapshot } from "./types";
 
-// Where a span's produced nous lands and whether it credits practice
-// (focus-tool spec §1–3). "live" is present or trusted time: banks, credits,
-// accrues. "provisional" is away time the honesty report still owns: its
-// nous lands in the provisional bucket and its minutes in the pool — it
-// produces, but credits nothing until the report settles it.
-export type AdvanceSink = "live" | "provisional";
+// Both trusted sinks bank and credit practice. Offline accounting keeps
+// those promises without moving the World clock. Provisional time produces
+// into the bucket and pool but does not credit practice or fight.
+export type AdvanceSink = "live" | "offline" | "provisional";
 
 // The one production-credit seam (ADR-0039): produced nous lands on the
 // balance, the lifetime truth, and the era's measure together — prestige
@@ -149,15 +147,13 @@ function walkFlow(
     let { liveGenerators, earliest } = boardBoundaries(state);
     // A live goal completion banks reserve mid-span, so it is another rate
     // boundary even when every generator starts empty.
-    if (sink === "live") earliest = Math.min(earliest, secondsUntilGoalCompletion(state, state.activeHabitId));
-    // The World boundaries (issue #425, priorities 3 and 5): the era's
-    // first threshold crossing — the reveal — and the next armed weapon's
-    // attack tick are rate-relevant boundaries exactly like reserve
-    // depletion and temporal marks. Both are trusted-time legs: provisional
-    // spans hold fire, and their production never touches eraEarned, so
-    // neither boundary can move under them.
-    if (sink === "live") {
-      earliest = Math.min(earliest, worldBoundarySeconds(state, snapshot.rate, snapshot));
+    if (sink !== "provisional") earliest = Math.min(earliest, secondsUntilGoalCompletion(state, state.activeHabitId));
+    // Offline production may still activate a wall and change the rate;
+    // only online trusted time has attack and recovery boundaries.
+    if (sink !== "provisional") {
+      earliest = Math.min(earliest, sink === "live"
+        ? worldBoundarySeconds(state, snapshot.rate, snapshot)
+        : discoverySecondsOf(state, snapshot.rate));
     }
     const spanSeconds = earliest !== Infinity && earliest + EPS < seconds ? earliest : seconds;
 
@@ -191,7 +187,7 @@ function walkFlow(
     // The summary's headline and rate (§5.7) accrue with the session itself,
     // so pauses never count into either; provisional production stays out
     // until its bucket banks.
-    if (sink === "live") session.earned = requireFinite(session.earned + gained, "the session's earned ν");
+    if (sink !== "provisional") session.earned = requireFinite(session.earned + gained, "the session's earned ν");
     // Each generator's reserve is a store of charge quantity of its own
     // (issue #371): a deployed generator — any named design —
     // spends reserve at its emission rate per flow second, elapsing even
@@ -199,7 +195,7 @@ function walkFlow(
     // full strength; expenditure never depends on the neighbor count).
     // Undeployed, it produces no output and its reserve holds.
     drainReserves(liveGenerators, spanSeconds);
-    if (sink === "live") {
+    if (sink !== "provisional") {
       // Practice credits only from present and trusted time — nothing ever
       // accrues from away before its reconciliation (§3), so the provisional
       // minutes above leave habit, goals, and C untouched.
@@ -220,13 +216,10 @@ function walkFlow(
       // nothing class-side.
       spanResult.rollsFlow += accrueClassDevelopment(state, spanSeconds, rng);
       spanResult.rollsBanked += spanResult.rollsFlow;
-      // The World's combat leg (issue #425, priorities 4–5): the ticks the
-      // span crossed resolve at its edge — the boundary above cut the span
-      // at the next firing tick, so a kill lands exactly where the
-      // remainder's production factor changes. Provisional spans never
-      // reach this: rejected practice retains no damage, victories, or
-      // bonuses, with no retraction machinery and no pending combat ledger.
-      advanceWorldCombat(state, spanSeconds);
+      // Fight at the span edge, before reevaluating the wall, so a kill
+      // changes production only for the remainder. Neither reconciled
+      // offline time nor provisional time resolves damage or recovery.
+      if (sink === "live") advanceWorldCombat(state, spanSeconds);
       syncWorldDiscoveries(state);
     }
     // The session-tick check (ADR-0015): charge exists only live in flow, so
@@ -250,7 +243,7 @@ function walkFlow(
 // session's, kept warm). The wall gap clamps at the remaining allowance —
 // the phase cannot overshoot its mint — and the caller ends it when the
 // clamp bites (trust.applyBreatherGap flags the completion).
-function walkBreather(state: GameState, seconds: number, rng: Rng): AdvanceResult {
+function walkBreather(state: GameState, seconds: number, rng: Rng, offlineSeconds: number): AdvanceResult {
   let result: AdvanceResult = {
     nousEarned: 0,
     rollsBanked: 0,
@@ -262,22 +255,24 @@ function walkBreather(state: GameState, seconds: number, rng: Rng): AdvanceResul
   const breather = state.breather;
   if (state.mode !== "breather" || !breather || seconds <= 0) return result;
   seconds = Math.min(seconds, Math.max(0, breather.allowanceSeconds - breather.elapsed));
+  offlineSeconds = Math.min(seconds, offlineSeconds);
   while (seconds > 0) {
+    const offline = offlineSeconds > 0;
     const spanResult: AdvanceResult = {
       nousEarned: 0, rollsBanked: 0, rollsFlow: 0,
       rollsForge: 0, rollsMutator: 0, goalsCompleted: 0,
     };
     // The same boundary walk as flow, goals aside — a breather advances no
     // goal: reserve depletion, temporal marks, and lifetime rest marks are the mid-step
-    // rate changes the phase can meet — and the World's own (issue #425):
-    // the breather is trusted time, so enemy reveals and weapon ticks
-    // split its spans exactly as flow's do, and its combat fights beside
-    // its production with no class accrual, exactly as practice legs are
-    // absent here.
+    // rate changes the phase can meet. As in flow, offline banking still
+    // splits at discovery but does not resolve World attacks or recovery.
     const snapshot = syncRates(state, true);
     const { liveGenerators, earliest } = boardBoundaries(state);
-    const boundary = Math.min(earliest, worldBoundarySeconds(state, snapshot.rate, snapshot));
-    const spanSeconds = boundary !== Infinity && boundary + EPS < seconds ? boundary : seconds;
+    const boundary = Math.min(earliest, offline
+      ? discoverySecondsOf(state, snapshot.rate)
+      : worldBoundarySeconds(state, snapshot.rate, snapshot));
+    const available = offline ? offlineSeconds : seconds;
+    const spanSeconds = boundary !== Infinity && boundary + EPS < available ? boundary : available;
     const gained = requireFinite(snapshot.rate * spanSeconds, "the breather's produced ν/s");
     // Supply earned during this span is available at its ending attack tick.
     advanceWorldCharge(state, snapshot, spanSeconds);
@@ -291,7 +286,8 @@ function walkBreather(state: GameState, seconds: number, rng: Rng): AdvanceResul
     // No creditedSeconds, no habit, no goal, no flow meter: a breather
     // credits nothing (spec §6 — the honesty system governs practice
     // claims, and a breather claims nothing).
-    advanceWorldCombat(state, spanSeconds);
+    if (offline) offlineSeconds -= spanSeconds;
+    else advanceWorldCombat(state, spanSeconds);
     syncWorldDiscoveries(state);
     discoverBoard(state, snapshot);
     result = sumResults(result, spanResult);
@@ -304,8 +300,8 @@ function walkBreather(state: GameState, seconds: number, rng: Rng): AdvanceResul
 // pre-trusted phase cannot bank an unrepresentable figure either — the
 // failed span restores the phase it started with, and the refusal rides
 // the result.
-export function advanceBreather(state: GameState, seconds: number, rng: Rng = Math.random): AdvanceResult {
-  return walkRefusingFault(state, structuredClone(state), () => walkBreather(state, seconds, rng));
+export function advanceBreather(state: GameState, seconds: number, rng: Rng = Math.random, offlineSeconds = 0): AdvanceResult {
+  return walkRefusingFault(state, structuredClone(state), () => walkBreather(state, seconds, rng, offlineSeconds));
 }
 
 // The refusal plumbing both walks share: the walk runs against the live

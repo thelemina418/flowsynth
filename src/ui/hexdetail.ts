@@ -7,7 +7,7 @@ import { tierPowerOf } from "../engine/module-strength";
 // Editing remains upgrade-only; live sessions inspect the same readouts.
 import { affordableLevels, boosterBonusOf, boosterTermOf, deployed, deployedAt, displayedRates, flowLive, hostPower, isPriceableLevel, isResponseSupport, levelCost, levelsCost, responseSupportPowerOf, wholeNous } from "../engine/economy";
 import { BALANCE, isOscillatorType, typeRarityOf } from "../engine/constants";
-import { adjacent, sameHex } from "../engine/hex";
+import { adjacent } from "../engine/hex";
 import { cellNoteOf, noteNameOf, pitchOf } from "../engine/lattice";
 import { enemyStateOf, worldEnemyAt, worldOccupantAt, worldPieceOf, worldPiecesOf } from "../engine/world";
 import { conduitEdgesHtml, gearBearersHtml, worldPieceName } from "./world-combat";
@@ -16,6 +16,7 @@ import type { App, DetailFace } from "./app";
 import { HEX_RADIUS, hexPoints, moduleFace, forgeBranchOf, faceLevel, faceReadoutFor, waterFill, zeroBuyRead, spotlightInactiveVerdict } from "./face";
 import { chargeGlow } from "./leads";
 import { formatInt, formatNumber } from "./format";
+import { escapeHtml } from "./focus";
 import { worldEntered, bindWorldDrag, worldChassisHtml } from "./world";
 import { META, RARITY_LABEL, tierWord } from "./meta";
 import { isPhoneWidth, scrollTopOf } from "./container";
@@ -310,33 +311,32 @@ export function renderHexDetail(app: App, live: RateSnapshot, projected: RateSna
 }
 
 function detailLayerPreviews(app: App, pos: Hex, module: ModuleInstance | undefined, snapshot: RateSnapshot): string {
-  const preview = (face: DetailFace, image: string, detail: string) => {
+  const preview = (face: DetailFace, image: string, detail?: string) => {
     const id = `detail-layer-${face}-tip`;
     const selected = app.ui.detail?.face === face;
-    return `<span class="inst-tip"><button class="detail-layer-preview inst-tip-trigger${selected ? " active" : ""}" data-legend-layer="${face}" aria-label="${face === "world" ? "World" : "Modules"} layer" aria-pressed="${selected}" aria-describedby="${id}">${image}</button><span class="inst-tip-body" id="${id}" role="tooltip">${detail}</span></span>`;
+    const button = `<button class="detail-layer-preview${detail ? " inst-tip-trigger" : ""}${selected ? " active" : ""}" data-legend-layer="${face}" aria-label="${face === "world" ? "World" : "Modules"} layer" aria-pressed="${selected}"${detail ? ` aria-describedby="${id}"` : ""}>${image}</button>`;
+    return detail ? `<span class="inst-tip">${button}<span class="inst-tip-body" id="${id}" role="tooltip">${escapeHtml(detail)}</span></span>` : button;
   };
-  const world = worldChassisHtml(app.state, pos, snapshot);
-  const worldFacts = world.chassis.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   const read = module ? faceReadoutFor(app.state, module, pos, snapshot, true) : null;
   const moduleImage = `<svg class="hex-stack-face" viewBox="-70 -70 140 140" ${module ? `data-type="${module.type}" data-rarity="${typeRarityOf(module.type)}"` : ""} aria-hidden="true">${module ? moduleFace({ type: module.type, tier: module.tier, variant: "identity", readout: "" }) : `<polygon class="hex" points="${hexPoints(HEX_RADIUS)}"/>`}</svg>`;
   const moduleFacts = module ? `${META[module.type].name} · Lv. ${module.level} · ${read!.readout}` : "Empty module cell";
-  return `${worldEntered(app.state) ? preview("world", world.chassis, `${world.tip}${worldFacts ? ` · ${worldFacts}` : ""}`) : ""}${preview("modules", moduleImage, moduleFacts)}`;
+  const world = worldEntered(app.state) ? worldChassisHtml(app.state, pos, snapshot) : null;
+  const worldPreview = world && preview("world", world.chassis, world.preview && app.ui.detail?.face !== "world" ? world.label : undefined);
+  return `${worldPreview ?? ""}${preview("modules", moduleImage, moduleFacts)}`;
 }
 
 /* ── The World face ─────────────────────────────────── */
 // The coordinate's steel World plate at detail scale, on the same
-// chassis as Modules. The tooltip carries the state's one line.
+// chassis as Modules. Only a mechanic, not the plate's state, is disclosed.
 
 function worldLayerHtml(app: App, pos: Hex, snapshot: RateSnapshot): string {
-  const { ui } = app;
-  const selected = ui.detail?.face === "world";
-  const note = cellNoteOf(pos);
-  const { chassis, tip } = worldChassisHtml(app.state, pos, snapshot);
-  const id = detailTipId();
-  // The face's own post — its actions (retrieve, target priority) ride
-  // the action rail below the stack when the World face holds focus.
-  return `<section class="hex-detail-layer world${selected ? " selected" : ""}" data-detail-section="world" tabindex="-1" aria-label="World — ${app.state.cells.some((cell) => sameHex(cell, pos)) || worldEnemyAt(app.state, pos) ? "face state" : "locked"} at ${note}">
-    <span class="hex-orbit"><span class="inst-tip"><button class="hex-stack-chassis inst-tip-trigger" data-detail-face="world" aria-pressed="${selected}" aria-describedby="${id}" aria-label="Emphasize the World face">${chassis}</button><span class="inst-tip-body" id="${id}" role="tooltip">${tip}</span></span></span>
+  const selected = app.ui.detail?.face === "world";
+  const { chassis, label, tip } = worldChassisHtml(app.state, pos, snapshot);
+  const id = tip ? detailTipId() : null;
+  const button = `<button class="hex-stack-chassis${tip ? " inst-tip-trigger" : ""}" data-detail-face="world" aria-pressed="${selected}" aria-label="${escapeHtml(label)}"${id ? ` aria-describedby="${id}"` : ""}>${chassis}</button>`;
+  const face = tip ? `<span class="inst-tip">${button}<span class="inst-tip-body" id="${id}" role="tooltip">${escapeHtml(tip)}</span></span>` : button;
+  return `<section class="hex-detail-layer world${selected ? " selected" : ""}" data-detail-section="world" tabindex="-1" aria-label="World at ${cellNoteOf(pos)}">
+    <span class="hex-orbit">${face}</span>
   </section>`;
 }
 

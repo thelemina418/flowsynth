@@ -152,22 +152,38 @@ export class SharedSave {
   // primary intact, and only completed backup writes need undoing.
   // Keep the source timestamp so a reload can still reconcile its gap
   // if the normal post-adoption session save fails.
-  adoptRecovered(raw: string, state: GameState, savedAt: number, fromVersion?: number): boolean {
+  adoptRecovered(raw: string, state: GameState, savedAt: number, source?: { from: "boot" | "import"; version?: number }): boolean {
     const changed: { key: string; previous: string | null }[] = [];
     try {
       const text = serialize(state, savedAt);
       const earlier = this.storage.getItem(ORIGINAL_SAVE_KEY);
-      const archive = this.storage.getItem(PRE_V13_ORIGINAL_SAVE_KEY);
       const replace = (key: string, value: string, previous: string | null): void => {
         if (previous === value) return;
         this.storage.setItem(key, value);
         changed.push({ key, previous });
       };
-      if (fromVersion === 14) {
-        replace(PRE_V15_ORIGINAL_SAVE_KEY, raw, this.storage.getItem(PRE_V15_ORIGINAL_SAVE_KEY));
-        if (earlier === null) replace(ORIGINAL_SAVE_KEY, raw, earlier);
-      } else {
-        if (earlier !== null && earlier !== raw) replace(PRE_V13_ORIGINAL_SAVE_KEY, earlier, archive);
+      const archive = (key: string, value: string): void => {
+        const previous = this.storage.getItem(key);
+        if (previous !== null && previous !== value) {
+          // Keep older archives too when the current lineage displaces one.
+          let i = 1;
+          for (;;) {
+            const historyKey = `${key}.${i++}`;
+            const saved = this.storage.getItem(historyKey);
+            if (saved === previous) break;
+            if (saved === null) {
+              replace(historyKey, previous, null);
+              break;
+            }
+          }
+        }
+        replace(key, value, previous);
+      };
+      if (source?.version === 14) archive(PRE_V15_ORIGINAL_SAVE_KEY, raw);
+      // A boot migration does not displace its existing lineage's earlier
+      // original. An import starts a new lineage, even if it migrates too.
+      if (source?.version !== 14 || source.from === "import" || earlier === null) {
+        if (earlier !== null && earlier !== raw) archive(PRE_V13_ORIGINAL_SAVE_KEY, earlier);
         replace(ORIGINAL_SAVE_KEY, raw, earlier);
       }
       this.storage.setItem(STORAGE_KEY, text);

@@ -374,6 +374,9 @@ export interface SessionAccounting {
   // classified in one pass when presence returns (the reconciliation floor
   // and the target split both read the whole absence, never a chunk).
   pendingAwaySeconds: number;
+  // Offset where the current absence lost World eligibility (sleep or
+  // resume from a save). The whole stretch still uses one honesty split.
+  pendingOfflineFrom?: number;
   // Settled reconciliations, in order. Target hits, the honesty summary,
   // and miss rows derive from these — never stored.
   events: HonestyEvent[];

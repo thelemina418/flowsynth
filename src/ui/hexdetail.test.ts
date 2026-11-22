@@ -386,8 +386,12 @@ describe("the World face in detail", () => {
     // The opening cell (0,0) is open space — the quiet dashed plate; the
     // enemy position w0 sits reserved off the owned patch.
     expect(section("world").querySelector(".world-plate.open")).not.toBeNull();
-    // The tooltip carries the state's one line.
-    expect(worldTip()).toContain("Open World cell");
+    expect(section("world").querySelector("[data-detail-face]")!.getAttribute("aria-label")).toBe("Open World cell");
+    expect(worldTip()).toBeNull();
+    app.state.cells.push(hex(-1, 0));
+    app.openDetail(hex(-1, 0), "world");
+    expect(section("world").querySelector("[data-detail-face]")!.getAttribute("aria-label")).toBe("Reserved World cell");
+    expect(worldTip()).toBeNull();
   });
 
   it("names an unbound Blade and its charge store without a target picker", () => {
@@ -450,8 +454,15 @@ describe("the World face in detail", () => {
     expect(faceSvg("world").textContent).toContain("Shale");
     expect(faceSvg("world").textContent).toContain("48/48 HP");
     expect(faceSvg("world").textContent).toContain("−20% ν");
+    const chassis = section("world").querySelector("[data-detail-face]")!;
+    expect(chassis.getAttribute("aria-label")).toBe("Shale · 48/48 HP · −20% ν");
     expect(worldTip()).toContain("heals 0.35 HP/s");
-    expect(worldTip()).not.toContain("−20%");
+    expect(worldTip()).not.toMatch(/Shale|48\/48|−20%/);
+    const miniature = () => detail().querySelector('[data-legend-layer="world"]')!;
+    expect(miniature().hasAttribute("aria-describedby")).toBe(false);
+    app.detailFace("modules");
+    const preview = document.getElementById(miniature().getAttribute("aria-describedby")!)!;
+    expect(preview.textContent).toBe("Shale · 48/48 HP · −20% ν");
   });
 
   it("the rail's retrieve lands the occupant in the World tray", () => {

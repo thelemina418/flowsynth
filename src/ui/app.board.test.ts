@@ -1083,6 +1083,20 @@ describe("the always-live board (§5)", () => {
     expect(pill.hidden).toBe(true);
   });
 
+  it("engraves and speaks the exact outer-band Add price on the unchanged full-cell target", () => {
+    app.state.cells.push(...Array.from({ length: 7 }, (_, i) => hex(0, i + 2)));
+    app.state.nous = 1_474_560;
+    document.querySelector<HTMLButtonElement>('#board-tools [data-op="cell"]')!.click();
+    const outer = cell(0, 9);
+    expect(outer.querySelector(".cell-price")?.textContent).toBe("1,474,560 ν");
+    expect(outer.getAttribute("aria-label")).toContain("for 1,474,560 nous");
+    expect(outer.getAttribute("aria-disabled")).toBe("false");
+    expect(outer.querySelector("polygon")!.getAttribute("points")).toBe(cell(0, 8).querySelector("polygon")!.getAttribute("points"));
+    outer.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(app.state.nous).toBe(0);
+    expect(app.state.cells).toContainEqual(hex(0, 9));
+  });
+
   it("face upgrades cannot spend nous while cell purchase is armed", () => {
     app.state.nous = 1e6;
     app.render();

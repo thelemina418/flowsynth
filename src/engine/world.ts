@@ -4,6 +4,7 @@ import { hexKey, neighbors, sameHex } from "./hex";
 import { requireFinite } from "./numeric";
 import type { GameState, Hex, RateSnapshot, WeaponCopy, WeaponType, WorldColumn, WorldCombatCreature, WorldConduit, WorldEnemyState, WorldGear, WorldSpell } from "./types";
 import { activeWallOf, advanceCombat, combatBoundaryOf, COMBAT, discoverySecondsOf, worldEnemiesOf } from "./world-combat";
+import { WEAPONS } from "./weapons";
 export { activeWallOf, discoverySecondsOf, syncWorldDiscoveries, worldEnemiesOf } from "./world-combat";
 export { attackPowerOf, honePowerAt } from "./weapons";
 
@@ -97,7 +98,9 @@ export interface WorldLift {
 }
 
 type WorldMove = { id: string; pos: Hex | null };
-type ChargeStore = { copy: WorldColumn & { store: number }; cap: number; kind: "weapon" | "spell" };
+type ChargeStore =
+  | { copy: WeaponCopy; cap: number; kind: "weapon" }
+  | { copy: WorldSpell; cap: number; kind: "spell" };
 
 function worldChargeStores(state: GameState): ChargeStore[] {
   return [
@@ -196,7 +199,17 @@ export function advanceWorldCharge(state: GameState, snapshot: RateSnapshot, spa
       const rate = rateFor(store, lift);
       if (rate <= 0) continue;
       if ((store.cap - store.copy.store) / rate <= span) store.copy.store = store.cap;
-      else store.copy.store = Math.min(store.cap, store.copy.store + rate * span);
+      else {
+        const delivered = rate * span;
+        if (delivered === 0) continue;
+        const total = Math.min(store.cap, store.copy.store + delivered);
+        // Normalize only newly integrated charge, within a few ulps of an
+        // authored payment. A genuinely short, unfed carried store does
+        // not become funded merely because its attack tick arrived.
+        const cost = store.kind === "weapon" ? WEAPONS[store.copy.type].chargeCost : COMBAT.spell.threshold;
+        const shortfall = cost - total;
+        store.copy.store = shortfall > 0 && shortfall <= 16 * Number.EPSILON * cost ? cost : total;
+      }
     }
     remaining -= span;
   }

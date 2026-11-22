@@ -1271,12 +1271,16 @@ function renderGrid(app: App, live: RateSnapshot, projected: RateSnapshot, overl
       const [x, y] = point(pos);
       const { price, reason } = cellPurchaseQuote(state, pos);
       const available = reason === null;
-      const label = `Add ${cellNoteOf(pos)}${price === null ? "" : ` for ${formatBalance(price)} nous`}${reason ? ` · ${reason}` : ""}`;
-      const cost = price === null ? "No price" : `${formatNumber(price)} ν`;
+      const exactPrice = price === null ? null : BigInt(price).toLocaleString("en-US");
+      const label = `Add ${cellNoteOf(pos)}${exactPrice === null ? "" : ` for ${exactPrice} nous`}${reason ? ` · ${reason}` : ""}`;
+      const cost = exactPrice === null ? "No price" : `${exactPrice} ν`;
+      // Fit the engraving, not the target: the whole hex remains clickable.
+      const compact = cost.length > 9 ? " compact" : "";
+      const fit = cost.length > 12 ? ' textLength="96" lengthAdjust="spacingAndGlyphs"' : "";
       const stateRead = available ? "" : reason === "Not enough whole nous." ? "Short on ν" : "Unavailable";
       html += `<g class="cell-node cell-offer" transform="translate(${x},${y})" data-cell="${pos.q},${pos.r}" tabindex="0" role="button" aria-disabled="${!available}" aria-label="${escapeHtml(label)}">
         <polygon class="hex ${available ? "buy-here" : "future"}" points="${hexPoints(HEX_RADIUS)}"/>
-        <text y="${available ? 0 : -5}" class="cell-price">${cost}</text>
+        <text y="${available ? 0 : -5}" class="cell-price${compact}"${fit}>${cost}</text>
         <text y="14" class="cell-price-state">${stateRead}</text>
       </g>`;
     }

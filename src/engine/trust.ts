@@ -32,10 +32,10 @@ export function freshAccounting(): SessionAccounting {
   return { creditedSeconds: 0, poolSeconds: 0, bucketNous: 0, pendingAwaySeconds: 0, events: [] };
 }
 
-// The presence state that held across a gap: visible, or away (hidden, or a
-// slept span, or the unobservable stretch a discard/reload/import must
-// reconcile from the last hidden-transition save).
-export type Presence = "visible" | "away";
+// Hidden time on a running page may still be trusted. An offline gap
+// (reload/import, suspended page, or detected sleep) uses the same honesty
+// rules for production and practice, but can never advance combat.
+export type Presence = "visible" | "away" | "offline";
 
 const ZERO: AdvanceResult = { nousEarned: 0, rollsBanked: 0, rollsFlow: 0, rollsForge: 0, rollsMutator: 0, goalsCompleted: 0 };
 
@@ -57,9 +57,9 @@ export interface BreatherGapResult {
 // the remaining allowance is breather production; a gap that reaches the
 // deadline completes the phase at that deadline, and seconds past it
 // produce nothing (the board sits upgrade-quiet from there).
-export function applyBreatherGap(state: GameState, seconds: number, rng: Rng = Math.random): BreatherGapResult {
+export function applyBreatherGap(state: GameState, seconds: number, rng: Rng = Math.random, offlineSeconds = 0): BreatherGapResult {
   if (state.mode !== "breather" || seconds <= EPS || !state.breather) return { result: ZERO, completed: false };
-  const result = advanceBreather(state, seconds, rng);
+  const result = advanceBreather(state, seconds, rng, offlineSeconds);
   const completed = state.breather.elapsed >= state.breather.allowanceSeconds - EPS;
   return { result, completed };
 }
@@ -79,7 +79,16 @@ export function applyGap(
   driftStepSeconds: number,
   rng: Rng = Math.random,
 ): AdvanceResult {
-  if (state.mode !== "flow" || seconds <= EPS) return ZERO;
+  if (state.mode !== "flow" || !state.session) return ZERO;
+  const accounting = state.session.accounting;
+  if (presence === "offline") {
+    // On a resume the persisted buffer is also part of the absence we
+    // reconcile, even if the source timestamp is equal to or ahead of now.
+    accounting.pendingOfflineFrom = 0;
+    if (seconds > EPS) accounting.pendingAwaySeconds += seconds;
+    return ZERO;
+  }
+  if (seconds <= EPS) return ZERO;
   // Past the noise floor on either side is real drift; inside it is the two
   // clocks' quantization jitter, which the boundary ignores. Treating each
   // jitter step as drift discarded whole wall gaps (negative) or sized
@@ -88,15 +97,18 @@ export function applyGap(
   if (driftStepSeconds < -DRIFT_NOISE_SECONDS) return ZERO;
   const slept = driftStepSeconds > DRIFT_NOISE_SECONDS ? Math.min(driftStepSeconds, seconds) : 0;
   const awake = seconds - slept;
+  if (slept > 0) accounting.pendingOfflineFrom ??= accounting.pendingAwaySeconds;
   if (presence === "away") {
     // Same contiguous absence: buffer, never classify a throttled slice.
-    state.session!.accounting.pendingAwaySeconds += seconds;
+    // After a hidden-clock sleep, resume the World clock at a known awake
+    // boundary, not during the rest of the buffered absence.
+    accounting.pendingAwaySeconds += seconds;
     return ZERO;
   }
   // The slept span joins the buffered absence and flushes first, so its
   // credit clamps at the plan (spec §1); whatever presence follows the
   // sleep banks live regardless, even past the target.
-  state.session!.accounting.pendingAwaySeconds += slept;
+  accounting.pendingAwaySeconds += slept;
   const flushed = flushPendingAway(state, rng);
   if (flushed.fault) return flushed;
   const live = advance(state, awake, rng);
@@ -112,24 +124,24 @@ export function applyGap(
 export function flushPendingAway(state: GameState, rng: Rng = Math.random): AdvanceResult {
   if (state.mode !== "flow") return ZERO;
   const accounting = state.session?.accounting;
-  if (!accounting || accounting.pendingAwaySeconds <= EPS) return ZERO;
-  const pristine = structuredClone(state);
+  if (!accounting) return ZERO;
   const seconds = accounting.pendingAwaySeconds;
-  accounting.pendingAwaySeconds = 0;
-  let result: AdvanceResult;
-  const session = state.session!;
-  if (seconds < RECONCILIATION_FLOOR_SECONDS) {
-    result = advance(state, seconds, rng);
-  } else if (session.target !== null && session.elapsed < session.target) {
-    const underPlan = Math.min(seconds, session.target - session.elapsed);
-    const trusted = advance(state, underPlan, rng);
-    result = trusted.fault ? trusted : sumResults(
-      trusted,
-      advance(state, seconds - underPlan, rng, "provisional"),
-    );
-  } else {
-    result = advance(state, seconds, rng, "provisional");
+  if (seconds <= EPS) {
+    delete accounting.pendingOfflineFrom;
+    return ZERO;
   }
+  const pristine = structuredClone(state);
+  const cutoff = accounting.pendingOfflineFrom;
+  accounting.pendingAwaySeconds = 0;
+  delete accounting.pendingOfflineFrom;
+  const session = state.session!;
+  const trusted = seconds < RECONCILIATION_FLOOR_SECONDS ? seconds
+    : Math.min(seconds, Math.max(0, (session.target ?? 0) - session.elapsed));
+  const online = cutoff === undefined ? trusted
+    : Number.isFinite(cutoff) ? Math.min(trusted, Math.max(0, cutoff)) : 0;
+  let result = online > 0 ? advance(state, online, rng) : ZERO;
+  if (!result.fault && trusted > online) result = sumResults(result, advance(state, trusted - online, rng, "offline"));
+  if (!result.fault && seconds > trusted) result = sumResults(result, advance(state, seconds - trusted, rng, "provisional"));
   // The buffer belongs to the same transaction as both sides of the plan.
   // A refused walk must leave the absence available for a later retry.
   if (result.fault) {

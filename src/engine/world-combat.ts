@@ -155,8 +155,14 @@ export function advanceCombat(state: GameState, seconds: number): void {
   world.elapsed = requireFinite(world.elapsed + seconds, "the World clock");
   for (const creature of world.creatures) {
     if (creature.pos || creature.hp === COMBAT.creature.hp) continue;
-    creature.hp = Math.min(COMBAT.creature.hp, creature.hp + COMBAT.creature.regeneration * seconds);
-    if (creature.hp === COMBAT.creature.hp) creature.recovering = false;
+    const maxHp = COMBAT.creature.hp;
+    const healed = creature.hp + COMBAT.creature.regeneration * seconds;
+    // A completed heal can land a few ulps below full after fractional
+    // spans. Normalize at the readiness boundary, not every HP read.
+    if (maxHp - healed <= 16 * Number.EPSILON * maxHp) {
+      creature.hp = maxHp;
+      creature.recovering = false;
+    } else creature.hp = healed;
   }
   for (const wall of worldEnemiesOf(state)) {
     const live = world.enemies[wall.key]!;

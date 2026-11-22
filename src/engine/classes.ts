@@ -218,8 +218,13 @@ function creditWeaponForge(pair: ClassPairState, seconds: number): void {
   const meter = pair.rollMeter;
   const threshold = BALANCE.blacksmithForgeSeconds;
   const total = requireFinite(meter.progress + seconds, "Blacksmith forge progress");
-  const progress = total % threshold;
-  const fills = Math.round((total - progress) / threshold);
+  const remainder = total % threshold;
+  // Thousands of fractional credits can leave a completed fill a few
+  // ulps short. Allow one nanosecond of accumulation error at the edge,
+  // not a tolerance proportional to the total or number of fills.
+  const atEdge = threshold - remainder <= 1e-9;
+  const progress = atEdge ? 0 : remainder;
+  const fills = Math.round((total - remainder) / threshold) + (atEdge ? 1 : 0);
   const earned = meter.earned + fills;
   if (!Number.isSafeInteger(earned)) throw new NumericFault("Blacksmith weapon choices");
   meter.progress = progress;

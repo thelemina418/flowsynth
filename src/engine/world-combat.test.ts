@@ -3,7 +3,7 @@ import { endSession, pauseSession, placeWorldOccupant, prestige, resumeSession, 
 import { advance, advanceBreather } from "./advance";
 import { hex } from "./hex";
 import { scenarioOf } from "./scenarios";
-import { columnLiftsOf, enemyStateOf, worldFactorOf } from "./world";
+import { enemyStateOf, worldFactorOf } from "./world";
 import { applyGap, flushPendingAway, resolveHonestyReport } from "./trust";
 import { syncRates } from "./economy";
 import { walkWorldCombatProof } from "./world-combat-walks";
@@ -58,31 +58,56 @@ it("adjacent armor enables a wounded bench return; defeat locks the tray until f
   expect(placeWorldOccupant(state, creature!.id, front).ok).toBe(true);
 });
 
-it("a directed route feeds unbound gear without firing or multiplying the Column's supply", () => {
+it("unlocks a defeated Sentinel at the same full-HP boundary after fractional recovery", () => {
   const state = scenarioOf("world-combat")!.build(0);
-  const { conduits: [conduit], spells: [spell] } = state.world;
-  const [blade] = state.world.weapons;
-  const [column] = state.world.columns;
+  const sentinel = state.world.creatures[0]!;
+  expect(placeWorldOccupant(state, sentinel.id, hex(0, 0)).ok).toBe(true);
+  expect(startSession(state, null).ok).toBe(true);
+  advance(state, 16, rng);
+  expect(sentinel.recovering).toBe(true);
+  const long = structuredClone(state);
+  advance(long, 12, rng);
+  for (let i = 0; i < 120; i++) advance(state, 0.1, rng);
+  for (const ready of [long, state]) {
+    expect(endSession(ready).ok).toBe(true);
+    expect(ready.world.creatures[0]!.hp).toBe(24);
+    expect(placeWorldOccupant(ready, sentinel.id, hex(0, 0)).ok).toBe(true);
+  }
+});
+
+it("conserves one Column's supply through a full sink, a real conduit cycle, and a broken route", () => {
+  const state = scenarioOf("world-combat")!.build(0);
+  const { conduits: [first], spells: [spell], weapons: [blade], columns: [column] } = state.world;
+  const second = { ...first!, id: "second-conduit" };
+  state.world.conduits.push(second);
   for (const [id, position] of [
-    [column!.id, hex(1, 1)], [conduit!.id, hex(1, 0)], [blade!.id, hex(1, -1)], [spell!.id, hex(0, 1)],
+    [column!.id, hex(1, 1)], [first!.id, hex(1, 0)], [second.id, hex(1, -1)],
+    [blade!.id, hex(1, -2)], [spell!.id, hex(0, 1)],
   ] as const) expect(placeWorldOccupant(state, id, position).ok).toBe(true);
-  startSession(state, null);
-  const lift = columnLiftsOf(state, syncRates(state));
-  const supply = lift.byColumn.get(column!.id)!;
-  expect(supply).toBeGreaterThan(0);
+  expect(setWorldConduitDirection(state, second.id, 2).ok).toBe(true);
+  expect(startSession(state, null).ok).toBe(true);
+  // The rig lifts 1/s. Both unbound stores start empty and share it.
   advance(state, 8, rng);
-  expect(blade!.store).toBeCloseTo(4 * supply, 6);
-  expect(spell!.store).toBeCloseTo(4 * supply, 6);
-  expect(enemyStateOf(state, "shale").hp).toBe(48);
-  expect(setWorldConduitDirection(state, conduit!.id, 5).ok).toBe(false);
-  endSession(state);
-  // Edge 5 points straight back to the supplying Column.
-  expect(setWorldConduitDirection(state, conduit!.id, 5).ok).toBe(true);
-  const banked = blade!.store;
-  startSession(state, null);
-  advance(state, 80, rng);
-  expect(blade!.store).toBe(banked);
-  expect(spell!.store).toBe(6);
+  expect([blade!.store, spell!.store]).toEqual([4, 4]);
+  expect(setWorldConduitDirection(state, second.id, 5).ok).toBe(false);
+  // Pulse fills after four more seconds at half-rate; the connected Blade
+  // takes the entire lift for the two seconds after that.
+  advance(state, 6, rng);
+  expect([blade!.store, spell!.store]).toEqual([8, 6]);
+  expect(endSession(state).ok).toBe(true);
+  // 5 sends the second conduit back into the first. 1 sends into an
+  // empty owned cell. Neither route leaks charge into the distant Blade.
+  for (const direction of [5, 1]) {
+    expect(setWorldConduitDirection(state, second.id, direction).ok).toBe(true);
+    expect(startSession(state, null).ok).toBe(true);
+    advance(state, 8, rng);
+    expect([blade!.store, spell!.store]).toEqual([8, 6]);
+    expect(endSession(state).ok).toBe(true);
+  }
+  expect(setWorldConduitDirection(state, second.id, 2).ok).toBe(true);
+  expect(startSession(state, null).ok).toBe(true);
+  advance(state, 8, rng);
+  expect([blade!.store, spell!.store]).toEqual([16, 6]);
   expect(enemyStateOf(state, "shale").hp).toBe(48);
 });
 
@@ -189,6 +214,24 @@ it("uses only trusted World time through pause, honesty settlement, and a breath
   advanceBreather(state, 2, rng);
   expect(hp()).toEqual({ creature: 22, enemy: 45.7, world: 8 });
   expect(state.sessionRecords).toEqual(records);
+});
+
+it("splits a trusted hidden stretch, sleep, and the visible tail without spending an offline beat", () => {
+  const state = scenarioOf("world-combat")!.build(0);
+  const sentinel = state.world.creatures[0]!;
+  expect(placeWorldOccupant(state, sentinel.id, hex(0, 0)).ok).toBe(true);
+  expect(startSession(state, 600).ok).toBe(true);
+  applyGap(state, 3, "away", 0, rng);
+  // Pending hidden time stays contiguous with sleep for the honesty
+  // decision. Only the three hidden seconds and visible tail can fight.
+  applyGap(state, 101, "visible", 100, rng);
+  expect(state.session!.accounting).toMatchObject({ creditedSeconds: 104, poolSeconds: 0 });
+  expect(state.world.elapsed).toBe(4);
+  expect(sentinel.hp).toBe(18);
+  expect(enemyStateOf(state, "shale").hp).toBe(48);
+  applyGap(state, 40, "visible", -40, rng);
+  expect(state.world.elapsed).toBe(4);
+  expect(state.session!.accounting.creditedSeconds).toBe(104);
 });
 
 it("keeps HP, charge, and threshold-split production when the advance is subdivided", () => {

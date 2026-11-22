@@ -1,18 +1,30 @@
-// Run from the candidate root with the verified baseline archive as argv[2].
-// The baseline uses its own engine and policy with the same seed/schedule.
+// Run from the frozen candidate root with a checkout of the pinned baseline.
+// Each side uses its own engine and policy with the same seed/schedule.
 import { execFileSync } from 'node:child_process';
-import { mkdir, writeFile, unlink } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { realpathSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, rm, writeFile, unlink } from 'node:fs/promises';
 import assert from 'node:assert/strict';
-import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { compileEngine } from '../../../tools/dev/compile-engine.mjs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { compileEngineTo } from '../../../tools/dev/compile-engine.mjs';
+import { devProvenance } from '../../../tools/dev/provenance.mjs';
 import { recordingEnvironment, requireRuntimeEnvironment } from '../../../tools/dev/runtime.mjs';
-
-await requireRuntimeEnvironment();
 const baselineCommit = '7da4007dee8f2343f9526c96a4dc930c66881683';
 const recipeInput = { seed: 468, policyId: 'pushing', budgetDays: 10, claimTarget: 2,
   schedule: { sessionsPerDay: 2, sessionMinutes: 600, breatherMinutes: 5 } };
-const head = () => execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+const comparatorPath = 'docs/evidence/issue-543/measure.mjs';
+
+export function verifiedCheckout(root, expectedCommit, side) {
+  const worktree = realpathSync(root);
+  const provenance = devProvenance(worktree);
+  assert.equal(provenance.worktree, worktree, `Use the ${side} checkout root, not a subdirectory.`);
+  assert.equal(provenance.commit, expectedCommit, `Unexpected ${side} checkout HEAD at ${worktree}.`);
+  assert.ok(provenance.source?.clean,
+    `${side} checkout has uncommitted source or unknown cleanliness: ${JSON.stringify(provenance.source?.changes ?? null)}`);
+  return provenance;
+}
 // The proof's kit and charge are pre-staged, not earned. Only its footprint
 // is rebuilt here, through the same real actions on both revisions.
 function proofApproach(engine) {
@@ -27,41 +39,50 @@ function proofApproach(engine) {
     accept(engine.buyCell(state, {q,r}));
     purchases.push({ coordinate: [q,r], price: before - state.nous });
   }
-  const { proof, columns, weapons } = state.world;
-  for (const [id, q, r] of [[proof.creature.id, 0, 0], [proof.armor.id, -1, 1], [proof.conduit.id, 1, 0],
-      [proof.spell.id, 0, 1], [columns[0].id, 1, 1], [weapons[0].id, 1, -1]]) {
+  const { world } = state;
+  // #542 stored its isolated duel under world.proof. The live promotion
+  // keeps the same scenario and kit in the ordinary World ledger.
+  const kit = typeof world.proof === 'object' ? world.proof : {
+    creature: world.creatures[0], armor: world.armor[0], conduit: world.conduits[0], spell: world.spells[0], enemies: world.enemies,
+  };
+  for (const [id, q, r] of [[kit.creature.id, 0, 0], [kit.armor.id, -1, 1], [kit.conduit.id, 1, 0],
+      [kit.spell.id, 0, 1], [world.columns[0].id, 1, 1], [world.weapons[0].id, 1, -1]]) {
     accept(engine.placeWorldOccupant(state, id, {q,r}));
   }
   accept(engine.startSession(state, null, now));
   let seconds = 0;
-  while (proof.enemies.shale.hp > 0 && !proof.creature.recovering && seconds < 40) {
+  while (kit.enemies.shale.hp > 0 && !kit.creature.recovering && seconds < 40) {
     assert.equal(engine.advance(state, 1, () => 0.3).fault, undefined);
     seconds++;
   }
-  assert.equal(proof.enemies.shale.hp, 0);
+  assert.equal(kit.enemies.shale.hp, 0);
   return { provenance: 'Prepared #542 kit and charge, synthetic 1000ν budget; board rebuilt from the starter triangle with buys.',
     purchases, remainingNousAfterPurchases: 1000 - purchases.reduce((sum, p) => sum + p.price, 0),
-    cells: state.cells, arete: state.arete, prestiges: state.prestiges, secondsToClear: seconds, sentinelHp: proof.creature.hp };
+    cells: state.cells, arete: state.arete, prestiges: state.prestiges, secondsToClear: seconds, sentinelHp: kit.creature.hp };
 }
 
-async function measure(root, commit) {
+async function measure(checkout, tier) {
+  const { worktree: root, commit } = checkout;
   process.chdir(root);
   await mkdir('.dev', { recursive: true });
   const entry = resolve(root, `.dev/issue-543-measure-${process.pid}.ts`);
   await writeFile(entry, `
     export { composePlaythroughRecipe, runPlaythrough, runPlaythroughCheckpoint, playthroughSource } from '../src/engine/playthrough';
-    export { WORLD_ENEMIES } from '../src/engine/constants';
     export { createWorldCombatScenario } from '../src/engine/world-combat-scenario';
     export { createInitialState } from '../src/engine/state';
     export { buyCell, placeWorldOccupant, startSession } from '../src/engine/actions';
     export { advance } from '../src/engine/advance';
   `, { flag: 'wx' });
+  const compiled = await mkdtemp(join(tmpdir(), 'flowsynth-543-'));
   try {
-    const engine = await compileEngine(entry, 'opening-543');
+    const bundle = await compileEngineTo(entry, 'opening-543', compiled);
+    const engineSha256 = createHash('sha256').update(await readFile(bundle)).digest('hex');
+    const engine = await import(pathToFileURL(bundle).href);
     const recipe = engine.composePlaythroughRecipe(recipeInput);
     const source = engine.playthroughSource();
+    const provenance = { commit, worktree: root, engineSha256, source };
     const proof = proofApproach(engine);
-    if (process.argv.includes('--proof-only')) return { commit, source, proof };
+    if (tier === '--proof-only') return { ...provenance, proof };
     const openingRecipe = engine.composePlaythroughRecipe({ ...recipeInput, budgetDays: 1,
       schedule: { sessionsPerDay: 2, sessionMinutes: 25, breatherMinutes: 5 } });
     const opening = engine.runPlaythrough(openingRecipe, source);
@@ -73,7 +94,7 @@ async function measure(root, commit) {
     const openingResult = { recipe: openingRecipe, runId: opening.runId, purchased: cells(opening),
       firstPlacement: placement ? { label: placement.label, creditedMinutes: placement.credited / 60 } : null,
       firstPlacementOnBoughtCell: placementAfterExpansion ? { label: placementAfterExpansion.label, creditedMinutes: placementAfterExpansion.credited / 60 } : null };
-    if (process.argv.includes('--opening-only')) return { commit, source, proof, opening: openingResult };
+    if (tier === '--opening-only') return { ...provenance, proof, opening: openingResult };
     const ordinaryRecipe = engine.composePlaythroughRecipe({ seed: recipeInput.seed, budgetDays: 15 });
     const ordinary = engine.runPlaythroughCheckpoint(ordinaryRecipe, 'approaching-prestige', source);
     const world = engine.runPlaythroughCheckpoint(recipe, 'world-enemy-active', source);
@@ -82,22 +103,53 @@ async function measure(root, commit) {
     assert.ok(eligibility);
     assert.ok(bank);
     const bankDay = 1 + Math.floor(bank.at / 86_400);
-    const firstFight = engine.WORLD_ENEMIES.find(e => world.state.world.enemies[e.key]?.discovered && world.state.world.enemies[e.key]?.hp > 0);
-    return { commit, source, recipe, proof, opening: openingResult,
+    const firstFight = Object.entries(world.state.world.enemies).find(([, enemy]) => enemy.discovered && enemy.hp > 0);
+    return { ...provenance, recipe, proof, opening: openingResult,
       ordinaryEligibility: { recipe: ordinaryRecipe, runId: ordinary.runId, day: ordinary.days,
         creditedMinutes: ordinary.creditedSeconds / 60, purchased: cells(ordinary) },
       eligibility: { creditedMinutes: eligibility.credited / 60 },
       bank: { day: bankDay, creditedMinutes: bank.credited / 60, claim: world.claims[0],
         purchased: cells({ events: world.events.slice(0, world.events.indexOf(bank)) }) },
       world: { runId: world.runId, day: world.days, creditedMinutes: world.creditedSeconds / 60, purchased: cells(world),
-        areteSpent: world.areteSpent, enemy: firstFight?.key, footprint: world.state.cells.map(({q,r}) => [q,r]),
+        areteSpent: world.areteSpent, enemy: firstFight?.[0], footprint: world.state.cells.map(({q,r}) => [q,r]),
         deployedColumns: world.state.world.columns.flatMap(({pos}) => pos ? [[pos.q, pos.r]] : []),
         weaponStillInTray: world.state.world.weapons.some(weapon => weapon.pos === null) } };
-  } finally { await unlink(entry); }
+  } finally {
+    await unlink(entry);
+    await rm(compiled, { recursive: true, force: true });
+  }
 }
-const root = process.cwd();
-const commit = head();
-const output = { scope: 'One matched schedule, not a calibration or a representative distribution.',
-  environment: recordingEnvironment(),
-  baseline: await measure(resolve(process.argv[2]), baselineCommit), candidate: await measure(root, commit) };
-await writeFile(pathToFileURL(resolve(process.argv[3])), JSON.stringify(output, null, 2) + '\n');
+
+async function main() {
+  const [baselineRoot, targetCommit, targetFile, tier] = process.argv.slice(2);
+  assert.ok(baselineRoot && /^[a-f0-9]{40}$/.test(targetCommit ?? '') && targetFile &&
+    [undefined, '--verify-only', '--proof-only', '--opening-only'].includes(tier) && process.argv.length <= 6,
+  `Usage: node tools/run-supported.mjs ${comparatorPath} <from-checkout> <to-full-SHA> <new-output> [--verify-only|--proof-only|--opening-only]`);
+  const targetRoot = process.cwd();
+  const outputPath = resolve(targetFile);
+  const verify = () => {
+    const from = verifiedCheckout(baselineRoot, baselineCommit, 'from');
+    const to = verifiedCheckout(targetRoot, targetCommit, 'to');
+    assert.notEqual(from.worktree, to.worktree, 'The comparison requires two different checkouts.');
+    assert.equal(fileURLToPath(import.meta.url), join(to.worktree, comparatorPath), 'Run the comparator from the to checkout.');
+    // This evidence-directory file is executable input, not a capture.
+    execFileSync('git', ['diff', '--exit-code', 'HEAD', '--', comparatorPath], { cwd: to.worktree, stdio: 'ignore' });
+    execFileSync('git', ['merge-base', '--is-ancestor', from.commit, to.commit], { cwd: to.worktree });
+    return { from, to };
+  };
+  const { from, to } = verify();
+  await requireRuntimeEnvironment(to.worktree);
+  await requireRuntimeEnvironment(from.worktree);
+  if (tier === '--verify-only') return console.log(JSON.stringify({ from, to }, null, 2));
+  const baseline = await measure(from, tier);
+  process.chdir(targetRoot);
+  verify();
+  const candidate = await measure(to, tier);
+  process.chdir(targetRoot);
+  verify();
+  const output = { scope: 'One matched schedule, not a calibration or a representative distribution.',
+    environment: recordingEnvironment(), baseline, candidate };
+  await writeFile(outputPath, JSON.stringify(output, null, 2) + '\n', { flag: 'wx' });
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

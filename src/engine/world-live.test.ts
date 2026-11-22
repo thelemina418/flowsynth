@@ -226,9 +226,12 @@ it("resolves two staggered Blades and two layers of armor, and never gives falle
   advanceLive(saved, 6);
   expect(saved.world.weapons[0]!.store).toBe(held);
   expect(saved.world.weapons[0]!.bearer).toBe(sentinel!.id);
+  expect(pauseSession(saved).ok).toBe(true);
+  expect(reload(saved).world.weapons[0]!.bearer).toBe(sentinel!.id);
+  expect(setWorldGearBearer(saved, blade!.id, "second").ok).toBe(false);
   expect(endSession(saved).ok).toBe(true);
-  expect(setWorldGearBearer(saved, blade!.id, "second").ok).toBe(true);
   expect(saved.world.weapons[0]!.bearer).toBe("second");
+  expect(reload(saved).world.weapons[0]!.bearer).toBe("second");
 });
 
 it("turns late-wall defeat into a clear at the same cadence with paid high-scale Hone", () => {

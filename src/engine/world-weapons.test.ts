@@ -46,6 +46,27 @@ it("Striker strikes unfed on its own cadence and spends only a discrete charge p
   }
 });
 
+it("funds the same Striker beat with one second of supply or ten tenth-second spans", () => {
+  const state = scenarioOf("world-combat")!.build(0);
+  const striker = createWeapon(state, "striker");
+  state.world.weapons.push(striker);
+  for (const [id, q, r] of [[state.world.creatures[0]!.id, 0, 0], [state.world.columns[0]!.id, 1, 1], [striker.id, 0, 1]] as const) {
+    expect(placeWorldOccupant(state, id, hex(q, r)).ok).toBe(true);
+  }
+  // Model a carried beat and empty store at the start of the session.
+  striker.cooldown = 3;
+  expect(startSession(state, null).ok).toBe(true);
+  const single = structuredClone(state);
+  const short = structuredClone(state);
+  tick(single, 1);
+  for (let i = 0; i < 10; i++) tick(state, 0.1);
+  tick(short, 0.99999999); // truly short, far outside floating-point noise
+  expect(single.world.enemies.shale!.hp).toBe(40);
+  expect(state.world.enemies.shale!.hp).toBe(40);
+  expect(state.world.weapons.find(w => w.id === striker.id)!.store).toBeCloseTo(0, 12);
+  expect(short.world.enemies.shale!.hp).toBe(48);
+});
+
 it("Charge Blade skips an unfed beat, then all copies use the same purchased Hone at the original cadence", () => {
   const state = openingFight();
   const blade = equip(state, "chargeBlade", 0);
