@@ -1,0 +1,208 @@
+{
+  "kind": "Blacksmith comparison from a played World checkpoint",
+  "tier": "proof",
+  "recordingCommit": "4d81a5908794f426ff797f2f3632b59255b9f936",
+  "engineSha256": "8e3619eda228e3209c7f3f29ac49d1d1c3884e590eefbac27b4e76bb07390e7a",
+  "origin": {
+    "recipe": {
+      "scenarioId": "fresh-start",
+      "seed": 468,
+      "policyId": "pushing",
+      "claimTarget": 2,
+      "schedule": {
+        "sessionsPerDay": 2,
+        "sessionMinutes": 600,
+        "breatherMinutes": 5,
+        "habitName": "Practice",
+        "goalMinutes": 25,
+        "startAt": 1767603600000,
+        "timeZone": "America/Chicago"
+      },
+      "budgetDays": 36,
+      "eras": 1,
+      "stopCreditedHours": 0,
+      "responseCurve": "shipped",
+      "overrides": {}
+    },
+    "day": 3,
+    "claims": [
+      2
+    ],
+    "stop": {
+      "kind": "checkpoint",
+      "reason": "World enemy reached at day 3 — a living discovered enemy with the placement decision unplayed."
+    }
+  },
+  "comparison": {
+    "credited": 600,
+    "banked": 1,
+    "remainingArete": 1,
+    "branches": [
+      {
+        "type": "chargeBlade",
+        "routed": false,
+        "start": {
+          "second": 0,
+          "wallHP": 48,
+          "sentinelHP": 24,
+          "recovering": false,
+          "store": 0
+        },
+        "firstBeat": {
+          "second": 4,
+          "wallHP": 48,
+          "sentinelHP": 21,
+          "recovering": false,
+          "store": 0
+        },
+        "eighthSecond": {
+          "second": 8,
+          "wallHP": 45.7,
+          "sentinelHP": 18,
+          "recovering": false,
+          "store": 0
+        },
+        "outcome": {
+          "second": 32,
+          "wallHP": 42.1,
+          "sentinelHP": 0,
+          "recovering": true,
+          "store": 0
+        }
+      },
+      {
+        "type": "striker",
+        "routed": false,
+        "start": {
+          "second": 0,
+          "wallHP": 48,
+          "sentinelHP": 24,
+          "recovering": false,
+          "store": 0
+        },
+        "firstBeat": {
+          "second": 4,
+          "wallHP": 43,
+          "sentinelHP": 21,
+          "recovering": false,
+          "store": 0
+        },
+        "eighthSecond": {
+          "second": 8,
+          "wallHP": 36.4,
+          "sentinelHP": 18,
+          "recovering": false,
+          "store": 0
+        },
+        "outcome": {
+          "second": 32,
+          "wallHP": 2.7999999999999994,
+          "sentinelHP": 0,
+          "recovering": true,
+          "store": 0
+        }
+      },
+      {
+        "type": "maul",
+        "routed": false,
+        "start": {
+          "second": 0,
+          "wallHP": 48,
+          "sentinelHP": 24,
+          "recovering": false,
+          "store": 0
+        },
+        "firstBeat": {
+          "second": 4,
+          "wallHP": 48,
+          "sentinelHP": 21,
+          "recovering": false,
+          "store": 0
+        },
+        "eighthSecond": {
+          "second": 8,
+          "wallHP": 33.7,
+          "sentinelHP": 18,
+          "recovering": false,
+          "store": 0
+        },
+        "outcome": {
+          "second": 32,
+          "wallHP": 0,
+          "sentinelHP": 3,
+          "recovering": false,
+          "store": 0
+        }
+      },
+      {
+        "type": "striker",
+        "routed": true,
+        "start": {
+          "second": 0,
+          "wallHP": 48,
+          "sentinelHP": 24,
+          "recovering": false,
+          "store": 0
+        },
+        "firstBeat": {
+          "second": 4,
+          "wallHP": 40,
+          "sentinelHP": 21,
+          "recovering": false,
+          "store": 29
+        },
+        "eighthSecond": {
+          "second": 8,
+          "wallHP": 30.4,
+          "sentinelHP": 18,
+          "recovering": false,
+          "store": 29
+        },
+        "outcome": {
+          "second": 32,
+          "wallHP": 0,
+          "sentinelHP": 9,
+          "recovering": false,
+          "store": 30
+        }
+      },
+      {
+        "type": "maul",
+        "routed": true,
+        "start": {
+          "second": 0,
+          "wallHP": 48,
+          "sentinelHP": 24,
+          "recovering": false,
+          "store": 0
+        },
+        "firstBeat": {
+          "second": 4,
+          "wallHP": 48,
+          "sentinelHP": 21,
+          "recovering": false,
+          "store": 30
+        },
+        "eighthSecond": {
+          "second": 8,
+          "wallHP": 21.7,
+          "sentinelHP": 18,
+          "recovering": false,
+          "store": 28
+        },
+        "outcome": {
+          "second": 32,
+          "wallHP": 0,
+          "sentinelHP": 15,
+          "recovering": false,
+          "store": 30
+        }
+      }
+    ]
+  },
+  "recordingEnvironment": {
+    "node": "v22.23.4",
+    "timeZone": "America/Chicago",
+    "utcOffsetMinutes": -360
+  }
+}

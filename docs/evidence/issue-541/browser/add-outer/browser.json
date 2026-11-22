@@ -1,0 +1,265 @@
+{
+  "source": "4d81a5908794f426ff797f2f3632b59255b9f936",
+  "url": "http://localhost:5173/",
+  "browser": "149.0.7827.55",
+  "setup": "Constructed: fresh-start + devWorldEra, owned spur (0,2)…(0,8); nous set to price−1 then exactly the price. Not an earning record.",
+  "errors": [],
+  "desktop": {
+    "origin": {
+      "layer": "world",
+      "viewport": [
+        1280,
+        800
+      ],
+      "coarse": false
+    },
+    "entered": {
+      "layer": "modules",
+      "buying": true
+    },
+    "short": {
+      "visual": "1,474,560 ν",
+      "label": "Add C13 for 1,474,560 nous · Not enough whole nous.",
+      "disabled": "true",
+      "state": "Short on ν",
+      "points": "52.8275,-30.5000 52.8275,30.5000 0.0000,61.0000 -52.8275,30.5000 -52.8275,-30.5000 -0.0000,-61.0000",
+      "polygon": {
+        "x": 450.1720275878906,
+        "y": 725.1011352539062,
+        "width": 55.338714599609375,
+        "height": 63.89971923828125,
+        "top": 725.1011352539062,
+        "right": 505.5107421875,
+        "bottom": 789.0008544921875,
+        "left": 450.1720275878906
+      },
+      "price": {
+        "x": 455.41168212890625,
+        "y": 749.93212890625,
+        "width": 44.859405517578125,
+        "height": 9,
+        "top": 749.93212890625,
+        "right": 500.2710876464844,
+        "bottom": 758.93212890625,
+        "left": 455.41168212890625
+      },
+      "priceInsideCell": true,
+      "priceInViewport": true,
+      "textLength": 85.64735412597656,
+      "hits": {
+        "center": true,
+        "priceLeft": true,
+        "priceRight": true
+      },
+      "topmost": "polygon#.hex future",
+      "overflow": false,
+      "neighbourPoints": "52.8275,-30.5000 52.8275,30.5000 0.0000,61.0000 -52.8275,30.5000 -52.8275,-30.5000 -0.0000,-61.0000"
+    },
+    "hitTestPass": true,
+    "targetAtLeast44": true,
+    "exact": {
+      "visual": "1,474,560 ν",
+      "label": "Add C13 for 1,474,560 nous",
+      "disabled": "false",
+      "state": "",
+      "points": "52.8275,-30.5000 52.8275,30.5000 0.0000,61.0000 -52.8275,30.5000 -52.8275,-30.5000 -0.0000,-61.0000",
+      "polygon": {
+        "x": 450.1720275878906,
+        "y": 725.1011352539062,
+        "width": 55.338714599609375,
+        "height": 63.89971923828125,
+        "top": 725.1011352539062,
+        "right": 505.5107421875,
+        "bottom": 789.0008544921875,
+        "left": 450.1720275878906
+      },
+      "price": {
+        "x": 455.41168212890625,
+        "y": 752.5509643554688,
+        "width": 44.859405517578125,
+        "height": 9.00006103515625,
+        "top": 752.5509643554688,
+        "right": 500.2710876464844,
+        "bottom": 761.551025390625,
+        "left": 455.41168212890625
+      },
+      "priceInsideCell": true,
+      "priceInViewport": true,
+      "textLength": 85.64735412597656,
+      "hits": {
+        "center": true,
+        "priceLeft": true,
+        "priceRight": true
+      },
+      "topmost": "polygon#.hex buy-here",
+      "overflow": false,
+      "neighbourPoints": "52.8275,-30.5000 52.8275,30.5000 0.0000,61.0000 -52.8275,30.5000 -52.8275,-30.5000 -0.0000,-61.0000"
+    },
+    "focusRing": {
+      "focused": true,
+      "outline": "none",
+      "stroke": "rgb(233, 234, 232)"
+    },
+    "bought": {
+      "nous": 0,
+      "owned": true,
+      "stillArmed": true
+    },
+    "pill": {
+      "text": "Cancel Add",
+      "box": {
+        "x": 592.7421875,
+        "y": 204,
+        "width": 94.515625,
+        "height": 44,
+        "top": 204,
+        "right": 687.2578125,
+        "bottom": 248,
+        "left": 592.7421875
+      }
+    },
+    "worldCell": "World cell at C13",
+    "detail": {
+      "detail": {
+        "pos": {
+          "q": 0,
+          "r": 9
+        },
+        "face": "world"
+      },
+      "face": "world",
+      "overflow": false
+    }
+  },
+  "findings": [
+    {
+      "check": "phone outer Add hit area",
+      "pass": false,
+      "topmost": "DIV#upgrade-all.upgrade-all"
+    }
+  ],
+  "phone": {
+    "origin": {
+      "layer": "world",
+      "viewport": [
+        390,
+        844
+      ],
+      "coarse": true
+    },
+    "entered": {
+      "layer": "modules",
+      "buying": true
+    },
+    "short": {
+      "visual": "1,474,560 ν",
+      "label": "Add C13 for 1,474,560 nous · Not enough whole nous.",
+      "disabled": "true",
+      "state": "Short on ν",
+      "points": "52.8275,-30.5000 52.8275,30.5000 0.0000,61.0000 -52.8275,30.5000 -52.8275,-30.5000 -0.0000,-61.0000",
+      "polygon": {
+        "x": 47.21876907348633,
+        "y": 665.576904296875,
+        "width": 43.08124923706055,
+        "height": 49.74603271484375,
+        "top": 665.576904296875,
+        "right": 90.30001831054688,
+        "bottom": 715.3229370117188,
+        "left": 47.21876907348633
+      },
+      "price": {
+        "x": 51.27500534057617,
+        "y": 684.9111328125,
+        "width": 34.9687614440918,
+        "height": 7,
+        "top": 684.9111328125,
+        "right": 86.24376678466797,
+        "bottom": 691.9111328125,
+        "left": 51.27500534057617
+      },
+      "priceInsideCell": true,
+      "priceInViewport": true,
+      "textLength": 85.75940704345703,
+      "hits": {
+        "center": false,
+        "priceLeft": false,
+        "priceRight": false
+      },
+      "topmost": "DIV#upgrade-all.upgrade-all",
+      "overflow": false,
+      "neighbourPoints": "52.8275,-30.5000 52.8275,30.5000 0.0000,61.0000 -52.8275,30.5000 -52.8275,-30.5000 -0.0000,-61.0000"
+    },
+    "hitTestPass": false,
+    "targetAtLeast44": false,
+    "exact": {
+      "visual": "1,474,560 ν",
+      "label": "Add C13 for 1,474,560 nous",
+      "disabled": "false",
+      "state": "",
+      "points": "52.8275,-30.5000 52.8275,30.5000 0.0000,61.0000 -52.8275,30.5000 -52.8275,-30.5000 -0.0000,-61.0000",
+      "polygon": {
+        "x": 47.21876907348633,
+        "y": 665.576904296875,
+        "width": 43.08124923706055,
+        "height": 49.74603271484375,
+        "top": 665.576904296875,
+        "right": 90.30001831054688,
+        "bottom": 715.3229370117188,
+        "left": 47.21876907348633
+      },
+      "price": {
+        "x": 51.27500534057617,
+        "y": 686.9498901367188,
+        "width": 34.9687614440918,
+        "height": 7,
+        "top": 686.9498901367188,
+        "right": 86.24376678466797,
+        "bottom": 693.9498901367188,
+        "left": 51.27500534057617
+      },
+      "priceInsideCell": true,
+      "priceInViewport": true,
+      "textLength": 85.75940704345703,
+      "hits": {
+        "center": false,
+        "priceLeft": false,
+        "priceRight": false
+      },
+      "topmost": "DIV#upgrade-all.upgrade-all",
+      "overflow": false,
+      "neighbourPoints": "52.8275,-30.5000 52.8275,30.5000 0.0000,61.0000 -52.8275,30.5000 -52.8275,-30.5000 -0.0000,-61.0000"
+    },
+    "centreTapBought": false,
+    "boughtVia": "tap on the visible sliver above #upgrade-all (workaround)",
+    "bought": {
+      "nous": 0,
+      "owned": true,
+      "stillArmed": true
+    },
+    "pill": {
+      "text": "Cancel Add",
+      "box": {
+        "x": 22,
+        "y": 736,
+        "width": 94.515625,
+        "height": 44,
+        "top": 736,
+        "right": 116.515625,
+        "bottom": 780,
+        "left": 22
+      }
+    },
+    "worldCell": "World cell at C13",
+    "detail": {
+      "detail": {
+        "pos": {
+          "q": 0,
+          "r": 9
+        },
+        "face": "world"
+      },
+      "face": "world",
+      "overflow": false
+    }
+  }
+}

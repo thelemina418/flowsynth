@@ -1,0 +1,180 @@
+{
+  "source": "4d81a5908794f426ff797f2f3632b59255b9f936",
+  "url": "http://localhost:5173/",
+  "browser": "149.0.7827.55",
+  "errors": [],
+  "desktop-migration": {
+    "seed": {
+      "key": "flowsynth.save.v1",
+      "bytes": 3705,
+      "version": 14
+    },
+    "exactSourceRetained": [
+      "flowsynth.save.original.pre-v15",
+      "flowsynth.save.original.v1"
+    ],
+    "boot": {
+      "arete": 3,
+      "nous": 555,
+      "eraEarned": 20000000,
+      "frontier": 2,
+      "shale": {
+        "discovered": true,
+        "hp": 48
+      },
+      "status": "World: new starter gear is in the tray. Old Blade-only clears do not count; new victories last through prestige.",
+      "areteReadout": "3",
+      "stored": 15,
+      "modal": null,
+      "recovery": null,
+      "text": "",
+      "overflow": false
+    },
+    "world": [
+      "Shale · 48/48 HP · −20% ν · F3",
+      "World cell at D4",
+      "World cell at G5",
+      "World cell at C6",
+      "World cell at D6",
+      "World cell at F5",
+      "World cell at A4",
+      "World cell at G6",
+      "World cell at A3",
+      "World cell at C4",
+      "Charge Blade · ⌁9/30 · Unbound · G4",
+      "Charge Column · ⌁0/s · No host · C5"
+    ],
+    "reload": {
+      "modal": null,
+      "status": "Welcome. Upgrade the synth, then enter flow.",
+      "arete": 3
+    }
+  },
+  "desktop-recovery": {
+    "seed": {
+      "key": "flowsynth.save.v1",
+      "bytes": 3708,
+      "version": 14
+    },
+    "exactSourceRetained": [
+      "flowsynth.save.v1"
+    ],
+    "boot": {
+      "arete": 0,
+      "nous": 12,
+      "eraEarned": 0,
+      "frontier": 0,
+      "shale": {
+        "discovered": false,
+        "hp": 48
+      },
+      "status": "Welcome. Upgrade the synth, then enter flow.",
+      "areteReadout": "—",
+      "stored": 14,
+      "modal": "recovery",
+      "recovery": {
+        "lost": [
+          "arete"
+        ]
+      },
+      "text": "SAVE RECOVERY\n✕\n\nThis save's monetary figures are unavailable — recovery is the one way it plays.\n\nLOST\nThe monetary figures below are unreadable — they ride the retained original only, and recovery starts them at their calibrated values, never invented ones\nSTANDS\nPractice history, \nclass development\n, \ngoals\n, notes, and feats\nSTANDS\nYour collection and its board — designs, \ntiers\n, placement, and every earned \nroll\nSTANDS\nMemorized\n purchases — \nCatalog\n unlocks, the \nArete\n-bought World purchases, the \nWarp Beam\n's rungs\nREBASES\nThe economy opens calibrated: levels return to base, \nnous\n at the opening grant, purchased \ncapacity\n to one voice, World pressure resets for the era, and the \nClaimed frontier\n clears — claims bank against what you earn from here\nORIGINAL\nYour save stays on this device, byte for byte\n\narete\n\nDownload the original\nNot now\nRecover",
+      "overflow": false
+    },
+    "storedBefore": 14,
+    "after": {
+      "modal": null,
+      "arete": 0,
+      "pieces": 6,
+      "retained": true,
+      "version": 15,
+      "text": ""
+    }
+  },
+  "phone-migration": {
+    "seed": {
+      "key": "flowsynth.save.v1",
+      "bytes": 3705,
+      "version": 14
+    },
+    "exactSourceRetained": [
+      "flowsynth.save.original.pre-v15",
+      "flowsynth.save.original.v1"
+    ],
+    "boot": {
+      "arete": 3,
+      "nous": 555,
+      "eraEarned": 20000000,
+      "frontier": 2,
+      "shale": {
+        "discovered": true,
+        "hp": 48
+      },
+      "status": "World: new starter gear is in the tray. Old Blade-only clears do not count; new victories last through prestige.",
+      "areteReadout": "3",
+      "stored": 15,
+      "modal": null,
+      "recovery": null,
+      "text": "",
+      "overflow": false
+    },
+    "world": [
+      "Shale · 48/48 HP · −20% ν · F3",
+      "World cell at D4",
+      "World cell at G5",
+      "World cell at C6",
+      "World cell at D6",
+      "World cell at F5",
+      "World cell at A4",
+      "World cell at G6",
+      "World cell at A3",
+      "World cell at C4",
+      "Charge Blade · ⌁9/30 · Unbound · G4",
+      "Charge Column · ⌁0/s · No host · C5"
+    ],
+    "reload": {
+      "modal": null,
+      "status": "Welcome. Upgrade the synth, then enter flow.",
+      "arete": 3
+    }
+  },
+  "phone-recovery": {
+    "seed": {
+      "key": "flowsynth.save.v1",
+      "bytes": 3708,
+      "version": 14
+    },
+    "exactSourceRetained": [
+      "flowsynth.save.v1"
+    ],
+    "boot": {
+      "arete": 0,
+      "nous": 12,
+      "eraEarned": 0,
+      "frontier": 0,
+      "shale": {
+        "discovered": false,
+        "hp": 48
+      },
+      "status": "Welcome. Upgrade the synth, then enter flow.",
+      "areteReadout": "—",
+      "stored": 14,
+      "modal": "recovery",
+      "recovery": {
+        "lost": [
+          "arete"
+        ]
+      },
+      "text": "SAVE RECOVERY\n✕\n\nThis save's monetary figures are unavailable — recovery is the one way it plays.\n\nLOST\nThe monetary figures below are unreadable — they ride the retained original only, and recovery starts them at their calibrated values, never invented ones\nSTANDS\nPractice history, \nclass development\n, \ngoals\n, notes, and feats\nSTANDS\nYour collection and its board — designs, \ntiers\n, placement, and every earned \nroll\nSTANDS\nMemorized\n purchases — \nCatalog\n unlocks, the \nArete\n-bought World purchases, the \nWarp Beam\n's rungs\nREBASES\nThe economy opens calibrated: levels return to base, \nnous\n at the opening grant, purchased \ncapacity\n to one voice, World pressure resets for the era, and the \nClaimed frontier\n clears — claims bank against what you earn from here\nORIGINAL\nYour save stays on this device, byte for byte\n\narete\n\nDownload the original\nNot now\nRecover",
+      "overflow": false
+    },
+    "storedBefore": 14,
+    "after": {
+      "modal": null,
+      "arete": 0,
+      "pieces": 6,
+      "retained": true,
+      "version": 15,
+      "text": ""
+    }
+  }
+}

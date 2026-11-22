@@ -1,0 +1,781 @@
+{
+  "scope": "One matched schedule, not a calibration or a representative distribution.",
+  "cellPurchaseEvidence": "Earned runs report counts and credited timestamps from purchase events, not ν spent. Prepared Shale measures actual ν debits from its synthetic budget.",
+  "recordingEnvironment": {
+    "node": "v22.23.4",
+    "timeZone": "America/Chicago",
+    "utcOffsetMinutes": -360
+  },
+  "baseline": {
+    "commit": "211267b81442954565b53c4f68761df04e74b87f",
+    "worktree": "/home/lem/.t3/worktrees/flowsynth/541-baseline-211267b",
+    "engineSha256": "ad4aad62eb1830d6d96e0cdae186f0cd48b04c2d03a8f1fb8db4286859292e93",
+    "source": {
+      "game": "flowsynth",
+      "saveVersion": 13,
+      "runnerVersion": 15,
+      "engineSource": "bc662d16"
+    },
+    "recipe": {
+      "scenarioId": "fresh-start",
+      "seed": 468,
+      "policyId": "pushing",
+      "claimTarget": 2,
+      "schedule": {
+        "sessionsPerDay": 2,
+        "sessionMinutes": 600,
+        "breatherMinutes": 5,
+        "habitName": "Practice",
+        "goalMinutes": 25,
+        "startAt": 1767603600000,
+        "timeZone": "America/Chicago"
+      },
+      "budgetDays": 10,
+      "eras": 1,
+      "stopCreditedHours": 0,
+      "responseCurve": "shipped",
+      "overrides": {}
+    },
+    "proof": {
+      "provenance": "Prepared #542 kit and charge, synthetic 1000ν budget; board rebuilt from the starter triangle with buys.",
+      "purchases": [
+        {
+          "coordinate": [
+            1,
+            -1
+          ],
+          "price": 90
+        },
+        {
+          "coordinate": [
+            -1,
+            1
+          ],
+          "price": 75
+        },
+        {
+          "coordinate": [
+            1,
+            1
+          ],
+          "price": 188
+        },
+        {
+          "coordinate": [
+            2,
+            0
+          ],
+          "price": 469
+        }
+      ],
+      "remainingNousAfterPurchases": 178,
+      "cells": [
+        {
+          "q": 0,
+          "r": 0
+        },
+        {
+          "q": 1,
+          "r": 0
+        },
+        {
+          "q": 0,
+          "r": 1
+        },
+        {
+          "q": 1,
+          "r": -1
+        },
+        {
+          "q": -1,
+          "r": 1
+        },
+        {
+          "q": 1,
+          "r": 1
+        },
+        {
+          "q": 2,
+          "r": 0
+        }
+      ],
+      "arete": 0,
+      "prestiges": 0,
+      "secondsToClear": 30,
+      "sentinelHp": 3
+    },
+    "opening": {
+      "recipe": {
+        "scenarioId": "fresh-start",
+        "seed": 468,
+        "policyId": "pushing",
+        "claimTarget": 2,
+        "schedule": {
+          "sessionsPerDay": 2,
+          "sessionMinutes": 25,
+          "breatherMinutes": 5,
+          "habitName": "Practice",
+          "goalMinutes": 25,
+          "startAt": 1767603600000,
+          "timeZone": "America/Chicago"
+        },
+        "budgetDays": 1,
+        "eras": 1,
+        "stopCreditedHours": 0,
+        "responseCurve": "shipped",
+        "overrides": {}
+      },
+      "runId": "fresh-start-s468-a7a32e17",
+      "purchased": [],
+      "firstPlacement": {
+        "label": "Placed a standby at 1,0",
+        "creditedMinutes": 25
+      },
+      "firstPlacementOnBoughtCell": null
+    },
+    "ordinaryEligibility": {
+      "recipe": {
+        "scenarioId": "fresh-start",
+        "seed": 468,
+        "policyId": "prompt",
+        "claimTarget": 2,
+        "schedule": {
+          "sessionsPerDay": 2,
+          "sessionMinutes": 25,
+          "breatherMinutes": 5,
+          "habitName": "Practice",
+          "goalMinutes": 25,
+          "startAt": 1767603600000,
+          "timeZone": "America/Chicago"
+        },
+        "budgetDays": 15,
+        "eras": 1,
+        "stopCreditedHours": 0,
+        "responseCurve": "shipped",
+        "overrides": {}
+      },
+      "runId": "fresh-start-s468-330a4bf8",
+      "day": 9,
+      "creditedMinutes": 450,
+      "purchased": [
+        {
+          "coordinate": "0,-1",
+          "creditedMinutes": 50
+        },
+        {
+          "coordinate": "0,2",
+          "creditedMinutes": 50
+        },
+        {
+          "coordinate": "-1,1",
+          "creditedMinutes": 50
+        },
+        {
+          "coordinate": "-1,0",
+          "creditedMinutes": 50
+        },
+        {
+          "coordinate": "-1,2",
+          "creditedMinutes": 75
+        },
+        {
+          "coordinate": "1,-1",
+          "creditedMinutes": 125
+        },
+        {
+          "coordinate": "1,1",
+          "creditedMinutes": 150
+        },
+        {
+          "coordinate": "-1,3",
+          "creditedMinutes": 175
+        },
+        {
+          "coordinate": "1,2",
+          "creditedMinutes": 200
+        },
+        {
+          "coordinate": "-2,2",
+          "creditedMinutes": 250
+        },
+        {
+          "coordinate": "2,-1",
+          "creditedMinutes": 325
+        },
+        {
+          "coordinate": "-2,1",
+          "creditedMinutes": 375
+        },
+        {
+          "coordinate": "-2,3",
+          "creditedMinutes": 400
+        }
+      ]
+    },
+    "eligibility": {
+      "creditedMinutes": 2400
+    },
+    "bank": {
+      "day": 3,
+      "creditedMinutes": 3000,
+      "claim": 3,
+      "purchased": [
+        {
+          "coordinate": "0,-1",
+          "creditedMinutes": 600
+        },
+        {
+          "coordinate": "0,2",
+          "creditedMinutes": 600
+        },
+        {
+          "coordinate": "-1,1",
+          "creditedMinutes": 600
+        },
+        {
+          "coordinate": "-1,0",
+          "creditedMinutes": 600
+        },
+        {
+          "coordinate": "-1,2",
+          "creditedMinutes": 600
+        },
+        {
+          "coordinate": "1,-1",
+          "creditedMinutes": 1200
+        },
+        {
+          "coordinate": "1,1",
+          "creditedMinutes": 1200
+        },
+        {
+          "coordinate": "-1,3",
+          "creditedMinutes": 1200
+        },
+        {
+          "coordinate": "1,2",
+          "creditedMinutes": 1200
+        },
+        {
+          "coordinate": "-2,2",
+          "creditedMinutes": 1200
+        },
+        {
+          "coordinate": "2,-1",
+          "creditedMinutes": 1800
+        },
+        {
+          "coordinate": "-2,1",
+          "creditedMinutes": 1800
+        },
+        {
+          "coordinate": "-2,3",
+          "creditedMinutes": 1800
+        },
+        {
+          "coordinate": "2,-2",
+          "creditedMinutes": 2400
+        }
+      ]
+    },
+    "world": {
+      "runId": "fresh-start-s468-43243966",
+      "day": 3,
+      "creditedMinutes": 3600,
+      "purchased": [
+        {
+          "coordinate": "0,-1",
+          "creditedMinutes": 600
+        },
+        {
+          "coordinate": "0,2",
+          "creditedMinutes": 600
+        },
+        {
+          "coordinate": "-1,1",
+          "creditedMinutes": 600
+        },
+        {
+          "coordinate": "-1,0",
+          "creditedMinutes": 600
+        },
+        {
+          "coordinate": "-1,2",
+          "creditedMinutes": 600
+        },
+        {
+          "coordinate": "1,-1",
+          "creditedMinutes": 1200
+        },
+        {
+          "coordinate": "1,1",
+          "creditedMinutes": 1200
+        },
+        {
+          "coordinate": "-1,3",
+          "creditedMinutes": 1200
+        },
+        {
+          "coordinate": "1,2",
+          "creditedMinutes": 1200
+        },
+        {
+          "coordinate": "-2,2",
+          "creditedMinutes": 1200
+        },
+        {
+          "coordinate": "2,-1",
+          "creditedMinutes": 1800
+        },
+        {
+          "coordinate": "-2,1",
+          "creditedMinutes": 1800
+        },
+        {
+          "coordinate": "-2,3",
+          "creditedMinutes": 1800
+        },
+        {
+          "coordinate": "2,-2",
+          "creditedMinutes": 2400
+        }
+      ],
+      "areteSpent": {
+        "entry": 0,
+        "discounts": 0,
+        "ceilings": 0,
+        "columns": 0,
+        "rowUnlocks": 2,
+        "hone": {
+          "chargeBlade": 0
+        }
+      },
+      "enemy": "w0",
+      "footprint": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          -1
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          1,
+          -1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          -2,
+          2
+        ],
+        [
+          2,
+          -1
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          -2,
+          3
+        ],
+        [
+          2,
+          -2
+        ]
+      ],
+      "deployedColumns": [
+        [
+          -2,
+          2
+        ]
+      ],
+      "weaponStillInTray": true
+    }
+  },
+  "candidate": {
+    "commit": "4d81a5908794f426ff797f2f3632b59255b9f936",
+    "worktree": "/home/lem/.t3/worktrees/flowsynth/541-review-port",
+    "engineSha256": "17cdcd94d972e677d0438a897d59e9f9d3135c91e882d886c41e2ba69cc17e9d",
+    "source": {
+      "game": "flowsynth",
+      "saveVersion": 15,
+      "runnerVersion": 18,
+      "engineSource": "7eb3f3c5"
+    },
+    "recipe": {
+      "scenarioId": "fresh-start",
+      "seed": 468,
+      "policyId": "pushing",
+      "claimTarget": 2,
+      "schedule": {
+        "sessionsPerDay": 2,
+        "sessionMinutes": 600,
+        "breatherMinutes": 5,
+        "habitName": "Practice",
+        "goalMinutes": 25,
+        "startAt": 1767603600000,
+        "timeZone": "America/Chicago"
+      },
+      "budgetDays": 10,
+      "eras": 1,
+      "stopCreditedHours": 0,
+      "responseCurve": "shipped",
+      "overrides": {}
+    },
+    "proof": {
+      "provenance": "Prepared #542 kit and charge, synthetic 1000ν budget; board rebuilt from the starter triangle with buys.",
+      "purchases": [
+        {
+          "coordinate": [
+            1,
+            -1
+          ],
+          "price": 30
+        },
+        {
+          "coordinate": [
+            -1,
+            1
+          ],
+          "price": 30
+        },
+        {
+          "coordinate": [
+            1,
+            1
+          ],
+          "price": 90
+        },
+        {
+          "coordinate": [
+            2,
+            0
+          ],
+          "price": 90
+        }
+      ],
+      "remainingNousAfterPurchases": 760,
+      "cells": [
+        {
+          "q": 0,
+          "r": 0
+        },
+        {
+          "q": 1,
+          "r": 0
+        },
+        {
+          "q": 0,
+          "r": 1
+        },
+        {
+          "q": 1,
+          "r": -1
+        },
+        {
+          "q": -1,
+          "r": 1
+        },
+        {
+          "q": 1,
+          "r": 1
+        },
+        {
+          "q": 2,
+          "r": 0
+        }
+      ],
+      "arete": 0,
+      "prestiges": 0,
+      "secondsToClear": 30,
+      "sentinelHp": 3
+    },
+    "opening": {
+      "recipe": {
+        "scenarioId": "fresh-start",
+        "seed": 468,
+        "policyId": "pushing",
+        "claimTarget": 2,
+        "schedule": {
+          "sessionsPerDay": 2,
+          "sessionMinutes": 25,
+          "breatherMinutes": 5,
+          "habitName": "Practice",
+          "goalMinutes": 25,
+          "startAt": 1767603600000,
+          "timeZone": "America/Chicago"
+        },
+        "budgetDays": 1,
+        "eras": 1,
+        "stopCreditedHours": 0,
+        "responseCurve": "shipped",
+        "overrides": {}
+      },
+      "runId": "fresh-start-s468-77262d98",
+      "purchased": [
+        {
+          "coordinate": "0,-1",
+          "creditedMinutes": 25
+        }
+      ],
+      "firstPlacement": {
+        "label": "Placed a standby at 1,0",
+        "creditedMinutes": 25
+      },
+      "firstPlacementOnBoughtCell": {
+        "label": "Placed a infusor at 0,-1",
+        "creditedMinutes": 25
+      }
+    },
+    "ordinaryEligibility": {
+      "recipe": {
+        "scenarioId": "fresh-start",
+        "seed": 468,
+        "policyId": "prompt",
+        "claimTarget": 2,
+        "schedule": {
+          "sessionsPerDay": 2,
+          "sessionMinutes": 25,
+          "breatherMinutes": 5,
+          "habitName": "Practice",
+          "goalMinutes": 25,
+          "startAt": 1767603600000,
+          "timeZone": "America/Chicago"
+        },
+        "budgetDays": 15,
+        "eras": 1,
+        "stopCreditedHours": 0,
+        "responseCurve": "shipped",
+        "overrides": {}
+      },
+      "runId": "fresh-start-s468-eb1287f3",
+      "day": 7,
+      "creditedMinutes": 325,
+      "purchased": [
+        {
+          "coordinate": "0,-1",
+          "creditedMinutes": 25
+        },
+        {
+          "coordinate": "0,2",
+          "creditedMinutes": 50
+        },
+        {
+          "coordinate": "-1,1",
+          "creditedMinutes": 75
+        },
+        {
+          "coordinate": "-1,2",
+          "creditedMinutes": 100
+        },
+        {
+          "coordinate": "1,1",
+          "creditedMinutes": 125
+        },
+        {
+          "coordinate": "-1,0",
+          "creditedMinutes": 150
+        },
+        {
+          "coordinate": "-1,3",
+          "creditedMinutes": 175
+        },
+        {
+          "coordinate": "1,-1",
+          "creditedMinutes": 200
+        },
+        {
+          "coordinate": "1,2",
+          "creditedMinutes": 225
+        },
+        {
+          "coordinate": "-2,2",
+          "creditedMinutes": 250
+        },
+        {
+          "coordinate": "-2,3",
+          "creditedMinutes": 275
+        },
+        {
+          "coordinate": "2,-1",
+          "creditedMinutes": 300
+        }
+      ]
+    },
+    "eligibility": {
+      "creditedMinutes": 2400
+    },
+    "bank": {
+      "day": 2,
+      "creditedMinutes": 2400,
+      "claim": 2,
+      "purchased": [
+        {
+          "coordinate": "0,-1",
+          "creditedMinutes": 600
+        },
+        {
+          "coordinate": "0,2",
+          "creditedMinutes": 600
+        },
+        {
+          "coordinate": "-1,1",
+          "creditedMinutes": 1200
+        },
+        {
+          "coordinate": "-1,2",
+          "creditedMinutes": 1200
+        },
+        {
+          "coordinate": "1,1",
+          "creditedMinutes": 1800
+        },
+        {
+          "coordinate": "-1,0",
+          "creditedMinutes": 1800
+        }
+      ]
+    },
+    "world": {
+      "runId": "fresh-start-s468-f0b3d509",
+      "day": 3,
+      "creditedMinutes": 3000,
+      "purchased": [
+        {
+          "coordinate": "0,-1",
+          "creditedMinutes": 600
+        },
+        {
+          "coordinate": "0,2",
+          "creditedMinutes": 600
+        },
+        {
+          "coordinate": "-1,1",
+          "creditedMinutes": 1200
+        },
+        {
+          "coordinate": "-1,2",
+          "creditedMinutes": 1200
+        },
+        {
+          "coordinate": "1,1",
+          "creditedMinutes": 1800
+        },
+        {
+          "coordinate": "-1,0",
+          "creditedMinutes": 1800
+        },
+        {
+          "coordinate": "-1,3",
+          "creditedMinutes": 2400
+        },
+        {
+          "coordinate": "1,-1",
+          "creditedMinutes": 2400
+        }
+      ],
+      "areteSpent": {
+        "entry": 0,
+        "discounts": 0,
+        "ceilings": 0,
+        "columns": 0,
+        "rowUnlocks": 0,
+        "hone": {
+          "chargeBlade": 1
+        }
+      },
+      "enemy": "shale",
+      "footprint": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          -1
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          -1,
+          1
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          1,
+          -1
+        ]
+      ],
+      "deployedColumns": [
+        [
+          -1,
+          1
+        ]
+      ],
+      "weaponStillInTray": true
+    }
+  }
+}
