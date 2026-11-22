@@ -459,7 +459,8 @@ describe("the World face in detail", () => {
     expect(worldTip()).toContain("heals 0.35 HP/s");
     expect(worldTip()).not.toMatch(/Shale|48\/48|−20%/);
     const miniature = () => detail().querySelector('[data-legend-layer="world"]')!;
-    expect(miniature().hasAttribute("aria-describedby")).toBe(false);
+    // The selected miniature still carries its basic facts (#539), closed until asked.
+    expect(document.getElementById(miniature().getAttribute("aria-describedby")!)!.classList.contains("inst-show")).toBe(false);
     app.detailFace("modules");
     const preview = document.getElementById(miniature().getAttribute("aria-describedby")!)!;
     expect(preview.textContent).toBe("Shale · 48/48 HP · −20% ν");
@@ -498,7 +499,8 @@ describe("the World face in detail", () => {
     expect(shown()).toBe(true);
     touch();
     expect(active()).toBe("world");
-    expect(world().hasAttribute("aria-describedby")).toBe(false);
+    expect(world().getAttribute("aria-expanded")).toBe("false");
+    expect(document.getElementById(world().getAttribute("aria-describedby")!)!.classList.contains("inst-show")).toBe(false);
     expect(preview.isConnected).toBe(false);
     expect(document.activeElement).toBe(section("world").querySelector("[data-detail-face]"));
     expect(app.ui.boardLayer).toBe("world");

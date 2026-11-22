@@ -337,7 +337,9 @@ function detailLayerPreviews(app: App, pos: Hex, module: ModuleInstance | undefi
   const preview = (face: DetailFace, image: string, facts?: string) => {
     const id = `detail-layer-${face}-tip`;
     const selected = app.ui.detail?.face === face;
-    const detail = selected ? undefined : facts;
+    // Every selector miniature, selected or not, carries its basic facts
+    // in the shared tooltip (#539 owner-confirmed amendment).
+    const detail = facts;
     const button = `<button class="detail-layer-preview${detail ? " inst-tip-trigger" : ""}${selected ? " active" : ""}" data-legend-layer="${face}" aria-label="${face === "world" ? "World" : "Modules"} layer" aria-pressed="${selected}"${detail ? ` aria-describedby="${id}" aria-expanded="false"` : ""}>${image}</button>`;
     return detail ? `<span class="inst-tip">${button}<span class="inst-tip-body" id="${id}" role="tooltip">${escapeHtml(detail)}</span></span>` : button;
   };

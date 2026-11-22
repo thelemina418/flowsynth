@@ -133,7 +133,8 @@ it.each(["second touch", "unfocused touch", "Escape", "tap-away", "different Hex
     }
     if (action === "different layer") {
       app.detailFace("world");
-      expect(mini().hasAttribute("aria-describedby")).toBe(false);
+      // The selected miniature keeps its facts (#539) but a switch never carries the pin.
+      expect(mini().getAttribute("aria-expanded")).toBe("false");
       app.detailFace("modules");
     }
     if (action === "Return and reopen") {
@@ -164,7 +165,8 @@ it.each(["second touch", "unfocused touch", "Escape", "tap-away", "different Hex
     }
     expect(app.ui.detail?.face).toBe("world");
     expect(app.ui.boardLayer).toBe("world");
-    expect(mini().hasAttribute("aria-describedby")).toBe(false);
+    // No pin carries into the selected miniature; restored focus may still show its facts.
+    expect(mini().getAttribute("aria-expanded")).toBe("false");
   },
 );
 
