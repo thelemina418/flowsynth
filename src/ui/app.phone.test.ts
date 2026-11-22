@@ -637,6 +637,30 @@ describe("the small-screen composition (issue #389)", () => {
     expect(app.ui.boardLayer).toBe("world");
   });
 
+  it("Add armed from World hides Upgrade All so the outer destination takes the tap (#541 F1)", () => {
+    const s = app.state;
+    s.eraEarned = BALANCE.world.entryNous * 1.5;
+    s.world.unlocked = true;
+    s.cells.push(...Array.from({ length: 7 }, (_, i) => hex(0, i + 2)));
+    s.nous = 1_474_560;
+    app.setBoardLayer("world");
+    app.render();
+    const cluster = document.getElementById("upgrade-all")!;
+    expect(cluster.hidden).toBe(false);
+    const staleChip = cluster.querySelector<HTMLButtonElement>('[data-sweep="1"]')!;
+    document.querySelector<HTMLButtonElement>('#thumb-bar [data-op="cell"], #board-tools [data-op="cell"]')!.click();
+    expect(app.ui.buyingCell).toBe(true);
+    expect(cluster.hidden).toBe(true);
+    staleChip.click();
+    expect(s.nous).toBe(1_474_560);
+    clickCell(0, 9);
+    expect(s.cells).toContainEqual(hex(0, 9));
+    expect(s.nous).toBe(0);
+    expect(cluster.hidden).toBe(true);
+    document.getElementById("cell-arm-pill")!.click();
+    expect(cluster.hidden).toBe(false);
+  });
+
   it.each([320, 360, 390])("Upgrade All buys at %ipx and hides during flow", (width) => {
     setAppWidth(width);
     const s = app.state;

@@ -1114,6 +1114,40 @@ describe("the always-live board (§5)", () => {
     expect(document.querySelector(".face-buy")).not.toBeNull();
   });
 
+  it("Upgrade All stands down while Add is armed and returns after cancel and after a purchase (#541 F1/F4)", () => {
+    const s = app.state;
+    s.nous = 1e6;
+    app.render();
+    const cluster = document.getElementById("upgrade-all")!;
+    const staleChip = cluster.querySelector<HTMLButtonElement>('[data-sweep="1"]')!;
+    expect(cluster.hidden).toBe(false);
+    const level = s.modules[0]!.level;
+    // Armed: the cluster is hidden, and even a click queued on the chip
+    // it showed before arming spends nothing.
+    document.querySelector<HTMLButtonElement>('#board-tools [data-op="cell"]')!.click();
+    expect(app.ui.buyingCell).toBe(true);
+    expect(cluster.hidden).toBe(true);
+    staleChip.click();
+    expect(s.nous).toBe(1e6);
+    expect(s.modules[0]!.level).toBe(level);
+    // Cancel returns it unchanged and live.
+    document.getElementById("cell-arm-pill")!.click();
+    expect(app.ui.buyingCell).toBe(false);
+    expect(cluster.hidden).toBe(false);
+    expect(cluster.textContent).toContain("UPGRADE ALL");
+    // A purchase: the arm persists across buys, so the cluster stays down
+    // until Add is backed out; then it returns, quoting the new bank.
+    document.querySelector<HTMLButtonElement>('#board-tools [data-op="cell"]')!.click();
+    cell(1, -1).dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(s.cells).toContainEqual(hex(1, -1));
+    expect(s.nous).toBe(1e6 - BALANCE.cellFirstCost);
+    expect(cluster.hidden).toBe(true);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(cluster.hidden).toBe(false);
+    cluster.querySelector<HTMLButtonElement>('[data-sweep="1"]')!.click();
+    expect(s.modules[0]!.level).toBe(level + 1);
+  });
+
   it("add-cell mode is the one mode that dims the board (#201)", () => {
     app.render();
     expect(document.body.classList.contains("cell-arming")).toBe(false);

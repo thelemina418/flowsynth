@@ -1902,6 +1902,8 @@ export class App {
   // levelable module, deployed and tray alike, spacers never. The toast
   // reports what landed, whatever the chip promised.
   upgradeAllAction(want: number | "max"): void {
+    // Inert while Add is armed, as the face upgrades are (#541 F4).
+    if (this.ui.buyingCell) return;
     this.landBulk(this.gameAction("upgradeAll", () => upgradeAll(this.state, want)), (bulk) =>
       want === "max"
         ? `UPGRADE ALL MAX: ${bulk.levels} levels across ${bulk.modules} modules · ${formatNumber(bulk.spent)} ν`

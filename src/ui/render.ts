@@ -1924,13 +1924,17 @@ const SWEEP_STEPS = [1, 5, 10] as const;
 // never disable — partial by design — and their tooltips carry the full-N
 // cost previews; the toast reports what actually landed. When nothing is
 // affordable, every tooltip gains the zero-read suffix (#233, ADR-0045):
-// the shortfall to the cheapest next level on the board.
+// the shortfall to the cheapest next level on the board. Armed Add hides
+// it too, like the face upgrades it would otherwise outlive (#541).
 function renderUpgradeAll(app: App): void {
   const host = byId("upgrade-all");
   if (!host) return;
   const { state } = app;
   const eligible = state.modules.filter(levelable);
-  const active = state.mode === "upgrade" && eligible.length > 0;
+  // Add's frontier owns the board while armed (#541 F1/F4): the cluster
+  // stands down so an outer destination beneath it takes the tap, and it
+  // returns as it was on cancel.
+  const active = state.mode === "upgrade" && !app.ui.buyingCell && eligible.length > 0;
   host.hidden = !active;
   if (!active) return;
   // Rebuild only when the quoted numbers move (#115's economy): the chips
