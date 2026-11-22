@@ -1,8 +1,8 @@
 import { EPS, WORLD_ENEMIES } from "./constants";
 import { attackPowerOf, WEAPONS } from "./weapons";
 import { adjacent } from "./hex";
-import { requireFinite } from "./numeric";
-import type { GameState, Hex, WorldCombatCreature, WorldGear } from "./types";
+import { addToSum, gapTo, requireFinite, resetSum } from "./numeric";
+import type { GameState, Hex, WeaponCopy, WorldCombatCreature, WorldGear } from "./types";
 
 export const COMBAT = {
   creature: { name: "Sentinel", hp: 24, damage: 3, cadence: 6, regeneration: 2 },
@@ -97,18 +97,19 @@ export function bearerOf(state: GameState, gear: WorldGear): WorldCombatCreature
 }
 
 export function reconcileWorldGear(state: GameState): void {
-  for (const gear of [...state.world.weapons, ...state.world.armor, ...state.world.spells]) {
+  const copies: (WorldGear | WeaponCopy)[] = [...state.world.weapons, ...state.world.armor, ...state.world.spells];
+  for (const gear of copies) {
     const candidates = adjacentBearersOf(state, gear);
     const next = candidates.length === 1 ? candidates[0]!.id : candidates.some(({ id }) => id === gear.chosenBearer) ? gear.chosenBearer! : null;
     if (next === gear.bearer) continue;
     gear.bearer = next;
-    if ("cooldown" in gear) gear.cooldown = 0;
+    if ("cooldown" in gear) resetSum(gear, "cooldown", 0);
   }
 }
 
 export function resetDuelClocks(state: GameState): void {
-  state.world.enemyCooldown = 0;
-  for (const creature of state.world.creatures) creature.cooldown = 0;
+  resetSum(state.world, "enemyCooldown", 0);
+  for (const creature of state.world.creatures) resetSum(creature, "cooldown", 0);
 }
 
 function fightersOf(state: GameState, wall: CombatWall): WorldCombatCreature[] {
@@ -132,19 +133,34 @@ function fightOf(state: GameState) {
   };
 }
 
-export function combatBoundaryOf(state: GameState, spellIncoming?: ReadonlyMap<string, number>): number {
+export function combatBoundaryOf(state: GameState): number {
   const fight = fightOf(state);
   if (!fight) return Infinity;
-  let next = COMBAT.enemyCadence - state.world.enemyCooldown;
-  for (const { cooldown } of fight.creatures) next = Math.min(next, COMBAT.creature.cadence - cooldown);
-  for (const { type, cooldown } of fight.weapons) next = Math.min(next, WEAPONS[type].cadence - cooldown);
-  for (const { id, store } of fight.spells) {
-    const missing = COMBAT.spell.threshold - store;
-    if (missing <= EPS) return EPS;
-    const incoming = spellIncoming?.get(id) ?? 0;
-    if (incoming > 0) next = Math.min(next, missing / incoming);
-  }
-  return Math.max(EPS, next);
+  let next = gapTo(state.world, "enemyCooldown", COMBAT.enemyCadence);
+  for (const creature of fight.creatures) next = Math.min(next, gapTo(creature, "cooldown", COMBAT.creature.cadence));
+  for (const weapon of fight.weapons) next = Math.min(next, gapTo(weapon, "cooldown", WEAPONS[weapon.type].cadence));
+  // A carried, fully funded Pulse is ready now. An underfunded one has
+  // no combat boundary until World charge actually fills its reserve.
+  return fight.spells.some(({ store }) => store >= COMBAT.spell.threshold) ? 0 : next;
+}
+
+function heal(target: { hp: number; hpCarry?: number }, amount: number, cap: number): void {
+  // Clamp before adding: very long recovery cannot overflow a bounded HP.
+  if (amount < gapTo(target, "hp", cap)) addToSum(target, "hp", amount, "World recovery");
+  else resetSum(target, "hp", cap);
+  if (target.hp >= cap) resetSum(target, "hp", cap);
+}
+
+function damage(target: { hp: number; hpCarry?: number }, amount: number): void {
+  addToSum(target, "hp", -amount, "World damage");
+  if (target.hp <= 0) resetSum(target, "hp", 0);
+}
+
+function spend<K extends "store" | "cooldown" | "enemyCooldown">(
+  owner: Record<K, number> & Partial<Record<`${K}Carry`, number>>, key: K, amount: number,
+): void {
+  addToSum(owner, key, -amount, "World action payment");
+  if (owner[key] <= 0) resetSum(owner, key, 0);
 }
 
 // Attacks resolve before a simultaneous return hit. The wall hits the
@@ -155,60 +171,54 @@ export function advanceCombat(state: GameState, seconds: number): void {
   world.elapsed = requireFinite(world.elapsed + seconds, "the World clock");
   for (const creature of world.creatures) {
     if (creature.pos || creature.hp === COMBAT.creature.hp) continue;
-    const maxHp = COMBAT.creature.hp;
-    const healed = creature.hp + COMBAT.creature.regeneration * seconds;
-    // A completed heal can land a few ulps below full after fractional
-    // spans. Normalize at the readiness boundary, not every HP read.
-    if (maxHp - healed <= 16 * Number.EPSILON * maxHp) {
-      creature.hp = maxHp;
-      creature.recovering = false;
-    } else creature.hp = healed;
+    heal(creature, COMBAT.creature.regeneration * seconds, COMBAT.creature.hp);
+    if (creature.hp === COMBAT.creature.hp) creature.recovering = false;
   }
   for (const wall of worldEnemiesOf(state)) {
     const live = world.enemies[wall.key]!;
-    if (live.hp > 0 && live.hp < wall.maxHp) live.hp = Math.min(wall.maxHp, live.hp + wall.regeneration * seconds);
+    if (live.hp > 0 && live.hp < wall.maxHp) heal(live, wall.regeneration * seconds, wall.maxHp);
   }
   const fight = fightOf(state);
   if (!fight) return;
   const live = world.enemies[fight.wall.key]!;
-  world.enemyCooldown += seconds;
+  addToSum(world, "enemyCooldown", seconds, "World enemy cadence");
   for (const creature of fight.creatures) {
-    creature.cooldown += seconds;
-    if (creature.cooldown + EPS < COMBAT.creature.cadence) continue;
-    creature.cooldown = Math.max(0, creature.cooldown - COMBAT.creature.cadence);
-    live.hp = Math.max(0, live.hp - COMBAT.creature.damage);
+    addToSum(creature, "cooldown", seconds, "World creature cadence");
+    if (creature.cooldown < COMBAT.creature.cadence) continue;
+    spend(creature, "cooldown", COMBAT.creature.cadence);
+    damage(live, COMBAT.creature.damage);
   }
   for (const weapon of fight.weapons) {
     const { cadence, chargeCost, unfedDamage } = WEAPONS[weapon.type];
-    weapon.cooldown += seconds;
-    if (weapon.cooldown + EPS < cadence) continue;
-    weapon.cooldown = Math.max(0, weapon.cooldown - cadence);
+    addToSum(weapon, "cooldown", seconds, "World weapon cadence");
+    if (weapon.cooldown < cadence) continue;
+    spend(weapon, "cooldown", cadence);
     if (live.hp <= EPS) continue;
     // Compare at the hit, not at fill. A reserve buys exactly one authored
     // effect; neither extra charge nor an unbound copy changes the hit.
     const powered = weapon.store >= chargeCost;
-    if (powered) weapon.store -= chargeCost;
-    live.hp = Math.max(0, live.hp - (powered ? attackPowerOf(state, weapon.type) : unfedDamage));
+    if (powered) spend(weapon, "store", chargeCost);
+    damage(live, powered ? attackPowerOf(state, weapon.type) : unfedDamage);
   }
   for (const spell of fight.spells) {
-    if (live.hp <= EPS || spell.store + EPS < COMBAT.spell.threshold) continue;
-    spell.store = Math.max(0, spell.store - COMBAT.spell.threshold);
-    live.hp = Math.max(0, live.hp - COMBAT.spell.damage);
+    if (live.hp <= EPS || spell.store < COMBAT.spell.threshold) continue;
+    resetSum(spell, "store", 0);
+    damage(live, COMBAT.spell.damage);
   }
   if (live.hp <= EPS) {
-    live.hp = 0;
+    resetSum(live, "hp", 0);
     resetDuelClocks(state);
     return;
   }
-  if (world.enemyCooldown + EPS < COMBAT.enemyCadence) return;
-  world.enemyCooldown = Math.max(0, world.enemyCooldown - COMBAT.enemyCadence);
+  if (world.enemyCooldown < COMBAT.enemyCadence) return;
+  spend(world, "enemyCooldown", COMBAT.enemyCadence);
   const target = fight.creatures[0]!;
   const armorCount = world.armor.filter((armor) => bearerOf(state, armor)?.id === target.id).length;
   const hit = fight.wall.damage * COMBAT.armor.remainingDamage ** armorCount;
-  target.hp = Math.max(0, target.hp - hit);
+  damage(target, hit);
   if (target.hp === 0) {
     target.pos = null;
     target.recovering = true;
-    target.cooldown = 0;
+    resetSum(target, "cooldown", 0);
   }
 }

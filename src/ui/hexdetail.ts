@@ -263,8 +263,20 @@ export function renderHexDetail(app: App, live: RateSnapshot, projected: RateSna
     const face = chassis.getAttribute("data-detail-face") as DetailFace;
     app.listen(chassis, "click", () => app.detailFace(face));
   });
-  host.querySelectorAll<HTMLElement>("[data-legend-layer]").forEach(button => {
-    app.listen(button, "click", () => app.detailFace(button.dataset.legendLayer as DetailFace));
+  host.querySelectorAll<HTMLButtonElement>("[data-legend-layer]").forEach(button => {
+    const tip = button.closest(".inst-tip");
+    let touch = false;
+    app.listen(button, "pointerdown", event => { touch = event.pointerType === "touch"; });
+    app.listen(button, "pointercancel", () => { touch = false; });
+    app.listen(button, "click", event => {
+      const pointer = (event as PointerEvent).pointerType;
+      const tap = pointer ? pointer === "touch" : event.detail > 0 && touch;
+      touch = false;
+      // The shared tooltip pins the first tap (focus alone is not a pin).
+      // A second tap or a mouse/keyboard activation selects the layer.
+      if (tap && tip && !tip.classList.contains("show")) return;
+      app.detailFace(button.dataset.legendLayer as DetailFace);
+    });
   });
   host.querySelectorAll<SVGElement>("[data-ctx-cell]").forEach(cell => {
     const navigate = () => {
@@ -311,17 +323,18 @@ export function renderHexDetail(app: App, live: RateSnapshot, projected: RateSna
 }
 
 function detailLayerPreviews(app: App, pos: Hex, module: ModuleInstance | undefined, snapshot: RateSnapshot): string {
-  const preview = (face: DetailFace, image: string, detail?: string) => {
+  const preview = (face: DetailFace, image: string, facts?: string) => {
     const id = `detail-layer-${face}-tip`;
     const selected = app.ui.detail?.face === face;
-    const button = `<button class="detail-layer-preview${detail ? " inst-tip-trigger" : ""}${selected ? " active" : ""}" data-legend-layer="${face}" aria-label="${face === "world" ? "World" : "Modules"} layer" aria-pressed="${selected}"${detail ? ` aria-describedby="${id}"` : ""}>${image}</button>`;
+    const detail = selected ? undefined : facts;
+    const button = `<button class="detail-layer-preview${detail ? " inst-tip-trigger" : ""}${selected ? " active" : ""}" data-legend-layer="${face}" aria-label="${face === "world" ? "World" : "Modules"} layer" aria-pressed="${selected}"${detail ? ` aria-describedby="${id}" aria-expanded="false"` : ""}>${image}</button>`;
     return detail ? `<span class="inst-tip">${button}<span class="inst-tip-body" id="${id}" role="tooltip">${escapeHtml(detail)}</span></span>` : button;
   };
   const read = module ? faceReadoutFor(app.state, module, pos, snapshot, true) : null;
   const moduleImage = `<svg class="hex-stack-face" viewBox="-70 -70 140 140" ${module ? `data-type="${module.type}" data-rarity="${typeRarityOf(module.type)}"` : ""} aria-hidden="true">${module ? moduleFace({ type: module.type, tier: module.tier, variant: "identity", readout: "" }) : `<polygon class="hex" points="${hexPoints(HEX_RADIUS)}"/>`}</svg>`;
   const moduleFacts = module ? `${META[module.type].name} · Lv. ${module.level} · ${read!.readout}` : "Empty module cell";
   const world = worldEntered(app.state) ? worldChassisHtml(app.state, pos, snapshot) : null;
-  const worldPreview = world && preview("world", world.chassis, world.preview && app.ui.detail?.face !== "world" ? world.label : undefined);
+  const worldPreview = world && preview("world", world.chassis, world.preview ? world.label : undefined);
   return `${worldPreview ?? ""}${preview("modules", moduleImage, moduleFacts)}`;
 }
 

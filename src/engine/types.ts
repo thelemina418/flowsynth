@@ -233,11 +233,14 @@ export interface WorldGear extends WorldColumn {
 export interface WeaponCopy extends WorldGear {
   type: WeaponType;
   store: number;
+  storeCarry?: number;
   cooldown: number;
+  cooldownCarry?: number;
 }
 
 export interface WorldSpell extends WorldGear {
   store: number;
+  storeCarry?: number;
 }
 
 export interface WorldConduit extends WorldColumn {
@@ -249,12 +252,15 @@ export interface WorldConduit extends WorldColumn {
 export interface WorldEnemyState {
   discovered: boolean;
   hp: number;
+  hpCarry?: number;
 }
 
 export interface WorldCombatCreature extends WorldColumn {
   hp: number;
+  hpCarry?: number;
   recovering: boolean;
   cooldown: number;
+  cooldownCarry?: number;
 }
 
 export interface WorldState {
@@ -272,6 +278,7 @@ export interface WorldState {
   hone: { chargeBlade: number };
   enemies: Record<string, WorldEnemyState>;
   enemyCooldown: number;
+  enemyCooldownCarry?: number;
   elapsed: number;
   // Only the isolated development scenario installs the compressed two-wall
   // timetable. The live loader never installs it from an export.
@@ -330,7 +337,7 @@ export interface ClassPairState {
   spent: Record<string, number>;
   // The pair's one reward meter: credited seconds and lifetime fills.
   // Engineer fills mint module rolls; Blacksmith fills bank weapon choices.
-  rollMeter: Meter;
+  rollMeter: Meter & { progressCarry?: number };
   weaponClaims?: number;
 }
 
@@ -377,6 +384,9 @@ export interface SessionAccounting {
   // Offset where the current absence lost World eligibility (sleep or
   // resume from a save). The whole stretch still uses one honesty split.
   pendingOfflineFrom?: number;
+  // Observed freeze/resume intervals, in order, within this absence.
+  // Unlike inferred sleep, a measured suspension has a known active tail.
+  pendingSuspensions?: { from: number; until: number }[];
   // Settled reconciliations, in order. Target hits, the honesty summary,
   // and miss rows derive from these — never stored.
   events: HonestyEvent[];

@@ -86,6 +86,7 @@ async function measure(checkout, tier) {
     const openingRecipe = engine.composePlaythroughRecipe({ ...recipeInput, budgetDays: 1,
       schedule: { sessionsPerDay: 2, sessionMinutes: 25, breatherMinutes: 5 } });
     const opening = engine.runPlaythrough(openingRecipe, source);
+    // Earned events record purchase occurrences and timestamps, not ν debits.
     const cells = r => r.events.filter(e => e.ok && e.label.startsWith('Cell at ')).map(e => ({ coordinate: e.label.slice(8), creditedMinutes: e.credited / 60 }));
     const placement = opening.events.find(e => e.ok && e.kind === 'placement' && /^Placed a /.test(e.label));
     const placementAfterExpansion = opening.events.find(e => e.ok && e.kind === 'placement' && /^Placed a /.test(e.label) &&
@@ -149,6 +150,7 @@ async function main() {
   process.chdir(targetRoot);
   verify();
   const output = { scope: 'One matched schedule, not a calibration or a representative distribution.',
+    cellPurchaseEvidence: 'Earned runs report counts and credited timestamps from purchase events, not ν spent. Prepared Shale measures actual ν debits from its synthetic budget.',
     recordingEnvironment: recordingEnvironment(), baseline, candidate };
   await writeFile(outputPath, JSON.stringify(output, null, 2) + '\n', { flag: 'wx' });
 }

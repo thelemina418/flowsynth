@@ -47,15 +47,16 @@ export function sumResults(a: AdvanceResult, b: AdvanceResult): AdvanceResult {
 // Shared board boundaries; only flow adds practice-driven goal boundaries.
 function boardBoundaries(state: GameState) {
   const liveGenerators: { module: ModuleInstance; strength: number }[] = [];
-  let earliest = Infinity;
+  let depletion = Infinity;
   for (const module of deployed(state)) {
     if (CATEGORY_OF[module.type] !== "generator") continue;
     if (module.reserve > EPS) {
       const strength = requireFinite(emittedStrength(state, module, true), "a generator's emission strength");
       liveGenerators.push({ module, strength });
-      earliest = Math.min(earliest, module.reserve / strength);
+      depletion = Math.min(depletion, Math.max(Number.MIN_VALUE, module.reserve / strength));
     }
   }
+  let earliest = Infinity;
   const clock = sessionClockOf(state);
   for (const module of deployed(state)) {
     const boundary = nextTemporalBoundaryOf(module.type, clock) - clock;
@@ -65,7 +66,7 @@ function boardBoundaries(state: GameState) {
       earliest = Math.min(earliest, nextRestBoundaryOf(module.type, rest) - rest);
     }
   }
-  return { liveGenerators, earliest };
+  return { liveGenerators, earliest, depletion };
 }
 
 function advanceForge(state: GameState, snapshot: RateSnapshot, spanSeconds: number, rng: Rng, spanResult: AdvanceResult): void {
@@ -84,7 +85,8 @@ function advanceForge(state: GameState, snapshot: RateSnapshot, spanSeconds: num
 
 function drainReserves(liveGenerators: { module: ModuleInstance; strength: number }[], spanSeconds: number): void {
   for (const { module, strength } of liveGenerators) {
-    module.reserve = Math.max(0, requireFinite(module.reserve - strength * spanSeconds, "a generator's reserve"));
+    module.reserve = module.reserve / strength <= spanSeconds ? 0
+      : Math.max(0, requireFinite(module.reserve - strength * spanSeconds, "a generator's reserve"));
   }
 }
 
@@ -144,18 +146,22 @@ function walkFlow(
     // leads the boundary read because the World legs need its rate: the
     // discovery crossing is measured in produced nous.
     const snapshot = syncRates(state, true);
-    let { liveGenerators, earliest } = boardBoundaries(state);
+    let { liveGenerators, earliest, depletion } = boardBoundaries(state);
     // A live goal completion banks reserve mid-span, so it is another rate
     // boundary even when every generator starts empty.
     if (sink !== "provisional") earliest = Math.min(earliest, secondsUntilGoalCompletion(state, state.activeHabitId));
     // Offline production may still activate a wall and change the rate;
     // only online trusted time has attack and recovery boundaries.
-    if (sink !== "provisional") {
-      earliest = Math.min(earliest, sink === "live"
-        ? worldBoundarySeconds(state, snapshot.rate, snapshot)
-        : discoverySecondsOf(state, snapshot.rate));
+    const worldBoundary = sink === "live" ? worldBoundarySeconds(state, snapshot.rate, snapshot)
+      : sink === "offline" ? discoverySecondsOf(state, snapshot.rate) : Infinity;
+    // Do not merge a depletion or combat boundary into a nearby end of
+    // span: even that sliver can decide whether a payment is funded.
+    const spanSeconds = Math.min(earliest + EPS < seconds ? earliest : seconds, depletion, worldBoundary);
+    if (spanSeconds === 0) {
+      advanceWorldCombat(state, 0); // A carried action was already ready.
+      syncWorldDiscoveries(state);
+      continue;
     }
-    const spanSeconds = earliest !== Infinity && earliest + EPS < seconds ? earliest : seconds;
 
     // The board is locked during flow, so the rate is constant across the
     // step; production is exactly what the board's modules make (§2.1).
@@ -267,12 +273,15 @@ function walkBreather(state: GameState, seconds: number, rng: Rng, offlineSecond
     // rate changes the phase can meet. As in flow, offline banking still
     // splits at discovery but does not resolve World attacks or recovery.
     const snapshot = syncRates(state, true);
-    const { liveGenerators, earliest } = boardBoundaries(state);
-    const boundary = Math.min(earliest, offline
-      ? discoverySecondsOf(state, snapshot.rate)
-      : worldBoundarySeconds(state, snapshot.rate, snapshot));
+    const { liveGenerators, earliest, depletion } = boardBoundaries(state);
+    const boundary = offline ? discoverySecondsOf(state, snapshot.rate) : worldBoundarySeconds(state, snapshot.rate, snapshot);
     const available = offline ? offlineSeconds : seconds;
-    const spanSeconds = boundary !== Infinity && boundary + EPS < available ? boundary : available;
+    const spanSeconds = Math.min(earliest + EPS < available ? earliest : available, depletion, boundary);
+    if (spanSeconds === 0) {
+      advanceWorldCombat(state, 0);
+      syncWorldDiscoveries(state);
+      continue;
+    }
     const gained = requireFinite(snapshot.rate * spanSeconds, "the breather's produced ν/s");
     // Supply earned during this span is available at its ending attack tick.
     advanceWorldCharge(state, snapshot, spanSeconds);

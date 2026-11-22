@@ -46,27 +46,61 @@ it("Striker strikes unfed on its own cadence and spends only a discrete charge p
   }
 });
 
-it("funds the same Striker beat with one second of supply or ten tenth-second spans", () => {
+it.each([
+  ["chargeBlade", 1, 10, 0.1, 5, 4, 0],
+  ["striker", 1, 10, 0.1, 4, 8, 5],
+  ["maul", 2, 400, 0.005, 8, 24, 12],
+] as const)(
+  "funds %s on the same beat after whole or fine spans, including reload; refuses genuine shortfall",
+  (type, cost, steps, dt, cadence, powered, unfed) => {
   const state = scenarioOf("world-combat")!.build(0);
-  const striker = createWeapon(state, "striker");
-  state.world.weapons.push(striker);
-  for (const [id, q, r] of [[state.world.creatures[0]!.id, 0, 0], [state.world.columns[0]!.id, 1, 1], [striker.id, 0, 1]] as const) {
-    expect(placeWorldOccupant(state, id, hex(q, r)).ok).toBe(true);
-  }
-  // Model a carried beat and empty store at the start of the session.
-  striker.cooldown = 3;
+    const weapon = createWeapon(state, type);
+    state.world.weapons.push(weapon);
+    for (const [id, q, r] of [[state.world.creatures[0]!.id, 0, 0], [state.world.columns[0]!.id, 1, 1], [weapon.id, 0, 1]] as const) {
+      expect(placeWorldOccupant(state, id, hex(q, r)).ok).toBe(true);
+    }
+    // The Column lifts 1/s; the carried beat is one cost away.
+    weapon.cooldown = cadence - cost;
+    expect(startSession(state, null).ok).toBe(true);
+    const single = structuredClone(state);
+    const short = structuredClone(state);
+    const shortReserve = cost - 5e-10;
+    short.modules.find(m => m.type === "focusKeyed")!.reserve = shortReserve;
+    tick(single, cost);
+    tick(short, cost);
+    const store = (s: GameState) => s.world.weapons.find(w => w.id === weapon.id)!.store;
+    const hp = (s: GameState) => s.world.enemies.shale!.hp;
+    expect([hp(single), store(single)]).toEqual([48 - powered, 0]);
+    let reloaded = structuredClone(state);
+    for (let i = 0; i < steps; i++) {
+      tick(state, dt);
+      tick(reloaded, dt);
+      if (i === steps / 2 - 1) reloaded = reload(reloaded);
+    }
+    expect(hp(state)).toBe(48 - powered);
+    expect(hp(reloaded)).toBe(48 - powered);
+    expect(store(state)).toBeCloseTo(0, 14);
+    expect(store(reloaded)).toBeCloseTo(0, 14);
+    // The generator empties genuinely short, even below the generic EPS.
+    expect(hp(short)).toBeCloseTo(48 - unfed, 8);
+    expect(store(short)).toBeCloseTo(shortReserve, 14);
+  },
+);
+
+it("retains individually sub-ulp charge deliveries across a save and reload", () => {
+  const state = scenarioOf("world-combat")!.build(0);
+  const [weapon] = state.world.weapons;
+  weapon!.store = 2;
+  expect(placeWorldOccupant(state, weapon!.id, hex(0, 1)).ok).toBe(true);
+  expect(placeWorldOccupant(state, state.world.columns[0]!.id, hex(1, 1)).ok).toBe(true);
   expect(startSession(state, null).ok).toBe(true);
-  const single = structuredClone(state);
-  const short = structuredClone(state);
-  short.modules.find(m => m.type === "focusKeyed")!.reserve = 0.99999999;
-  tick(single, 1);
-  for (let i = 0; i < 10; i++) tick(state, 0.1);
-  tick(short, 1); // The generator empties genuinely short of the cost.
-  expect(single.world.enemies.shale!.hp).toBe(40);
-  expect(state.world.enemies.shale!.hp).toBe(40);
-  expect(state.world.weapons.find(w => w.id === striker.id)!.store).toBeCloseTo(0, 12);
-  expect(short.world.enemies.shale!.hp).toBe(43);
-  expect(short.world.weapons.find(w => w.id === striker.id)!.store).toBeCloseTo(0.99999999, 12);
+  // Lift is 1/s. Four touches of 2^-54 add half an ULP at 2, and
+  // still round to 2. Read that save back before the next four.
+  for (let i = 0; i < 4; i++) tick(state, 2 ** -54);
+  expect(weapon!.store).toBe(2);
+  const resumed = reload(state);
+  for (let i = 0; i < 4; i++) tick(resumed, 2 ** -54);
+  expect(resumed.world.weapons[0]!.store).toBe(2 + 2 ** -51);
 });
 
 it("Charge Blade skips an unfed beat, then all copies use the same purchased Hone at the original cadence", () => {

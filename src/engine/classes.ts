@@ -1,7 +1,7 @@
 import { BALANCE, EPS } from "./constants";
 import { bankRolls, generateOffer, generateSpecialOffer, type Rng } from "./rolls";
 import { activeHabit, type Habit } from "./habits";
-import { NumericFault, requireFinite } from "./numeric";
+import { addToSum, NumericFault, requireFinite, resetSum, savedCarry } from "./numeric";
 import { createWeapon } from "./state";
 import { FORGE_WEAPONS, type ForgeWeapon } from "./weapons";
 import type { ClassId, ClassPairState, GameState } from "./types";
@@ -217,17 +217,22 @@ export function weaponChoicesOf(habit: Habit): number {
 function creditWeaponForge(pair: ClassPairState, seconds: number): void {
   const meter = pair.rollMeter;
   const threshold = BALANCE.blacksmithForgeSeconds;
-  const total = requireFinite(meter.progress + seconds, "Blacksmith forge progress");
-  const remainder = total % threshold;
-  // Thousands of fractional credits can leave a completed fill a few
-  // ulps short. Allow one nanosecond of accumulation error at the edge,
-  // not a tolerance proportional to the total or number of fills.
-  const atEdge = threshold - remainder <= 1e-9;
-  const progress = atEdge ? 0 : remainder;
-  const fills = Math.round((total - remainder) / threshold) + (atEdge ? 1 : 0);
+  // Divide out whole fills before adding the remainder so a long credit
+  // cannot round away an existing partial meter.
+  const remainder = seconds % threshold;
+  // Above the safe-integer range the input double is an exact (large)
+  // integer, but subtracting its remainder in doubles can round a fill
+  // up or down. Divide as integers, then enforce the saved count's range.
+  let fills = seconds > Number.MAX_SAFE_INTEGER ? Number(BigInt(seconds) / BigInt(threshold))
+    : Math.round((seconds - remainder) / threshold);
+  addToSum(meter, "progress", remainder, "Blacksmith forge progress");
+  if (meter.progress >= threshold) {
+    fills++;
+    addToSum(meter, "progress", -threshold, "Blacksmith forge progress");
+    if (meter.progress < 0) resetSum(meter, "progress", 0);
+  }
   const earned = meter.earned + fills;
   if (!Number.isSafeInteger(earned)) throw new NumericFault("Blacksmith weapon choices");
-  meter.progress = progress;
   meter.earned = earned;
 }
 
@@ -235,9 +240,9 @@ function creditWeaponForge(pair: ClassPairState, seconds: number): void {
 // honesty credit. Returns module rolls only; Blacksmith never touches the
 // shared roll queue, its RNG, the first-roll rig, or Forge notifications.
 export function accrueClassDevelopment(state: GameState, seconds: number, rng: Rng): number {
-  if (seconds <= EPS) return 0;
+  if (seconds <= 0) return 0;
   const active = activePair(state);
-  if (!active || !classAvailable(state, active.classId)) return 0;
+  if (!active || !classAvailable(state, active.classId) || (seconds <= EPS && active.classId !== "blacksmith")) return 0;
   const { habit, classId } = active;
   const pair = habit.classes[classId] ??= freshClassPair(classId);
   pair.experience = requireFinite(pair.experience + seconds, "class experience");
@@ -391,8 +396,11 @@ export function normalizeHabitClasses(habits: Habit[]): void {
         const claimed = pair.weaponClaims;
         const validCounts = Number.isSafeInteger(meter.earned) && claimed !== undefined &&
           Number.isSafeInteger(claimed) && claimed >= 0 && meter.earned >= claimed;
+        const partial = progress < BALANCE.blacksmithForgeSeconds ? progress : 0;
+        const carry = savedCarry(meter.progress, partial, meter.progressCarry);
         pair.rollMeter = {
-          progress: progress < BALANCE.blacksmithForgeSeconds ? progress : 0,
+          progress: partial,
+          ...(carry !== undefined && { progressCarry: carry }),
           earned: validCounts ? meter.earned : 0,
         };
         pair.weaponClaims = validCounts ? claimed : 0;

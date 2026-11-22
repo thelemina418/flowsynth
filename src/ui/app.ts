@@ -581,6 +581,7 @@ export class App {
   // The presence state that held since the last boundary (§1): presence is
   // visibility — focus loss alone is not away.
   presence = true;
+  private clockLifecycle: "running" | "suspended" | "resumed" = "running";
   // Set when exit was requested while the honesty report still waits: the
   // answer is mandatory and final before the session ends (§2).
   exitPending = false;
@@ -774,7 +775,8 @@ export class App {
   // advances by it — never by tick count, which throttling falsifies. The
   // breather runs its own boundary (docs/breather-spec.md §4): pre-trusted,
   // presence classifies nothing, and the deadline completes the phase.
-  private applyBoundary(now: number, offline = false): void {
+  private applyBoundary(now: number, absence?: "offline" | "suspended"): void {
+    if (this.clockLifecycle === "suspended") return;
     if (this.state.mode === "breather") {
       if (this.lastWall === null) {
         this.syncBoundaryClock(now);
@@ -786,7 +788,7 @@ export class App {
       if (gapSeconds <= 0) return;
       // Breather production still banks against wall time. The portion
       // spent asleep or suspended is not time the World actually ran.
-      const offlineSeconds = offline || driftStepSeconds < -DRIFT_NOISE_SECONDS ? gapSeconds
+      const offlineSeconds = absence || driftStepSeconds < -DRIFT_NOISE_SECONDS ? gapSeconds
         : driftStepSeconds > DRIFT_NOISE_SECONDS ? Math.min(gapSeconds, driftStepSeconds) : 0;
       const { result, completed } = applyBreatherGap(this.state, gapSeconds, Math.random, offlineSeconds);
       this.reportAdvance(result);
@@ -810,17 +812,31 @@ export class App {
     const gapSeconds = (now - this.lastWall) / 1000;
     const driftStepSeconds = (dualDriftMs() - this.lastDrift) / 1000;
     this.syncBoundaryClock(now);
-    if (!offline && gapSeconds <= 0 && driftStepSeconds <= 0) return;
+    if (!absence && gapSeconds <= 0 && driftStepSeconds <= 0) return;
     rollGoalOccurrences(this.state, now);
-    const result = applyGap(this.state, gapSeconds, offline ? "offline" : this.presence ? "visible" : "away", driftStepSeconds);
+    const result = applyGap(this.state, gapSeconds, absence ?? (this.presence ? "visible" : "away"), driftStepSeconds);
     this.reportAdvance(result);
     if (now - this.lastSaveWall > 5000) this.save(now);
   }
 
-  // A return (§1): the buffered absence — the hidden stretch, reconciled
-  // whole — classifies once, then live presence resumes banking behind it.
-  private processReturn(now: number, offline = false): void {
-    this.applyBoundary(now, offline);
+  // Unlike idle hidden time, a suspended document cannot fight. Persist
+  // the last running boundary, even on hosts where both clocks keep time
+  // through suspension. A paired pagehide/freeze cannot move it twice.
+  private suspendClock(now: number): void {
+    if (this.clockLifecycle === "suspended") return;
+    this.applyBoundary(now);
+    this.clockLifecycle = "suspended";
+    this.save(now);
+  }
+
+  // A return (§1): classify the whole contiguous absence when visible.
+  // Whichever signal returns first consumes the suspended interval. A
+  // later pageshow must not reclassify the active tail as offline.
+  private processReturn(now: number, cachedRestore = false): void {
+    const absence = this.clockLifecycle === "suspended" ? "suspended"
+      : cachedRestore && this.clockLifecycle === "running" ? "offline" : undefined;
+    if (absence) this.clockLifecycle = "resumed";
+    this.applyBoundary(now, absence);
     this.presence = document.visibilityState === "visible";
     if (this.presence) {
       this.reportAdvance(flushPendingAway(this.state));
@@ -1040,6 +1056,8 @@ export class App {
     document.addEventListener("visibilitychange", () => {
       if (!this.ownsBoard()) return;
       if (document.visibilityState === "hidden") {
+        if (this.clockLifecycle === "suspended") return;
+        if (this.presence) this.clockLifecycle = "running";
         // The gap that just ended was present: classify it, then persist —
         // the transition to hidden is the last reliably observable save
         // point (§10), carrying the session, the bucket, and the absence
@@ -1055,9 +1073,20 @@ export class App {
         this.processReturn(Date.now());
       }
     }, { signal: this.signal });
-    // A bfcache restore is a return: the frozen stretch classifies as away,
-    // and a save another tab wrote while this page sat frozen is adopted
-    // through the same reconcile path (#128).
+    document.addEventListener("freeze", () => {
+      if (this.ownsBoard()) this.suspendClock(Date.now());
+    }, { signal: this.signal });
+    document.addEventListener("resume", () => {
+      if (!this.ownsBoard() || this.clockLifecycle !== "suspended") return;
+      if (document.visibilityState === "visible") this.adoptNewerSave();
+      this.processReturn(Date.now());
+    }, { signal: this.signal });
+    window.addEventListener("pagehide", (event) => {
+      if (this.ownsBoard() && (event as PageTransitionEvent).persisted) this.suspendClock(Date.now());
+    }, { signal: this.signal });
+    // bfcache return also adopts a save written by another tab (#128).
+    // A restore without an observed departure conservatively treats the
+    // pending gap as offline, just like a reload.
     window.addEventListener("pageshow", (event) => {
       if (!this.ownsBoard() || !(event as PageTransitionEvent).persisted) return;
       this.adoptNewerSave();
@@ -1079,7 +1108,7 @@ export class App {
       if (this.ownsBoard()) this.processReturn(Date.now());
     }, { signal: this.signal });
     window.addEventListener("beforeunload", () => {
-      if (this.ownsBoard()) this.save();
+      if (this.ownsBoard() && this.clockLifecycle !== "suspended") this.save();
     }, { signal: this.signal });
     // The tick timer can outlive its document (a discarded environment, a
     // torn-down test): a dead document is simply not ours to tick.
@@ -1253,7 +1282,7 @@ export class App {
   }
 
   tick(): void {
-    if (this.released) return;
+    if (this.released || this.clockLifecycle === "suspended") return;
     // Recurring goals roll on every tick, not only across flow boundaries:
     // a tab resting in upgrade mode must read the new day's state too —
     // the Focus sheet's GOALS face with it. Idempotent with the

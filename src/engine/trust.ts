@@ -35,7 +35,7 @@ export function freshAccounting(): SessionAccounting {
 // Hidden time on a running page may still be trusted. An offline gap
 // (reload/import, suspended page, or detected sleep) uses the same honesty
 // rules for production and practice, but can never advance combat.
-export type Presence = "visible" | "away" | "offline";
+export type Presence = "visible" | "away" | "offline" | "suspended";
 
 const ZERO: AdvanceResult = { nousEarned: 0, rollsBanked: 0, rollsFlow: 0, rollsForge: 0, rollsMutator: 0, goalsCompleted: 0 };
 
@@ -85,10 +85,17 @@ export function applyGap(
     // On a resume the persisted buffer is also part of the absence we
     // reconcile, even if the source timestamp is equal to or ahead of now.
     accounting.pendingOfflineFrom = 0;
+    delete accounting.pendingSuspensions;
     if (seconds > EPS) accounting.pendingAwaySeconds += seconds;
     return ZERO;
   }
   if (seconds <= EPS) return ZERO;
+  if (presence === "suspended") {
+    const from = accounting.pendingAwaySeconds;
+    accounting.pendingAwaySeconds += seconds;
+    (accounting.pendingSuspensions ??= []).push({ from, until: accounting.pendingAwaySeconds });
+    return ZERO;
+  }
   // Past the noise floor on either side is real drift; inside it is the two
   // clocks' quantization jitter, which the boundary ignores. Treating each
   // jitter step as drift discarded whole wall gaps (negative) or sized
@@ -128,19 +135,37 @@ export function flushPendingAway(state: GameState, rng: Rng = Math.random): Adva
   const seconds = accounting.pendingAwaySeconds;
   if (seconds <= EPS) {
     delete accounting.pendingOfflineFrom;
+    delete accounting.pendingSuspensions;
     return ZERO;
   }
   const pristine = structuredClone(state);
   const cutoff = accounting.pendingOfflineFrom;
+  const suspensions = accounting.pendingSuspensions;
   accounting.pendingAwaySeconds = 0;
   delete accounting.pendingOfflineFrom;
+  delete accounting.pendingSuspensions;
   const session = state.session!;
   const trusted = seconds < RECONCILIATION_FLOOR_SECONDS ? seconds
     : Math.min(seconds, Math.max(0, (session.target ?? 0) - session.elapsed));
-  const online = cutoff === undefined ? trusted
+  const onlineUntil = cutoff === undefined ? trusted
     : Number.isFinite(cutoff) ? Math.min(trusted, Math.max(0, cutoff)) : 0;
-  let result = online > 0 ? advance(state, online, rng) : ZERO;
-  if (!result.fault && trusted > online) result = sumResults(result, advance(state, trusted - online, rng, "offline"));
+  let result = ZERO;
+  let cursor = 0;
+  const advanceTo = (end: number, sink: "live" | "offline") => {
+    if (!result.fault && end > cursor) result = sumResults(result, advance(state, end - cursor, rng, sink));
+    cursor = Math.max(cursor, end);
+  };
+  // A known suspension can split the trusted prefix without making it a
+  // new absence. The plan/report still sees the whole contiguous stretch.
+  if (onlineUntil > 0) {
+    for (const { from, until } of suspensions ?? []) {
+      if (from >= onlineUntil || result.fault) break;
+      advanceTo(from, "live");
+      advanceTo(Math.min(until, onlineUntil), "offline");
+    }
+  }
+  advanceTo(onlineUntil, "live");
+  advanceTo(trusted, "offline");
   if (!result.fault && seconds > trusted) result = sumResults(result, advance(state, seconds - trusted, rng, "provisional"));
   // The buffer belongs to the same transaction as both sides of the plan.
   // A refused walk must leave the absence available for a later retry.

@@ -465,6 +465,53 @@ describe("the World face in detail", () => {
     expect(preview.textContent).toBe("Shale · 48/48 HP · −20% ν");
   });
 
+  it("previews inactive World facts by hover, focus and first touch; a deliberate activation switches layers", () => {
+    setAppWidth(390);
+    seedEra();
+    clickCell(1, 0);
+    const world = () => detail().querySelector<HTMLButtonElement>('[data-legend-layer="world"]')!;
+    const preview = document.getElementById(world().getAttribute("aria-describedby")!)!;
+    const touch = () => world().dispatchEvent(new PointerEvent("click", { pointerType: "touch", bubbles: true }));
+    const shown = () => preview.classList.contains("inst-show");
+    const active = () => detail().querySelector("[data-detail-section]")?.getAttribute("data-detail-section");
+
+    world().dispatchEvent(new PointerEvent("pointerover", { pointerType: "mouse", bubbles: true }));
+    expect(shown()).toBe(true);
+    world().dispatchEvent(new PointerEvent("pointerout", { pointerType: "mouse", bubbles: true }));
+    expect(shown()).toBe(false);
+    world().focus();
+    expect(shown()).toBe(true);
+    world().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(shown()).toBe(false);
+    expect(document.activeElement).toBe(world());
+
+    touch();
+    expect(active()).toBe("modules");
+    expect(shown()).toBe(true);
+    expect(world().getAttribute("aria-expanded")).toBe("true");
+    expect(preview.parentElement).toBe(document.body);
+    expect(preview.textContent).toContain("Charge Blade");
+    detail().querySelector(".hex-detail-corner")!.dispatchEvent(new PointerEvent("click", { pointerType: "touch", bubbles: true }));
+    expect(shown()).toBe(false);
+    expect(active()).toBe("modules");
+    touch();
+    expect(shown()).toBe(true);
+    touch();
+    expect(active()).toBe("world");
+    expect(world().hasAttribute("aria-describedby")).toBe(false);
+    expect(preview.isConnected).toBe(false);
+    expect(document.activeElement).toBe(section("world").querySelector("[data-detail-face]"));
+    expect(app.ui.boardLayer).toBe("world");
+
+    // The button's native keyboard activation (click with detail 0) does
+    // not require the touch-specific preview step on either layer.
+    detail().querySelector<HTMLButtonElement>('[data-legend-layer="modules"]')!.click();
+    world().focus();
+    world().click();
+    expect(active()).toBe("world");
+    expect(document.activeElement).toBe(section("world").querySelector("[data-detail-face]"));
+  });
+
   it("the rail's retrieve lands the occupant in the World tray", () => {
     seedEra();
     app.render();

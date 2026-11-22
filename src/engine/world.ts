@@ -1,10 +1,9 @@
 // Shared World reads for placement, production, time advance and UI.
-import { BALANCE, EPS } from "./constants";
+import { BALANCE } from "./constants";
 import { hexKey, neighbors, sameHex } from "./hex";
-import { requireFinite } from "./numeric";
+import { addToSum, gapTo, requireFinite, resetSum } from "./numeric";
 import type { GameState, Hex, RateSnapshot, WeaponCopy, WeaponType, WorldColumn, WorldCombatCreature, WorldConduit, WorldEnemyState, WorldGear, WorldSpell } from "./types";
 import { activeWallOf, advanceCombat, combatBoundaryOf, COMBAT, discoverySecondsOf, worldEnemiesOf } from "./world-combat";
-import { WEAPONS } from "./weapons";
 export { activeWallOf, discoverySecondsOf, syncWorldDiscoveries, worldEnemiesOf } from "./world-combat";
 export { attackPowerOf, honePowerAt } from "./weapons";
 
@@ -73,8 +72,8 @@ export function worldBoundarySeconds(state: GameState, rate: number, snapshot: P
   if (combat === Infinity || !state.world.spells.some(({ pos }) => pos !== null)) return Math.min(threshold, combat);
   const lift = columnLiftsOf(state, snapshot, undefined, true);
   if (!lift.bySpell.size) return Math.min(threshold, combat);
-  const next = nextStoreFill(worldChargeStores(state), lift);
-  return Math.min(threshold, combatBoundaryOf(state, lift.bySpell), Math.max(EPS, next));
+  // Pulse acts at full store, and an earlier full sink can change its lift.
+  return Math.min(threshold, combat, nextStoreFill(worldChargeStores(state), lift));
 }
 
 // Kept for historical balance tooling. The live purchase is retired.
@@ -177,7 +176,7 @@ function nextStoreFill(stores: readonly ChargeStore[], lift: WorldLift): number 
   let next = Infinity;
   for (const store of stores) {
     const rate = rateFor(store, lift);
-    if (rate > 0) next = Math.min(next, (store.cap - store.copy.store) / rate);
+    if (rate > 0) next = Math.min(next, Math.max(Number.MIN_VALUE, gapTo(store.copy, "store", store.cap) / rate));
   }
   return next;
 }
@@ -198,17 +197,11 @@ export function advanceWorldCharge(state: GameState, snapshot: RateSnapshot, spa
     for (const store of stores) {
       const rate = rateFor(store, lift);
       if (rate <= 0) continue;
-      if ((store.cap - store.copy.store) / rate <= span) store.copy.store = store.cap;
+      const untilFull = gapTo(store.copy, "store", store.cap) / rate;
+      if (untilFull <= span) resetSum(store.copy, "store", store.cap);
       else {
-        const delivered = rate * span;
-        if (delivered === 0) continue;
-        const total = Math.min(store.cap, store.copy.store + delivered);
-        // Normalize only newly integrated charge, within a few ulps of an
-        // authored payment. A genuinely short, unfed carried store does
-        // not become funded merely because its attack tick arrived.
-        const cost = store.kind === "weapon" ? WEAPONS[store.copy.type].chargeCost : COMBAT.spell.threshold;
-        const shortfall = cost - total;
-        store.copy.store = shortfall > 0 && shortfall <= 16 * Number.EPSILON * cost ? cost : total;
+        addToSum(store.copy, "store", rate * span, "World stored charge");
+        if (store.copy.store >= store.cap) resetSum(store.copy, "store", store.cap);
       }
     }
     remaining -= span;

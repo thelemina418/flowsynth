@@ -14,7 +14,7 @@ import { createModule, createWeapon, createWorldColumn, createWorldConduit, eraS
 import { logSessionPractice } from "./habits";
 import { plannedTargetHit } from "./records";
 import { rollGoalOccurrences } from "./goals";
-import { NumericFault } from "./numeric";
+import { NumericFault, resetSum } from "./numeric";
 import { creditFocusEarning } from "./reserves";
 import { moduleScrapValue, skipPayoutOf } from "./scrap";
 import { syncAchievements } from "./achievements";
@@ -1169,10 +1169,10 @@ export function prestige(state: GameState, tuning: PrestigeTuning = {}): ActionR
   // victory, the wounds on either side, and the layout all stand.
   resetDuelClocks(state);
   syncWorldDiscoveries(state);
-  for (const spell of state.world.spells) spell.store = 0;
+  for (const spell of state.world.spells) resetSum(spell, "store", 0);
   for (const weapon of state.world.weapons) {
-    weapon.store = 0;
-    weapon.cooldown = 0;
+    resetSum(weapon, "store", 0);
+    resetSum(weapon, "cooldown", 0);
   }
   return { ok: true, unlocked: checkUnlocks(state) };
 }

@@ -7,6 +7,7 @@ import { longGoalCost, mutatorSlotCost } from "./economy";
 import { generateOffer, type Rng } from "./rolls";
 import { BALANCE, SAVE_VERSION, WORLD_ENEMIES } from "./constants";
 import { syncWorldDiscoveries } from "./world";
+import { resetSum } from "./numeric";
 import type { BreatherState, GameState, Goal, Meter, SpecialDraftKind } from "./types";
 
 export interface SaveFile {
@@ -160,7 +161,7 @@ function lostMonetaryFigures(
     if (Array.isArray(raw.world.weapons)) {
       raw.world.weapons.forEach((weapon, index) => {
         check(weapon?.store, `world.weapons[${index}].store`, true, () => {
-          if (weapon) weapon.store = 0;
+          if (weapon) resetSum(weapon, "store", 0);
         });
       });
     }
@@ -425,6 +426,22 @@ function readSave(text: string, rng: Rng, recovery: boolean): LoadResult {
   // drop the field rather than resume a state shape this build no longer
   // reads.
   delete (merged as unknown as Record<string, unknown>).activatedApps;
+  // A damaged optional suspension ledger cannot grant World time. The
+  // legacy honesty ledger (including the full pending absence) still rides.
+  const accounting = merged.session?.accounting;
+  if (accounting?.pendingSuspensions !== undefined) {
+    let cursor = 0;
+    const valid = Array.isArray(accounting.pendingSuspensions) && accounting.pendingSuspensions.every(span => {
+      if (!span || !Number.isFinite(span.from) || !Number.isFinite(span.until) ||
+        span.from < cursor || span.until <= span.from || span.until > accounting.pendingAwaySeconds) return false;
+      cursor = span.until;
+      return true;
+    });
+    if (!valid) {
+      delete accounting.pendingSuspensions;
+      accounting.pendingOfflineFrom = 0;
+    }
+  }
   // The session's per-source rolls ledger (ADR-0041) lenient-defaults the
   // same way: a save written mid-flow before it exists resumes with zeroed
   // counts, never a crash.
@@ -556,7 +573,7 @@ function readSave(text: string, rng: Rng, recovery: boolean): LoadResult {
       return isRecord(entry) && entry.hp === 0;
     }).length;
     merged.world.enemies = freshEnemyStates();
-    for (const blade of world.weapons) blade.cooldown = 0;
+    for (const blade of world.weapons) resetSum(blade, "cooldown", 0);
     if (world.unlocked) grantCombatStarter(merged);
     combatMigration = { oldClears, discovered: world.unlocked };
   }
@@ -833,13 +850,13 @@ function migrateV12ToV13(merged: GameState, fromVersion: number, retainVictories
   // purchases above it stand.
   if (!retainVictories) merged.world.enemies = freshEnemyStates();
   else {
-    merged.world.enemyCooldown = 0;
-    for (const creature of merged.world.creatures) creature.cooldown = 0;
-    for (const spell of merged.world.spells) spell.store = 0;
+    resetSum(merged.world, "enemyCooldown", 0);
+    for (const creature of merged.world.creatures) resetSum(creature, "cooldown", 0);
+    for (const spell of merged.world.spells) resetSum(spell, "store", 0);
   }
   for (const weapon of merged.world.weapons) {
-    weapon.store = 0;
-    weapon.cooldown = 0;
+    resetSum(weapon, "store", 0);
+    resetSum(weapon, "cooldown", 0);
   }
 
   const frontierCleared = merged.world.frontier;

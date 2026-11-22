@@ -148,6 +148,40 @@ it("banks at the same 600 credited seconds after fractional ticks and reload, bu
   expect(claimForgedWeapon(fine, habit.id, "striker").ok).toBe(false);
 });
 
+it("banks Blacksmith's 100000 × 6 ms fill through reload but does not round up real missing time", () => {
+  const { state } = selectedBlacksmith();
+  start(state);
+  const long = structuredClone(state);
+  const short = structuredClone(state);
+  tick(long, 600);
+  tick(short, 600 - 5e-10);
+  expect(weaponChoicesOf(long.habits[0]!)).toBe(1);
+  let fine = state;
+  for (let i = 0; i < 100_000; i++) {
+    tick(fine, 0.006);
+    if (i === 49_999) fine = reload(fine);
+  }
+  expect(weaponChoicesOf(fine.habits[0]!)).toBe(1);
+  expect(fine.habits[0]!.classes.blacksmith!.rollMeter.progress).toBeCloseTo(0, 12);
+  expect(weaponChoicesOf(short.habits[0]!)).toBe(0);
+  // A sub-nanosecond engine advance can still supply what's missing.
+  tick(short, 600 - (600 - 5e-10));
+  expect(weaponChoicesOf(short.habits[0]!)).toBe(1);
+}, 20_000);
+
+it("counts a large representable Blacksmith credit without rounding its whole fills", () => {
+  const { state, habit } = selectedBlacksmith();
+  // Isolate one credit span after discovery and without a deployed fighter.
+  // Dividing this exactly representable integer into 600-second fills
+  // leaves 352 seconds, not an extra choice.
+  state.eraEarned = 20_000_000;
+  start(state);
+  tick(state, Number(5_404_319_552_844_593_152n));
+  expect(weaponChoicesOf(habit)).toBe(9_007_199_254_740_988);
+  expect(habit.classes.blacksmith!.rollMeter.progress).toBe(352);
+  expect(weaponChoicesOf(reload(state).habits[0]!)).toBe(9_007_199_254_740_988);
+});
+
 it("refuses an unrepresentable fill without partial credit or a duplicated choice", () => {
   const { state, habit } = selectedBlacksmith();
   // Construct the representable edge of the persisted count; a carried

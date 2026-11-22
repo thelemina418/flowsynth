@@ -3,6 +3,7 @@ import { endBreather, endSession, pauseSession, placeWorldOccupant, prestige, re
 import { advance, advanceBreather } from "./advance";
 import { hex } from "./hex";
 import { scenarioOf } from "./scenarios";
+import { deserialize, serialize } from "./save";
 import { enemyStateOf, worldFactorOf } from "./world";
 import { applyGap, flushPendingAway, resolveHonestyReport } from "./trust";
 import { syncRates } from "./economy";
@@ -90,8 +91,17 @@ it("unlocks a defeated Sentinel at the same full-HP boundary after fractional re
   expect(sentinel.recovering).toBe(true);
   const long = structuredClone(state);
   advance(long, 12, rng);
-  for (let i = 0; i < 120; i++) advance(state, 0.1, rng);
-  for (const ready of [long, state]) {
+  const short = structuredClone(state);
+  advance(short, 12 - 5e-10, rng);
+  expect(endSession(short).ok).toBe(true);
+  expect(placeWorldOccupant(short, sentinel.id, hex(0, 0)).ok).toBe(false);
+  let reloaded = structuredClone(state);
+  for (let i = 0; i < 1200; i++) {
+    advance(state, 0.01, rng);
+    advance(reloaded, 0.01, rng);
+    if (i === 599) reloaded = deserialize(serialize(reloaded, 0)).state!;
+  }
+  for (const ready of [long, state, reloaded]) {
     expect(endSession(ready).ok).toBe(true);
     expect(ready.world.creatures[0]!.hp).toBe(24);
     expect(placeWorldOccupant(ready, sentinel.id, hex(0, 0)).ok).toBe(true);
@@ -160,6 +170,37 @@ it("spends Blade charge on its own cadence and casts Pulse at its banked thresho
   advance(state, 0.1, rng);
   expect(enemyStateOf(state, "shale").hp).toBeCloseTo(before + 0.035 - 3 - 11);
   expect(state.world.spells[0]!.store).toBeCloseTo(0);
+});
+
+it("Pulse does not spend a real shortfall, even with no supply or at generator depletion", () => {
+  const state = preparedShale();
+  const spell = state.world.spells[0]!;
+  const generator = state.modules.find(m => m.type === "focusKeyed")!;
+  const short = 6 - 5e-10;
+  spell.store = short;
+  generator.reserve = 0;
+  expect(startSession(state, null).ok).toBe(true);
+  expect(advance(state, 1, rng).fault).toBeUndefined();
+  expect(enemyStateOf(state, "shale").hp).toBe(48);
+  expect(spell.store).toBe(short);
+
+  expect(endSession(state).ok).toBe(true);
+  // Two sinks share a 1/s lift. Depletion falls just short of full Pulse.
+  spell.store = 5.75;
+  generator.reserve = 0.5 - 1e-9;
+  expect(startSession(state, null).ok).toBe(true);
+  expect(advance(state, 0.5, rng).fault).toBeUndefined();
+  expect(enemyStateOf(state, "shale").hp).toBe(48);
+  expect(spell.store).toBe(short);
+  expect(generator.reserve).toBe(0);
+  expect(state.world.weapons[0]!.store).toBeCloseTo(0.25 - 5e-10, 14);
+
+  expect(endSession(state).ok).toBe(true);
+  generator.reserve = 1;
+  expect(startSession(state, null).ok).toBe(true);
+  expect(advance(state, 2e-9, rng).fault).toBeUndefined();
+  expect(enemyStateOf(state, "shale").hp).toBeCloseTo(37, 8);
+  expect(spell.store).toBeCloseTo(5e-10, 14);
 });
 
 it("hands pressure to the next wall at victory, then preserves victories and wounds at prestige", () => {

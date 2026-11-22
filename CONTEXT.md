@@ -151,7 +151,7 @@ The miniature of the owned board and immediate frontier heading the details colu
 _Avoid_: minigrid, minimap
 
 **Action rail**:
-The row of cell-specific controls below the focus-scaled stack whose contents follow the focused face — the upgrade dial and button under Modules, placement and target priority under World.
+The row of cell-specific controls below the focus-scaled stack whose contents follow the focused face — the upgrade dial and button under Modules; retrieval, bearer selection when contested, and conduit outlet selection where applicable under World.
 _Avoid_: toolbar, button bar, side rail
 
 **Layer legend**:

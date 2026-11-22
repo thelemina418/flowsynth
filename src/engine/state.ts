@@ -2,6 +2,7 @@ import { BALANCE, isOscillatorType } from "./constants";
 import { COMBAT, COMBAT_WALLS } from "./world-combat";
 import { isWeaponType, WEAPONS } from "./weapons";
 import { hex } from "./hex";
+import { restoreSumCarry } from "./numeric";
 import { ENCYCLOPEDIA_REVISION } from "./encyclopedia";
 import type { ChordDiscovery, GameState, ModuleInstance, ModuleType, MutatorFamily, MutatorInstance, Rarity, WeaponCopy, WeaponType, WorldColumn, WorldConduit, WorldState } from "./types";
 
@@ -279,14 +280,22 @@ export function normalizeWorld(raw: unknown): WorldState {
     ...(typeof item.chosenBearer === "string" && { chosenBearer: item.chosenBearer }),
   });
   world.enemyCooldown = bounded(shape.enemyCooldown, COMBAT.enemyCadence);
+  restoreSumCarry(world, "enemyCooldown", shape);
   world.elapsed = bounded(shape.elapsed, Number.MAX_VALUE);
   world.creatures = rows(shape.creatures).map((item) => {
     const hp = bounded(item.hp, COMBAT.creature.hp, COMBAT.creature.hp);
     const recovering = hp < COMBAT.creature.hp && (item.recovering === true || hp === 0);
-    return { ...columnOf(item), hp, recovering, pos: recovering ? null : hexOrTray(item.pos), cooldown: bounded(item.cooldown, COMBAT.creature.cadence) };
+    const creature = { ...columnOf(item), hp, recovering, pos: recovering ? null : hexOrTray(item.pos), cooldown: bounded(item.cooldown, COMBAT.creature.cadence) };
+    restoreSumCarry(creature, "hp", item);
+    restoreSumCarry(creature, "cooldown", item);
+    return creature;
   });
   world.armor = rows(shape.armor).map(gearOf);
-  world.spells = rows(shape.spells).map((item) => ({ ...gearOf(item), store: bounded(item.store, COMBAT.spell.threshold) }));
+  world.spells = rows(shape.spells).map((item) => {
+    const spell = { ...gearOf(item), store: bounded(item.store, COMBAT.spell.threshold) };
+    restoreSumCarry(spell, "store", item);
+    return spell;
+  });
   world.conduits = rows(shape.conduits).map((item) => ({ ...columnOf(item), direction: Math.floor(bounded(item.direction, 5, 2)) }));
   if (Array.isArray(shape.columns)) {
     for (const column of shape.columns) {
@@ -305,12 +314,15 @@ export function normalizeWorld(raw: unknown): WorldState {
       const type = isWeaponType(candidate.type) ? candidate.type : "chargeBlade";
       const store = typeof candidate.store === "number" && Number.isFinite(candidate.store) && candidate.store > 0 ? candidate.store : 0;
       const cooldown = typeof candidate.cooldown === "number" && Number.isFinite(candidate.cooldown) && candidate.cooldown > 0 ? candidate.cooldown : 0;
-      world.weapons.push({
+      const copy = {
         ...gearOf(candidate),
         type,
         store: Math.min(store, BALANCE.world.storageCap),
         cooldown: Math.min(cooldown, WEAPONS[type].cadence),
-      });
+      };
+      restoreSumCarry(copy, "store", candidate);
+      restoreSumCarry(copy, "cooldown", candidate);
+      world.weapons.push(copy);
     }
   }
   if (typeof shape.hone === "object" && shape.hone !== null) {
@@ -327,10 +339,9 @@ export function normalizeWorld(raw: unknown): WorldState {
       if (!def || typeof value !== "object" || value === null) continue;
       const candidate = value as Record<string, unknown>;
       const hp = typeof candidate.hp === "number" && Number.isFinite(candidate.hp) ? candidate.hp : def.maxHp;
-      world.enemies[key] = {
-        discovered: candidate.discovered === true,
-        hp: Math.min(Math.max(hp, 0), def.maxHp),
-      };
+      const enemy = { discovered: candidate.discovered === true, hp: Math.min(Math.max(hp, 0), def.maxHp) };
+      restoreSumCarry(enemy, "hp", candidate);
+      world.enemies[key] = enemy;
     }
   }
   return world;

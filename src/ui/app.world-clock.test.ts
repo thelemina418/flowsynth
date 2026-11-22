@@ -11,7 +11,7 @@ import { createAppFixture, setVisibility } from "./testing/app-fixture";
 
 const fixture = createAppFixture();
 const savedAt = 1_000_000;
-afterEach(() => { fixture.release(); vi.restoreAllMocks(); });
+afterEach(() => { fixture.release(); setVisibility("visible"); vi.restoreAllMocks(); });
 
 function readyFight() {
   const state = createInitialState();
@@ -93,6 +93,127 @@ it("a cached page restore credits the closed stretch without attacking or healin
   window.dispatchEvent(restore);
   expect(app.state.session!.accounting.creditedSeconds).toBe(20);
   expect(app.state.world).toEqual(before);
+});
+
+function setClock() {
+  const monotonic = vi.spyOn(performance, "now").mockReturnValue(0);
+  return (seconds: number) => {
+    vi.mocked(Date.now).mockReturnValue(savedAt + seconds * 1000);
+    monotonic.mockReturnValue(seconds * 1000);
+  };
+}
+
+function visibility(state: "visible" | "hidden") {
+  setVisibility(state);
+  document.dispatchEvent(new Event("visibilitychange"));
+}
+
+function pageTransition(type: "pagehide" | "pageshow") {
+  const event = new Event(type);
+  Object.defineProperty(event, "persisted", { value: true });
+  window.dispatchEvent(event);
+}
+
+it.each(["resume first", "visibility first", "cache first"])("settles a document freeze once with both clocks advancing (%s)", (order) => {
+  const state = readyFight();
+  const sentinel = state.world.creatures[0]!;
+  state.world.creatures.push({ ...sentinel, id: "resting", pos: null, hp: 4, recovering: true });
+  expect(startSession(state, 600).ok).toBe(true);
+  const clock = setClock();
+  const app = reloadAfter(state, 0);
+  const gap = () => app.state.session!.accounting;
+  const world = () => app.state.world;
+
+  clock(1); visibility("hidden");
+  clock(2); document.dispatchEvent(new Event("freeze"));
+  if (order === "cache first") pageTransition("pagehide");
+  clock(12); app.tick(); // A queued tick cannot move the suspended boundary.
+  expect(world().elapsed).toBe(1);
+  expect(gap().pendingAwaySeconds).toBe(1);
+  clock(22);
+  if (order === "resume first") {
+    document.dispatchEvent(new Event("resume"));
+    // This now-running tab stays hidden another second.
+    clock(23); visibility("visible");
+  } else if (order === "visibility first") {
+    visibility("visible");
+    document.dispatchEvent(new Event("resume"));
+  } else {
+    pageTransition("pageshow");
+    document.dispatchEvent(new Event("resume"));
+    visibility("visible");
+  }
+  const online = order === "resume first" ? 3 : 2;
+  expect(gap()).toMatchObject({ creditedSeconds: online + 20, poolSeconds: 0, pendingAwaySeconds: 0 });
+  expect(world().elapsed).toBe(online);
+  expect(app.state.nous).toBeCloseTo(state.nous + (online + 20) * 0.08, 8);
+  expect(world().creatures.map(({ hp }) => hp)).toEqual([24, 4 + 2 * online]);
+  expect(world().enemies.shale!.hp).toBe(48);
+
+  clock(24); window.dispatchEvent(new Event("focus"));
+  expect(gap()).toMatchObject({ creditedSeconds: 24, poolSeconds: 0, pendingAwaySeconds: 0 });
+  expect(world().elapsed).toBe(4);
+  expect(world().creatures.map(({ hp }) => hp)).toEqual([18, 12]);
+});
+
+it("applies the plan to the whole frozen absence and never retro-fights on its honesty answer", () => {
+  const state = readyFight();
+  expect(startSession(state, 600).ok).toBe(true);
+  const clock = setClock();
+  const app = reloadAfter(state, 0);
+  clock(2); visibility("hidden");
+  clock(3); document.dispatchEvent(new Event("freeze"));
+  clock(603); document.dispatchEvent(new Event("resume"));
+  clock(605); visibility("visible");
+  const gap = () => app.state.session!.accounting;
+  expect(gap()).toMatchObject({ creditedSeconds: 600, pendingAwaySeconds: 0, poolSeconds: 5 });
+  expect(gap().bucketNous).toBeCloseTo(0.4, 9);
+  expect(app.state.nous).toBeCloseTo(state.nous + 600 * 0.08, 8);
+  expect(app.state.world.elapsed).toBe(3);
+  expect(app.state.world.creatures[0]!.hp).toBe(24);
+  app.resolveHonesty("full");
+  expect(gap()).toMatchObject({ creditedSeconds: 605, poolSeconds: 0, bucketNous: 0 });
+  expect(app.state.nous).toBeCloseTo(state.nous + 605 * 0.08, 8);
+  expect(app.state.world.elapsed).toBe(3);
+  expect(app.state.world.creatures[0]!.hp).toBe(24);
+});
+
+it("an observed bfcache departure preserves the active tail when resume precedes pageshow", () => {
+  const state = readyFight();
+  expect(startSession(state, 600).ok).toBe(true);
+  const clock = setClock();
+  const app = reloadAfter(state, 0);
+  clock(2); visibility("hidden"); pageTransition("pagehide");
+  clock(22); document.dispatchEvent(new Event("resume"));
+  clock(24); pageTransition("pageshow"); visibility("visible");
+  expect(app.state.session!.accounting.creditedSeconds).toBe(24);
+  expect(app.state.world.elapsed).toBe(4);
+  expect(app.state.world.creatures[0]!.hp).toBe(18);
+});
+
+it("a frozen breather banks the allowance without recovering, then returns to preparation", () => {
+  const state = readyFight();
+  const sentinel = state.world.creatures[0]!;
+  expect(startSession(state, 600).ok).toBe(true);
+  advance(state, 600, () => 0.3);
+  expect(endSession(state, savedAt).ok).toBe(true);
+  expect(sentinel.hp).toBe(24);
+  // Carry a defeated creature into the breather's tray without changing
+  // its earned allowance or the preparation commands under test.
+  sentinel.hp = 4;
+  sentinel.pos = null;
+  sentinel.recovering = true;
+  expect(startBreather(state, savedAt).ok).toBe(true);
+  const clock = setClock();
+  const app = reloadAfter(state, 0);
+  const worldBefore = app.state.world.elapsed;
+  clock(2); document.dispatchEvent(new Event("freeze"));
+  clock(202); document.dispatchEvent(new Event("resume"));
+  expect(app.state.mode).toBe("upgrade");
+  expect(app.state.breatherSeconds).toBe(120);
+  expect(app.state.nous).toBeGreaterThan(state.nous);
+  expect(app.state.world.elapsed).toBe(worldBefore + 2);
+  expect(app.state.world.creatures[0]!.hp).toBe(8);
 });
 
 it("paused reload does not bank time or fire a carried ready attack", () => {
