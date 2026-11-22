@@ -9,6 +9,7 @@ import { discoveryBoostOf, discoveryCount, syncChordDiscoveries } from "./librar
 import { summaryTermsOf } from "./allocation";
 import { worldFactorOf } from "./world";
 import { adjacent } from "./hex";
+import { addCharge, noCharge, scaleCharge, type ChargeAmount } from "./charge-amount";
 import type { Contribution, DeployedModule, GameState, Hex, ModuleInstance, ModuleType, MutatorFamily, MutatorInstance, Rarity, RateSnapshot } from "./types";
 
 export function chargedFactor(strength: number): number {
@@ -265,16 +266,30 @@ export function flowLive(state: GameState): boolean {
   return state.mode === "flow" || state.mode === "breather";
 }
 
+// Board reads use ordinary rates. World transfer runs the same reception
+// graph on the actual generator quantities debited in this span.
+interface ChargeRead<T> {
+  zero: T;
+  add: (a: T, b: T) => T;
+  scale: (quantity: T, factor: number) => T;
+  emission: (generator: ModuleInstance) => T;
+  emitting: (generator: ModuleInstance) => boolean;
+}
+
+function rateRead(emission: (generator: ModuleInstance) => number): ChargeRead<number> {
+  return { zero: 0, add: (a, b) => a + b, scale: (a, factor) => a * factor, emission, emitting: generator => emission(generator) > 0 };
+}
+
 // Raw generator output into one cell: the sum of adjacent deployed
 // generators' output — generators never divide output among neighbors.
-function generatorStrengthAt(state: GameState, pos: Hex, flow: boolean): number {
-  let strength = 0;
+function generatorOutputAt<T>(state: GameState, pos: Hex, read: ChargeRead<T>): T {
+  let output = read.zero;
   for (const generator of deployedGenerators(state)) {
     if (generator.pos !== null && adjacent(pos, generator.pos)) {
-      strength += emittedStrength(state, generator, flow);
+      output = read.add(output, read.emission(generator));
     }
   }
-  return strength;
+  return output;
 }
 
 // The amplifier relay net (ADR-0048): each amplifier receives from
@@ -282,39 +297,27 @@ function generatorStrengthAt(state: GameState, pos: Hex, flow: boolean): number 
 // depth, re-broadcasting at received × its level-scaled gain. The
 // hop-depth cap bounds the chain — an amplifier beyond it relays nothing,
 // which is what guards cycles (equal depths never feed each other).
-interface RelayNet {
+interface RelayNet<T = number> {
   // Amplifier id → generators + lower amplifiers' relays, with the
   // host's charge mutator applied.
-  received: Map<string, number>;
-  // Amplifier id → its re-broadcast strength (received × gain).
-  relay: Map<string, number>;
+  receivedAt: (amplifier: ModuleInstance) => T | undefined;
+  // An amplifier's re-broadcast (received × gain).
+  relayOf: (amplifier: ModuleInstance) => T | undefined;
+  read: ChargeRead<T>;
 }
 
-function relayNet(state: GameState, flow: boolean): RelayNet {
+function relayNet<T>(state: GameState, read: ChargeRead<T>): RelayNet<T> {
   const amplifiers = deployed(state).filter((m) => m.type === "amplifier");
-  const received = new Map<string, number>();
-  const relay = new Map<string, number>();
   const depth = new Map<string, number>();
   // Empty generators cannot anchor a relay depth: they must not cut off
   // charge arriving through an emitting generator's longer path.
   let frontier = amplifiers.filter((amp) =>
-    deployedGenerators(state).some((g) => emittedStrength(state, g, flow) > 0 && adjacent(amp.pos!, g.pos!)),
+    deployedGenerators(state).some((g) => read.emitting(g) && adjacent(amp.pos!, g.pos!)),
   );
   let level = 1;
   while (frontier.length > 0 && level <= BALANCE.amplifierHopCap) {
     const next: ModuleInstance[] = [];
-    for (const amp of frontier) {
-      depth.set(amp.id, level);
-      let strength = generatorStrengthAt(state, amp.pos!, flow);
-      for (const other of amplifiers) {
-        if (depth.get(other.id) === level - 1 && adjacent(amp.pos!, other.pos!)) {
-          strength += relay.get(other.id) ?? 0;
-        }
-      }
-      strength *= 1 + chargeMagnitudeAt(state, amp.pos);
-      received.set(amp.id, strength);
-      relay.set(amp.id, strength * amplifierGainOf(amp));
-    }
+    for (const amp of frontier) depth.set(amp.id, level);
     for (const amp of amplifiers) {
       if (depth.has(amp.id)) continue;
       if (frontier.some((f) => adjacent(f.pos!, amp.pos!))) next.push(amp);
@@ -322,7 +325,36 @@ function relayNet(state: GameState, flow: boolean): RelayNet {
     frontier = next;
     level++;
   }
-  return { received, relay };
+  // Read only the paths a receiver uses. A large, unrelated amplifier
+  // must not force an integrated World quantity to fit in a Column that
+  // cannot receive it. Paths and arithmetic order are the same as rates.
+  const received = new Map<string, T>();
+  const relay = new Map<string, T>();
+  const receivedAt = (amp: ModuleInstance): T | undefined => {
+    const hop = depth.get(amp.id);
+    if (hop === undefined) return;
+    const prior = received.get(amp.id);
+    if (prior !== undefined) return prior;
+    let output = generatorOutputAt(state, amp.pos!, read);
+    for (const other of amplifiers) {
+      if (depth.get(other.id) === hop - 1 && adjacent(amp.pos!, other.pos!)) {
+        output = read.add(output, relayOf(other) ?? read.zero);
+      }
+    }
+    output = read.scale(output, 1 + chargeMagnitudeAt(state, amp.pos));
+    received.set(amp.id, output);
+    return output;
+  };
+  const relayOf = (amp: ModuleInstance): T | undefined => {
+    const prior = relay.get(amp.id);
+    if (prior !== undefined) return prior;
+    const input = receivedAt(amp);
+    if (input === undefined) return;
+    const output = read.scale(input, amplifierGainOf(amp));
+    relay.set(amp.id, output);
+    return output;
+  };
+  return { receivedAt, relayOf, read };
 }
 
 // A generator's charge output: strength scales with its amplitude (level
@@ -343,26 +375,59 @@ function relayNet(state: GameState, flow: boolean): RelayNet {
 export function emittedStrength(state: GameState, module: ModuleInstance, flow: boolean): number {
   if (!flow || CATEGORY_OF[module.type] !== "generator" || module.pos === null) return 0;
   if (module.reserve <= EPS) return 0;
+  return generatorStrengthOf(state, module);
+}
+
+// World transfer can use a positive remainder below the Modules read's
+// live-strength threshold; it uses the very same physical emission rate.
+export function generatorStrengthOf(state: GameState, module: ModuleInstance): number {
   return hostPower(state, module) * productionClockFactorOf(module.type, sessionClockOf(state));
 }
 
 // The charge a module receives, read off a relay net — the one shared read
 // the rate pass and its supporting passes (booster grants, infusor uplift)
 // walk.
-function receivedOn(state: GameState, module: ModuleInstance, flow: boolean, placed: ModuleInstance[], net: RelayNet): number {
-  if (module.pos === null || !CHARGE_RECEIVING_CATEGORIES.includes(CATEGORY_OF[module.type])) return 0;
+function receivedOn<T>(state: GameState, module: ModuleInstance, placed: ModuleInstance[], net: RelayNet<T>): T {
+  const { read } = net;
+  if (module.pos === null || !CHARGE_RECEIVING_CATEGORIES.includes(CATEGORY_OF[module.type])) return read.zero;
   if (module.type === "amplifier") {
     // Its own received: what the relay pass credited it — generators plus
     // strictly-lower-depth relays — before its re-broadcast gain.
-    return net.received.get(module.id) ?? 0;
+    return net.receivedAt(module) ?? read.zero;
   }
-  let strength = generatorStrengthAt(state, module.pos, flow);
+  let output = generatorOutputAt(state, module.pos, read);
   for (const amplifier of placed) {
-    if (amplifier.type !== "amplifier") continue;
-    const out = net.relay.get(amplifier.id);
-    if (out !== undefined && adjacent(module.pos, amplifier.pos!)) strength += out;
+    if (amplifier.type !== "amplifier" || !adjacent(module.pos, amplifier.pos!)) continue;
+    const out = net.relayOf(amplifier);
+    if (out !== undefined) output = read.add(output, out);
   }
-  return strength * (1 + chargeMagnitudeAt(state, module.pos));
+  return read.scale(output, 1 + chargeMagnitudeAt(state, module.pos));
+}
+
+// A Column still copies the charge received by its host, not the
+// underneath generator's own output. Keep active relay depths fixed
+// while settling a span, even if the final debit empties a generator.
+export function worldChargeReception(state: GameState, emitters: ReadonlyMap<string, number>) {
+  const placed = deployed(state);
+  const emitting = (module: ModuleInstance) => emitters.has(module.id);
+  const receive = <T>(hosts: ReadonlySet<string>, read: ChargeRead<T>): Map<string, T> => {
+    const net = relayNet(state, read);
+    return new Map(placed.filter(module => hosts.has(module.id)).map(module => [module.id, receivedOn(state, module, placed, net)]));
+  };
+  return {
+    sources(hosts: ReadonlySet<string>) {
+      const inputs = receive(hosts, {
+        zero: [] as string[], add: (a, b) => a.concat(b), scale: (ids, gain) => gain > 0 ? ids : [],
+        emission: module => emitting(module) ? [module.id] : [], emitting,
+      });
+      return new Set([...inputs.values()].flat());
+    },
+    rates: (hosts: ReadonlySet<string>) => receive(hosts, rateRead(generator => emitters.get(generator.id) ?? 0)),
+    amounts: (hosts: ReadonlySet<string>, output: ReadonlyMap<string, ChargeAmount>) => receive(hosts, {
+      zero: noCharge, add: addCharge, scale: scaleCharge,
+      emission: generator => output.get(generator.id) ?? noCharge, emitting,
+    }),
+  };
 }
 
 // Received charge: adjacent generators' output plus every relaying
@@ -376,7 +441,6 @@ function receivedOn(state: GameState, module: ModuleInstance, flow: boolean, pla
 function infusorBonusAt(
   state: GameState,
   module: ModuleInstance,
-  flow: boolean,
   placed: ModuleInstance[],
   net: RelayNet,
 ): number {
@@ -390,7 +454,7 @@ function infusorBonusAt(
     if (CATEGORY_OF[other.type] !== "booster" || other.pos === null) continue;
     if (boosterTermOf(other.type) !== "amplitude") continue;
     if (!adjacent(module.pos, other.pos)) continue;
-    total += boosterGrantAt(state, other, module, flow, placed, net);
+    total += boosterGrantAt(state, other, module, placed, net);
   }
   return total;
 }
@@ -520,13 +584,12 @@ function boosterGrantAt(
   state: GameState,
   booster: ModuleInstance,
   module: ModuleInstance,
-  flow: boolean,
   placed: ModuleInstance[],
   net: RelayNet,
 ): number {
   if (!isOscillatorType(module.type)) return 0;
   if (booster.type === "spotlight" && spotlightRecipientOf(state, booster)?.id !== module.id) return 0;
-  return boosterBonusOf(booster.type) * hostPower(state, booster) * chargedFactor(receivedOn(state, booster, flow, placed, net));
+  return boosterBonusOf(booster.type) * hostPower(state, booster) * chargedFactor(receivedOn(state, booster, placed, net));
 }
 
 // The chord pass the rate snapshot runs over its deployed voices — the
@@ -577,9 +640,9 @@ export function computeRates(
 ): RateSnapshot {
   const contributions = new Map<string, Contribution>();
   const chargeStrength = new Map<string, number>();
-  const net = relayNet(state, flow);
+  const net = relayNet(state, rateRead(generator => emittedStrength(state, generator, flow)));
   const placed = deployed(state) as DeployedModule[];
-  const strengthOf = (module: ModuleInstance): number => receivedOn(state, module, flow, placed, net);
+  const strengthOf = (module: ModuleInstance): number => receivedOn(state, module, placed, net);
 
   const achievementBoost = achievementBoostOf(state);
   const discoveryBoost = discoveryBoostOf(state);
@@ -628,7 +691,7 @@ export function computeRates(
       // The type's authored booster response (issue #369) scales how much
       // of the granted bonus the term receives — a Sine converts half.
       const localBonus =
-        (category === "silentVoice" ? 0 : infusorBonusAt(state, deployedModule, flow, placed, net)) *
+        (category === "silentVoice" ? 0 : infusorBonusAt(state, deployedModule, placed, net)) *
         boosterResponseOf(deployedModule.type);
       // The charge term each producer applies: filled in pass one and a
       // half below — it reads the Exciter's grants (issue #376), which

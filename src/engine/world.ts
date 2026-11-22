@@ -1,7 +1,8 @@
 // Shared World reads for placement, production, time advance and UI.
 import { BALANCE } from "./constants";
 import { hexKey, neighbors, sameHex } from "./hex";
-import { addToSum, gapTo, requireFinite, resetSum } from "./numeric";
+import { addToSum, gapTo, NumericFault, requireFinite, resetSum } from "./numeric";
+import { addCharge, divideCharge, noCharge, scaleCharge, type ChargeAmount } from "./charge-amount";
 import type { GameState, Hex, RateSnapshot, WeaponCopy, WeaponType, WorldColumn, WorldCombatCreature, WorldConduit, WorldEnemyState, WorldGear, WorldSpell } from "./types";
 import { activeWallOf, advanceCombat, combatBoundaryOf, COMBAT, discoverySecondsOf, worldEnemiesOf } from "./world-combat";
 export { activeWallOf, discoverySecondsOf, syncWorldDiscoveries, worldEnemiesOf } from "./world-combat";
@@ -108,7 +109,7 @@ function worldChargeStores(state: GameState): ChargeStore[] {
   ];
 }
 
-function worldLiftRoutes(state: GameState, snapshot: Pick<RateSnapshot, "chargeStrength">, override?: WorldMove) {
+function worldLiftRoutes(state: GameState, override?: WorldMove) {
   const positionOf = (copy: WorldColumn): Hex | null => override?.id === copy.id ? override.pos : copy.pos;
   const conduits = new Map(state.world.conduits.flatMap((copy) => {
     const p = positionOf(copy);
@@ -123,8 +124,7 @@ function worldLiftRoutes(state: GameState, snapshot: Pick<RateSnapshot, "chargeS
     const pos = positionOf(column);
     if (!pos) return [];
     const module = state.modules.find((m) => m.pos !== null && sameHex(m.pos, pos));
-    const supply = module ? snapshot.chargeStrength.get(module.id) ?? 0 : 0;
-    if (supply <= 0) return [];
+    if (!module) return [];
     const visited = new Set<string>();
     const consumers: ChargeStore[] = [];
     // A conduit only forwards along its selected edge. Traversing each
@@ -141,16 +141,30 @@ function worldLiftRoutes(state: GameState, snapshot: Pick<RateSnapshot, "chargeS
         next = neighbors(next)[conduit.direction]!;
       }
     }
-    return [{ column, supply, consumers }];
+    return [{ column, hostId: module.id, consumers }];
   });
 }
 
-type LiftRoutes = ReturnType<typeof worldLiftRoutes>;
-function liftRates(routes: LiftRoutes, bounded: boolean): WorldLift {
+export function connectedWorldChargeHosts(state: GameState): Set<string> {
+  return new Set(worldLiftRoutes(state).filter(({ consumers }) => consumers.length > 0).map(({ hostId }) => hostId));
+}
+
+function suppliedRoutes(state: GameState, snapshot: Pick<RateSnapshot, "chargeStrength">, override?: WorldMove) {
+  return worldLiftRoutes(state, override).flatMap(route => {
+    const supply = snapshot.chargeStrength.get(route.hostId) ?? 0;
+    return supply <= 0 ? [] : [{ ...route, supply }];
+  });
+}
+
+function openStores(consumers: ChargeStore[]): ChargeStore[] {
+  return consumers.filter(({ copy, cap }) => copy.store < cap);
+}
+
+function liftRates(routes: ReturnType<typeof suppliedRoutes>, bounded: boolean): WorldLift {
   const lift: WorldLift = { byColumn: new Map(), byWeapon: new Map(), bySpell: new Map() };
   for (const { column, supply, consumers } of routes) {
     lift.byColumn.set(column.id, supply);
-    const open = consumers.filter(({ copy, cap }) => !bounded || copy.store < cap);
+    const open = bounded ? openStores(consumers) : consumers;
     for (const { copy, kind } of open) {
       const rates = kind === "weapon" ? lift.byWeapon : lift.bySpell;
       rates.set(copy.id, requireFinite((rates.get(copy.id) ?? 0) + supply / open.length, "World charge per second"));
@@ -165,7 +179,7 @@ export function columnLiftsOf(
   override?: WorldMove,
   bounded = false,
 ): WorldLift {
-  return liftRates(worldLiftRoutes(state, snapshot, override), bounded);
+  return liftRates(suppliedRoutes(state, snapshot, override), bounded);
 }
 
 function rateFor(store: ChargeStore, lift: WorldLift): number {
@@ -182,28 +196,42 @@ function nextStoreFill(stores: readonly ChargeStore[], lift: WorldLift): number 
 }
 
 // Integrate all Columns simultaneously so a shared full reserve releases
-// exactly its left-over share. This also runs on provisional spans; only
-// the damage and recovery leg is gated by trusted World time.
-export function advanceWorldCharge(state: GameState, snapshot: RateSnapshot, spanSeconds: number): void {
-  if (!state.world.columns.length || !snapshot.chargeStrength.size) return;
-  const routes = worldLiftRoutes(state, snapshot);
+// its remaining share. Rates decide the split boundaries; the live board
+// supplies the actual quantities at those boundaries, including the last
+// debit of a generator. Only damage and recovery require trusted time.
+export function advanceWorldCharge(
+  state: GameState, snapshot: Pick<RateSnapshot, "chargeStrength">, spanSeconds: number,
+  settle?: (seconds: number, last: boolean, hosts: ReadonlySet<string>) => ReadonlyMap<string, ChargeAmount>,
+): void {
+  const routes = suppliedRoutes(state, snapshot);
   const stores = worldChargeStores(state);
   let remaining = spanSeconds;
   while (remaining > 0) {
     const lift = liftRates(routes, true);
     const fill = nextStoreFill(stores, lift);
-    if (fill === Infinity) return;
-    const span = Math.min(fill, remaining);
-    for (const store of stores) {
-      const rate = rateFor(store, lift);
-      if (rate <= 0) continue;
-      const untilFull = gapTo(store.copy, "store", store.cap) / rate;
-      if (untilFull <= span) resetSum(store.copy, "store", store.cap);
-      else {
-        addToSum(store.copy, "store", rate * span, "World stored charge");
-        if (store.copy.store >= store.cap) resetSum(store.copy, "store", store.cap);
-      }
+    if (fill === Infinity) {
+      settle?.(remaining, true, new Set());
+      return;
     }
-    remaining -= span;
+    const span = Math.min(fill, remaining);
+    const openRoutes = routes.map(({ consumers, ...route }) => ({ ...route, open: openStores(consumers) }))
+      .filter(({ open }) => open.length > 0);
+    const amounts = settle?.(span, span === remaining, new Set(openRoutes.map(({ hostId }) => hostId)));
+    const deposits = new Map<ChargeStore, ChargeAmount>();
+    for (const { hostId, supply, open } of openRoutes) {
+      const amountsAtHost = amounts ? amounts.get(hostId) ?? noCharge : scaleCharge([supply, 0], span);
+      const share = divideCharge(amountsAtHost, open.length);
+      for (const store of open) deposits.set(store, addCharge(deposits.get(store) ?? noCharge, share));
+    }
+    let stored = false;
+    for (const [{ copy, cap }, [amount, low]] of deposits) {
+      const before = copy.store, carry = copy.storeCarry;
+      addToSum(copy, "store", amount, "World stored charge", low);
+      if (copy.store >= cap) resetSum(copy, "store", cap);
+      stored ||= before !== copy.store || carry !== copy.storeCarry;
+    }
+    const rest = remaining - span;
+    if (rest === remaining && !stored) throw new NumericFault("World charge cannot advance to its next store boundary");
+    remaining = rest;
   }
 }

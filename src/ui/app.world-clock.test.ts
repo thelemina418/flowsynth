@@ -7,7 +7,7 @@ import { give } from "../engine/fixtures";
 import { serialize, STORAGE_KEY } from "../engine/save";
 import { createInitialState } from "../engine/state";
 import { memorySaveStorage, SharedSave } from "./shared-save";
-import { createAppFixture, setVisibility } from "./testing/app-fixture";
+import { clickCell, createAppFixture, setAppWidth, setVisibility } from "./testing/app-fixture";
 
 const fixture = createAppFixture();
 const savedAt = 1_000_000;
@@ -102,6 +102,71 @@ function setClock() {
     monotonic.mockReturnValue(seconds * 1000);
   };
 }
+
+it.each(["second touch", "unfocused touch", "Escape", "tap-away", "different Hex", "different layer", "Return and reopen"])(
+  "keeps the inactive miniature's touch disclosure scoped across live detail rebuilds (%s)", (action) => {
+    const state = readyFight();
+    expect(startSession(state, null).ok).toBe(true);
+    const clock = setClock();
+    const app = reloadAfter(state, 0);
+    setAppWidth(390);
+    clickCell(0, 0);
+    const mini = (face = "world") => document.querySelector<HTMLButtonElement>(`#hex-detail [data-legend-layer="${face}"]`)!;
+    const body = (face = "world") => document.getElementById(mini(face).getAttribute("aria-describedby")!)!;
+    const tap = (face = "world") => {
+      const button = mini(face);
+      button.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "touch", bubbles: true }));
+      if (action !== "unfocused touch") button.focus(); // Mobile activation can also focus the trigger.
+      button.dispatchEvent(new PointerEvent("click", { pointerType: "touch", detail: 1, bubbles: true }));
+    };
+    const first = mini();
+    tap();
+    expect(app.ui.detail?.face).toBe("modules");
+    expect(body().classList.contains("inst-show")).toBe(true);
+    if (action === "Escape") first.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    if (action === "tap-away") document.querySelector("#hex-detail .hex-detail-corner")!.dispatchEvent(new PointerEvent("click", { pointerType: "touch", bubbles: true }));
+    if (action === "different Hex") {
+      // Navigate away and back without another touch on the miniature.
+      app.openDetail(hex(1, 0), "modules");
+      expect(mini().getAttribute("aria-expanded")).not.toBe("true");
+      app.openDetail(hex(0, 0), "modules");
+    }
+    if (action === "different layer") {
+      app.detailFace("world");
+      expect(mini().hasAttribute("aria-describedby")).toBe(false);
+      app.detailFace("modules");
+    }
+    if (action === "Return and reopen") {
+      const firstTip = body();
+      document.getElementById("hex-detail-return")!.click();
+      expect(app.ui.detail).toBeNull();
+      expect(firstTip.isConnected).toBe(false);
+      clickCell(0, 0);
+    }
+    const carry = action === "second touch" || action === "unfocused touch";
+    if (!carry) expect(mini().getAttribute("aria-expanded")).not.toBe("true");
+
+    const beforeTick = mini();
+    clock(0.1);
+    app.tick();
+    expect(app.state.world.elapsed).toBe(0.1);
+    expect(mini()).not.toBe(beforeTick);
+    expect(body().classList.contains("inst-show")).toBe(carry);
+    expect(mini().getAttribute("aria-expanded")).toBe(String(carry));
+    if (action === "Escape" || action === "tap-away") expect(document.activeElement).toBe(mini());
+    tap();
+    if (!carry) {
+      expect(app.ui.detail?.face).toBe("modules");
+      expect(body().classList.contains("inst-show")).toBe(true);
+      clock(0.2);
+      app.tick();
+      tap();
+    }
+    expect(app.ui.detail?.face).toBe("world");
+    expect(app.ui.boardLayer).toBe("world");
+    expect(mini().hasAttribute("aria-describedby")).toBe(false);
+  },
+);
 
 function visibility(state: "visible" | "hidden") {
   setVisibility(state);

@@ -151,7 +151,7 @@ function lostMonetaryFigures(
       if (module) module.invested = 0;
     });
     check(module?.reserve, `modules[${index}].reserve`, false, () => {
-      if (module) module.reserve = 0;
+      if (module) resetSum(module, "reserve", 0);
     });
   });
   if (isRecord(raw.world)) {
@@ -832,7 +832,7 @@ function migrateV12ToV13(merged: GameState, fromVersion: number, retainVictories
     if (module.level !== 0 || module.invested) modulesCleared++;
     module.level = 0;
     module.invested = 0;
-    module.reserve = 0;
+    resetSum(module, "reserve", 0);
   }
 
   const eraEarnedCleared = merged.eraEarned;

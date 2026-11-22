@@ -20,7 +20,7 @@ import { escapeHtml } from "./focus";
 import { worldEntered, bindWorldDrag, worldChassisHtml } from "./world";
 import { META, RARITY_LABEL, tierWord } from "./meta";
 import { isPhoneWidth, scrollTopOf } from "./container";
-import { wireTooltips } from "./instrument";
+import { isTooltipPinned, restoreTooltipPin, wireTooltips } from "./instrument";
 import { chargeHelpHtml, bindChargeHelp, chordsHelpHtml, bindChordsHelp } from "./encyclopedia";
 import { profileGradesHtml } from "./profile";
 import { moduleFlowsHtml } from "./hexflows";
@@ -227,8 +227,16 @@ export function renderHexDetail(app: App, live: RateSnapshot, projected: RateSna
   // scroll, and retire portaled tooltips before reusing chord disclosure IDs.
   // Scroll comes from the initial layout batch, before other surfaces
   // write; the new stack restores that captured position.
+  const coord = `${pos.q},${pos.r}`;
+  const scene = host.querySelector<HTMLElement>(".hex-detail-scene");
+  const sameView = scene?.dataset.coord === coord && scene.dataset.face === detail.face;
+  const pinnedLayer = sameView
+    ? [...host.querySelectorAll<HTMLButtonElement>("[data-legend-layer].inst-tip-trigger")].find(isTooltipPinned)?.dataset.legendLayer
+    : undefined;
   const focused = document.activeElement;
-  const focusAttribute = focused instanceof Element && host.contains(focused)
+  const miniFocused = focused?.hasAttribute("data-legend-layer");
+  const restoreClosedMini = miniFocused && focused?.getAttribute("aria-expanded") === "false";
+  const focusAttribute = focused instanceof Element && host.contains(focused) && (!miniFocused || sameView)
     ? ["id", "data-ctx-cell", "data-ctx-navigation", "data-legend-layer", "data-detail-face", "data-bulk", "data-shift", "data-target", "data-world-edge", "data-world-bearer", "aria-describedby"]
         .find((attribute) => focused.hasAttribute(attribute))
     : undefined;
@@ -239,7 +247,7 @@ export function renderHexDetail(app: App, live: RateSnapshot, projected: RateSna
   host.dataset.renderKey = key;
   host.classList.toggle("sheet", phone);
   host.innerHTML = `
-    <div class="hex-detail-scene${flow ? " readonly" : ""}${state.mode === "flow" || state.mode === "breather" ? " flow-live" : ""}" data-face="${detail.face}">
+    <div class="hex-detail-scene${flow ? " readonly" : ""}${state.mode === "flow" || state.mode === "breather" ? " flow-live" : ""}" data-face="${detail.face}" data-coord="${coord}">
       <div class="hex-detail-corner">
         <button class="hex-detail-return" id="hex-detail-return">Return</button>
         ${flow ? `<span class="hex-detail-readonly">${state.mode === "flow" ? "flow live" : state.mode === "breather" ? "breathing" : "paused"} · read-only</span>` : ""}
@@ -264,7 +272,6 @@ export function renderHexDetail(app: App, live: RateSnapshot, projected: RateSna
     app.listen(chassis, "click", () => app.detailFace(face));
   });
   host.querySelectorAll<HTMLButtonElement>("[data-legend-layer]").forEach(button => {
-    const tip = button.closest(".inst-tip");
     let touch = false;
     app.listen(button, "pointerdown", event => { touch = event.pointerType === "touch"; });
     app.listen(button, "pointercancel", () => { touch = false; });
@@ -274,7 +281,7 @@ export function renderHexDetail(app: App, live: RateSnapshot, projected: RateSna
       touch = false;
       // The shared tooltip pins the first tap (focus alone is not a pin).
       // A second tap or a mouse/keyboard activation selects the layer.
-      if (tap && tip && !tip.classList.contains("show")) return;
+      if (tap && button.matches(".inst-tip-trigger") && !isTooltipPinned(button)) return;
       app.detailFace(button.dataset.legendLayer as DetailFace);
     });
   });
@@ -314,12 +321,16 @@ export function renderHexDetail(app: App, live: RateSnapshot, projected: RateSna
   host.hidden = false;
   bindChargeHelp(app, host);
   bindChordsHelp(app, host);
+  const freshFocus = focusAttribute && focusValue !== null
+    ? [...host.querySelectorAll<HTMLElement | SVGElement>(`[${focusAttribute}]`)]
+        .find((control) => control.getAttribute(focusAttribute) === focusValue)
+    : undefined;
+  // Restoring focus is not a fresh focus entry after Escape or tap-away.
+  if (restoreClosedMini) freshFocus?.focus({ preventScroll: true });
   wireTooltips(host, app.signal);
-  if (focusAttribute && focusValue !== null) {
-    [...host.querySelectorAll<HTMLElement | SVGElement>(`[${focusAttribute}]`)]
-      .find((control) => control.getAttribute(focusAttribute) === focusValue)
-      ?.focus({ preventScroll: true });
-  }
+  if (!restoreClosedMini) freshFocus?.focus({ preventScroll: true });
+  const freshPin = pinnedLayer && host.querySelector<HTMLButtonElement>(`[data-legend-layer="${pinnedLayer}"]`);
+  if (freshPin) restoreTooltipPin(freshPin);
 }
 
 function detailLayerPreviews(app: App, pos: Hex, module: ModuleInstance | undefined, snapshot: RateSnapshot): string {

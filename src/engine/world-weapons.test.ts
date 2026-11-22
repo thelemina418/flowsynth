@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import { buyHoneRank, endSession, pauseSession, placeWorldOccupant, prestige, resumeSession, setWorldConduitDirection, startSession } from "./actions";
 import { advance } from "./advance";
 import { hex } from "./hex";
+import { writeNote } from "./notes";
 import { deserialize, serialize } from "./save";
 import { createInitialState, createWeapon } from "./state";
 import { scenarioOf } from "./scenarios";
@@ -86,6 +87,59 @@ it.each([
     expect(store(short)).toBeCloseTo(shortReserve, 14);
   },
 );
+
+it.each([0, 1])("spends exactly two generator charge (Flywheel Lv. %i) on Maul's beat across live ticks and reload, but not a short reserve", level => {
+  for (const reserve of [2, 2 - Number.EPSILON, 2 - 5e-10]) {
+    const state = scenarioOf("world-combat")!.build(0);
+    const weapon = createWeapon(state, "maul");
+    state.world.weapons.push(weapon);
+    for (const [id, q, r] of [[state.world.creatures[0]!.id, 0, 0], [state.world.columns[0]!.id, 1, 1], [weapon.id, 0, 1]] as const) {
+      expect(placeWorldOccupant(state, id, hex(q, r)).ok).toBe(true);
+    }
+    const generator = state.modules.find(m => m.type === "focusKeyed")!;
+    generator.reserve = reserve;
+    generator.level = level;
+    weapon.cooldown = 6; // Maul's eight-second beat is due at t=2 s.
+    expect(startSession(state, null).ok).toBe(true);
+    for (const partition of ["whole", "ticks", "reload", ...(level === 0 ? ["depletion tail"] : [])]) {
+      let run = structuredClone(state);
+      if (partition === "whole") tick(run, 2);
+      else if (partition === "depletion tail") {
+        tick(run, 2 - 2 ** -32);
+        expect(run.world.enemies.shale!.hp).toBe(48);
+        run = reload(run);
+        tick(run, 2 ** -32);
+      } else for (let i = 0; i < 20; i++) {
+        tick(run, 0.1);
+        if (i === 9 && partition === "reload") run = reload(run);
+      }
+      expect(run.modules.find(m => m.id === generator.id)!.reserve).toBe(0);
+      expect(run.world.enemies.shale!.hp, `${reserve}, ${partition}`).toBeCloseTo(reserve === 2 ? 24 : 36, 12);
+      const store = run.world.weapons.find(w => w.id === weapon.id)!.store;
+      if (reserve === 2) expect(store).toBeCloseTo(0, 25);
+      else expect(store).toBe(reserve);
+    }
+  }
+});
+
+it("delivers the unused generator reserve plus note and session-end credits once after reload", () => {
+  const state = scenarioOf("world-combat")!.build(0);
+  const generator = state.modules.find(m => m.type === "focusKeyed")!;
+  generator.reserve = 1;
+  expect(placeWorldOccupant(state, state.world.weapons[0]!.id, hex(0, 1)).ok).toBe(true);
+  expect(placeWorldOccupant(state, state.world.columns[0]!.id, hex(1, 1)).ok).toBe(true);
+  expect(startSession(state, null).ok).toBe(true);
+  tick(state, 0.1);
+  expect(endSession(state).ok).toBe(true); // 0.01 Flywheel charge from 0.1 credited seconds.
+  expect(writeNote(state, "x").ok).toBe(true); // 0.2 more from one character.
+  const ready = reload(state);
+  expect(startSession(ready, null).ok).toBe(true);
+  tick(ready, 2);
+  expect(ready.modules.find(m => m.id === generator.id)!.reserve).toBe(0);
+  expect(ready.world.weapons[0]!.store).toBe(1.21);
+  tick(ready, 2);
+  expect(ready.world.weapons[0]!.store).toBe(1.21);
+});
 
 it("retains individually sub-ulp charge deliveries across a save and reload", () => {
   const state = scenarioOf("world-combat")!.build(0);

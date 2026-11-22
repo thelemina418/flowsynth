@@ -1,5 +1,5 @@
 import { BALANCE, EPS } from "./constants";
-import { requireFinite } from "./numeric";
+import { addToSum, requireFinite, resetSum } from "./numeric";
 import { hostPower } from "./economy";
 import { GENERATOR_PROFILES, generatorProfileOf, type GeneratorProfile } from "./profiles";
 import type { GameState } from "./types";
@@ -29,10 +29,14 @@ function creditEachGenerator(state: GameState, credit: (profile: GeneratorProfil
     const profile = generatorProfileOf(module.type);
     if (!profile) return [];
     const amount = requireFinite(credit(profile, hostPower(state, module)), "a generator's reserve earning");
-    const reserve = requireFinite(module.reserve + amount, "a generator's reserve");
-    return [{ module, reserve }];
+    const next = { reserve: module.reserve, ...(module.reserveCarry ? { reserveCarry: module.reserveCarry } : {}) };
+    addToSum(next, "reserve", amount, "a generator's reserve");
+    return [{ module, next }];
   });
-  for (const { module, reserve } of updates) module.reserve = reserve;
+  for (const { module, next } of updates) {
+    resetSum(module, "reserve", next.reserve);
+    if (next.reserveCarry) module.reserveCarry = next.reserveCarry;
+  }
 }
 
 // The banked-earning seam (the session end, actions.endSession): every

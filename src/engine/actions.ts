@@ -1156,7 +1156,7 @@ export function prestige(state: GameState, tuning: PrestigeTuning = {}): ActionR
   // charge-shaped. Class development, practice history, and the discovery
   // ledger persist.
   for (const module of state.modules) {
-    module.reserve = 0;
+    resetSum(module, "reserve", 0);
   }
   // The harmonic-capacity ladder resets with the levels (issue #259):
   // purchased capacity is era progress like everything else the era

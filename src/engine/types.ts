@@ -137,6 +137,7 @@ export interface ModuleInstance {
   // emission rate while flow is live. Charge state — reset at prestige.
   // Lenient-defaulted to 0 at load.
   reserve: number;
+  reserveCarry?: number;
   // The Bend's player-picked shift (ADR-0048): semitones added to its
   // cell's pitch. The selectable set grows with rarity only (±1 at launch,
   // ±2 joining at rare); null on every other type. Lenient-defaulted at

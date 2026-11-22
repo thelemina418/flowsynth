@@ -1,8 +1,8 @@
-import { BALANCE, isOscillatorType } from "./constants";
+import { BALANCE, CATEGORY_OF, isOscillatorType } from "./constants";
 import { COMBAT, COMBAT_WALLS } from "./world-combat";
 import { isWeaponType, WEAPONS } from "./weapons";
 import { hex } from "./hex";
-import { restoreSumCarry } from "./numeric";
+import { restoreSumCarry, savedCarry } from "./numeric";
 import { ENCYCLOPEDIA_REVISION } from "./encyclopedia";
 import type { ChordDiscovery, GameState, ModuleInstance, ModuleType, MutatorFamily, MutatorInstance, Rarity, WeaponCopy, WeaponType, WorldColumn, WorldConduit, WorldState } from "./types";
 
@@ -139,7 +139,12 @@ export function createModule(state: GameState, type: ModuleType, tier: number = 
 // over the merged state's module list.
 export function normalizeModules(modules: ModuleInstance[]): void {
   for (const module of modules) {
+    const rawReserve = module.reserve;
     if (typeof module.reserve !== "number" || !Number.isFinite(module.reserve)) module.reserve = 0;
+    const carry = CATEGORY_OF[module.type] === "generator" && module.reserve > 0
+      ? savedCarry(rawReserve, module.reserve, module.reserveCarry) : undefined;
+    if (carry !== undefined) module.reserveCarry = carry;
+    else delete module.reserveCarry;
     if (typeof module.shift !== "number") module.shift = module.type === "bend" ? BALANCE.bendDefaultShift : null;
     if (typeof module.tier !== "number" || !Number.isInteger(module.tier) || module.tier < 0) module.tier = 0;
     // A position that is not a full hex reads as the tray (issue #372's

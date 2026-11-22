@@ -2,6 +2,8 @@ import { expect, it } from "vitest";
 import { endBreather, endSession, pauseSession, placeWorldOccupant, prestige, resumeSession, retrieveWorldOccupant, setWorldConduitDirection, setWorldGearBearer, startBreather, startSession } from "./actions";
 import { advance, advanceBreather } from "./advance";
 import { hex } from "./hex";
+import { give } from "./fixtures";
+import { createWeapon } from "./state";
 import { scenarioOf } from "./scenarios";
 import { deserialize, serialize } from "./save";
 import { enemyStateOf, worldFactorOf } from "./world";
@@ -201,6 +203,67 @@ it("Pulse does not spend a real shortfall, even with no supply or at generator d
   expect(advance(state, 2e-9, rng).fault).toBeUndefined();
   expect(enemyStateOf(state, "shale").hp).toBeCloseTo(37, 8);
   expect(spell.store).toBeCloseTo(5e-10, 14);
+});
+
+it.each([12, 12 - 2 ** -49])(
+  "splits %s generator charge between unfired Blade and Pulse across ticks and reload, without casting short", reserve => {
+    const state = scenarioOf("world-combat")!.build(0);
+    const { creatures: [creature], columns: [column], weapons: [blade], spells: [pulse] } = state.world;
+    for (const [id, pos] of [[creature!.id, hex(0, 0)], [column!.id, hex(1, 1)], [blade!.id, hex(2, 0)], [pulse!.id, hex(0, 1)]] as const) {
+      expect(placeWorldOccupant(state, id, pos).ok).toBe(true);
+    }
+    expect(blade!.bearer).toBeNull(); // Blade takes its share without paying for attacks.
+    const generator = state.modules.find(m => m.type === "focusKeyed")!;
+    generator.reserve = reserve;
+    state.world.enemies.shale!.hp = 38.25;
+    expect(startSession(state, null).ok).toBe(true);
+    for (const partition of ["whole", "ticks", "reload"]) {
+      let run = structuredClone(state);
+      const tick = (seconds: number) => expect(advance(run, seconds, rng).fault).toBeUndefined();
+      if (partition === "whole") tick(12);
+      else for (let i = 0; i < 2400; i++) {
+        tick(0.005);
+        if (i === 1199 && partition === "reload") run = deserialize(serialize(run, 0)).state!;
+      }
+      expect(run.modules.find(m => m.id === generator.id)!.reserve).toBe(0);
+      expect(enemyStateOf(run, "shale").hp, `${reserve}, ${partition}`).toBeCloseTo(reserve === 12 ? 25.45 : 36.45, 10);
+      expect(run.world.weapons[0]!.store).toBe(reserve / 2);
+      expect(run.world.spells[0]!.store).toBe(reserve === 12 ? 0 : reserve / 2);
+    }
+  }, 15_000,
+);
+
+it("conserves two generators through a relay, three shares and full-store redistribution", () => {
+  const state = scenarioOf("world-combat")!.build(0);
+  const { columns: [column], weapons: [blade], spells: [pulse] } = state.world;
+  const maul = createWeapon(state, "maul");
+  state.world.weapons.push(maul);
+  const first = state.modules.find(m => m.type === "focusKeyed")!;
+  first.reserve = 2;
+  give(state, "focusKeyed", hex(0, 1)).reserve = 10;
+  give(state, "amplifier", hex(1, 0));
+  // This dormant tail is not a provider. Its reserve must not drain just
+  // because there is a Column elsewhere on the board.
+  const isolated = give(state, "focusKeyed", hex(-1, 1));
+  isolated.reserve = 2 ** -32;
+  for (const [id, pos] of [[column!.id, hex(1, 1)], [blade!.id, hex(2, 0)], [pulse!.id, hex(0, 1)], [maul.id, hex(1, 0)]] as const) {
+    expect(placeWorldOccupant(state, id, pos).ok).toBe(true);
+  }
+  expect(startSession(state, null).ok).toBe(true);
+  const whole = structuredClone(state);
+  expect(advance(whole, 11, rng).fault).toBeUndefined();
+  let reloaded = state;
+  for (let i = 0; i < 110; i++) {
+    expect(advance(reloaded, 0.1, rng).fault).toBeUndefined();
+    if (i === 54) reloaded = deserialize(serialize(reloaded, 0)).state!;
+  }
+  // Each provider delivers its reserve directly and through gain 1, so
+  // the Column lifts 24 units. Pulse retains six; the two others take nine.
+  for (const run of [whole, reloaded]) {
+    expect(run.world.weapons.map(w => w.store)).toEqual([9, 9]);
+    expect(run.world.spells[0]!.store).toBe(6);
+    expect(run.modules.filter(m => m.type === "focusKeyed").map(m => m.reserve)).toEqual([0, 0, 2 ** -32]);
+  }
 });
 
 it("hands pressure to the next wall at victory, then preserves victories and wounds at prestige", () => {

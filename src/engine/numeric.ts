@@ -33,19 +33,19 @@ function twoSum(a: number, b: number, detail: string): [number, number] {
   return [total, (a - (total - right)) + (b - right)];
 }
 
-function accumulate(value: number, carry: number | undefined, delta: number, detail: string): [number, number] {
+export function sumWithCarry(value: number, carry: number | undefined, delta: number, deltaCarry: number, detail: string): [number, number] {
   const [total, error] = twoSum(value, delta, detail);
-  const [rounded, low] = twoSum(total, error + (carry ?? 0), detail);
+  const [rounded, low] = twoSum(total, (error + (carry ?? 0)) + deltaCarry, detail);
   return [rounded, requireFinite(low, detail)];
 }
 
 type Sum<K extends string> = Record<K, number> & Partial<Record<`${K}Carry`, number>>;
 
-export function addToSum<K extends string>(owner: Sum<K>, key: K, delta: number, detail: string): void {
+export function addToSum<K extends string>(owner: Sum<K>, key: K, delta: number, detail: string, deltaCarry = 0): void {
   const values: Record<K, number> = owner;
   const carries: Partial<Record<`${K}Carry`, number>> = owner;
   const carryKey = `${key}Carry` as const;
-  const [total, carry] = accumulate(values[key], carries[carryKey], delta, detail);
+  const [total, carry] = sumWithCarry(values[key], carries[carryKey], delta, deltaCarry, detail);
   values[key] = total;
   if (carry) carries[carryKey] = carry;
   else delete carries[carryKey];
