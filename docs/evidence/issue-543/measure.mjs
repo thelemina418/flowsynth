@@ -2,7 +2,7 @@
 // Each side uses its own engine and policy with the same seed/schedule.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { realpathSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile, unlink } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { tmpdir } from 'node:os';
@@ -127,18 +127,19 @@ async function main() {
   `Usage: node tools/run-supported.mjs ${comparatorPath} <from-checkout> <to-full-SHA> <new-output> [--verify-only|--proof-only|--opening-only]`);
   const targetRoot = process.cwd();
   const outputPath = resolve(targetFile);
+  await requireRuntimeEnvironment(targetRoot);
   const verify = () => {
     const from = verifiedCheckout(baselineRoot, baselineCommit, 'from');
     const to = verifiedCheckout(targetRoot, targetCommit, 'to');
     assert.notEqual(from.worktree, to.worktree, 'The comparison requires two different checkouts.');
     assert.equal(fileURLToPath(import.meta.url), join(to.worktree, comparatorPath), 'Run the comparator from the to checkout.');
     // This evidence-directory file is executable input, not a capture.
-    execFileSync('git', ['diff', '--exit-code', 'HEAD', '--', comparatorPath], { cwd: to.worktree, stdio: 'ignore' });
+    const committedComparator = execFileSync('git', ['show', `${to.commit}:${comparatorPath}`], { cwd: to.worktree });
+    assert.ok(readFileSync(fileURLToPath(import.meta.url)).equals(committedComparator), 'Commit the comparator before recording.');
     execFileSync('git', ['merge-base', '--is-ancestor', from.commit, to.commit], { cwd: to.worktree });
     return { from, to };
   };
   const { from, to } = verify();
-  await requireRuntimeEnvironment(to.worktree);
   await requireRuntimeEnvironment(from.worktree);
   if (tier === '--verify-only') return console.log(JSON.stringify({ from, to }, null, 2));
   const baseline = await measure(from, tier);
@@ -148,7 +149,7 @@ async function main() {
   process.chdir(targetRoot);
   verify();
   const output = { scope: 'One matched schedule, not a calibration or a representative distribution.',
-    environment: recordingEnvironment(), baseline, candidate };
+    recordingEnvironment: recordingEnvironment(), baseline, candidate };
   await writeFile(outputPath, JSON.stringify(output, null, 2) + '\n', { flag: 'wx' });
 }
 

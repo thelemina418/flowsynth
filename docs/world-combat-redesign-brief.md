@@ -1,6 +1,6 @@
 # World combat redesign
 
-Status: owner-confirmed design; not implemented. This brief owns the design; the linked issues own their implementation and verification scope. The [earlier World feedback brief](world-layer-feedback-brief.md) records the shipped baseline.
+Status: owner-confirmed design; slices #542–#546 implemented. This brief owns the design; the [#541 criterion record](evidence/issue-541/README.md) tracks the integrated source gate and final evidence. The [earlier World feedback brief](world-layer-feedback-brief.md) records the shipped baseline.
 
 ## Intent and priorities
 

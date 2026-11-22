@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { endSession, pauseSession, placeWorldOccupant, prestige, resumeSession, retrieveWorldOccupant, setWorldConduitDirection, startBreather, startSession } from "./actions";
+import { endBreather, endSession, pauseSession, placeWorldOccupant, prestige, resumeSession, retrieveWorldOccupant, setWorldConduitDirection, setWorldGearBearer, startBreather, startSession } from "./actions";
 import { advance, advanceBreather } from "./advance";
 import { hex } from "./hex";
 import { scenarioOf } from "./scenarios";
@@ -56,6 +56,29 @@ it("adjacent armor enables a wounded bench return; defeat locks the tray until f
   endSession(state);
   expect(creature).toMatchObject({ pos: null, hp: 24, recovering: false });
   expect(placeWorldOccupant(state, creature!.id, front).ok).toBe(true);
+});
+
+it("rebinds fallen gear to the sole neighbor only when the breather ends", () => {
+  const state = scenarioOf("world-combat")!.build(0);
+  const [first] = state.world.creatures;
+  const [blade] = state.world.weapons;
+  const second = { ...first!, id: "second-sentinel" };
+  state.world.creatures.push(second);
+  expect(startSession(state, 600).ok).toBe(true);
+  advance(state, 600, rng);
+  expect(endSession(state).ok).toBe(true);
+  first!.hp = 1;
+  expect(placeWorldOccupant(state, first!.id, hex(0, 0)).ok).toBe(true);
+  expect(placeWorldOccupant(state, second.id, hex(0, -1)).ok).toBe(true);
+  expect(placeWorldOccupant(state, blade!.id, hex(1, -1)).ok).toBe(true);
+  expect(setWorldGearBearer(state, blade!.id, first!.id).ok).toBe(true);
+  expect(startBreather(state).ok).toBe(true);
+  advanceBreather(state, 4, rng);
+  expect(first!.recovering).toBe(true);
+  expect(blade!.bearer).toBe(first!.id);
+  expect(setWorldGearBearer(state, blade!.id, second.id).ok).toBe(false);
+  expect(endBreather(state).ok).toBe(true);
+  expect(blade!.bearer).toBe(second.id);
 });
 
 it("unlocks a defeated Sentinel at the same full-HP boundary after fractional recovery", () => {

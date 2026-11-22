@@ -4,11 +4,11 @@ FlowSynth is an incremental game in which real-life practices drive a configurab
 
 ## World feedback implementation (visual acceptance outstanding)
 
-The [World feedback brief](docs/world-layer-feedback-brief.md) and [ADR-0087](docs/adr/0087-world-unlocks-through-prestige-and-collection-growth-uses-drafts.md) supersede conflicting World/Mutator passages below as the accepted direction. Issue #526 implements permanent discovery, once-only starting kit and save translation, hides the undiscovered World surfaces, removes Column purchasing, and removes the obsolete Catalog access screen. The merged #527 slice supplies ambient reset and pressure disclosure. World faces use steel hex plates (#529) with the same point-up perimeter as Modules on the board, in inventory, in drag previews, in Hex detail, and on the layer selector (#546). The plate treatment and functional glyphs distinguish World without rarity, level, or merge-tier semantics. Coordinates, full-cell hit geometry, occupancy, placement, and combat are unchanged. Mixed ordinary drafts initially supplied Columns and Charge Blades after discovery (#528). Now fresh World slots supply Columns and conduits, while Blacksmith earns weapon choices from credited practice (#545). Special module guarantees and already-generated offers stand. Issue #530 retires the remaining Mutator effects, actions, saved remnants and Forge paths, and removes Accelerator. Hone remains an Arete purchase. All slices are implemented; required desktop/phone visual acceptance remains blocked, not waived. Historical calibration does not validate this changed economy.
+The [World feedback brief](docs/world-layer-feedback-brief.md) and [ADR-0087](docs/adr/0087-world-unlocks-through-prestige-and-collection-growth-uses-drafts.md) supersede conflicting World/Mutator passages below as the accepted direction. Issue #526 implements permanent discovery, once-only starting kit and save translation, hides the undiscovered World surfaces, removes Column purchasing, and removes the obsolete Catalog access screen. The merged #527 slice supplies ambient reset and pressure disclosure. World faces use steel hex plates (#529) with the same point-up perimeter as Modules on the board, in inventory, in drag previews, in Hex detail, and on the layer selector (#546). The plate treatment and functional glyphs distinguish World without rarity, level, or merge-tier semantics. The faceplate change itself leaves coordinates, full-cell hit geometry, occupancy, and placement behavior unchanged. Mixed ordinary drafts initially supplied Columns and Charge Blades after discovery (#528). Now fresh World slots supply Columns and conduits, while Blacksmith earns weapon choices from credited practice (#545). Special module guarantees and already-generated offers stand. Issue #530 retires the remaining Mutator effects, actions, saved remnants and Forge paths, and removes Accelerator. Hone remains an Arete purchase. The slices are implemented; integrated source recheck and final evidence are tracked in the [#541 criterion record](docs/evidence/issue-541/README.md). Historical calibration does not validate this changed economy.
 
 **Prestige versus Arete purchase**: prestige ends an era and banks its pending Arete claim; an Arete purchase spends already-banked Arete. The first positive-Arete prestige, not the first purchase or a zero-yield reset, is the permanent World discovery boundary.
 
-The [World combat redesign](docs/world-combat-redesign-brief.md) records agreed future behavior separately. The World progression entries below still describe what ships.
+The [World combat redesign](docs/world-combat-redesign-brief.md), ADR-0088 and ADR-0089 govern live combat and shared expansion. They replace the earlier era-local victory, stacked pressure, and octave-gate choices.
 
 ## Language
 
@@ -392,7 +392,7 @@ The pure control surface organized around the Enter/Exit main switch — the dom
 **The display panel** (the [header-status brief](docs/header-status-brief.md), 2026-10-19): the door's interior is a recessed display well in the synth-faceplate register. The full-height display clock leads — the time is the device's face — and the program block follows: the selected habit's name (wearing completion's engraved check when the displayed goal is done), the caption (a planned session reads the bare target; running states name themselves), and the provisional line while the honesty pool holds. The goal meter closes the well flush at its right edge: the selected habit's goal progress as a seven-segment vertical LED column in the habit's palette token — the goal inherits it (issue #445) — with no meter at all when nothing qualifies (no habit, no goal, or an unresolved migration choice). Its tooltip gloss names the goal and what remains; activation of the meter, including touch, opens PLAN with the rest of the door (owner-confirmed review amendment, 2026-10-19). The provisional logo is the inventory hypercube with its filled core, adopted from the collapsed inventory's symbol; a later round may name a permanent mark.
 
 **Enemy pressure disclosure**:
-The shared ledger shows actual combined active-enemy production reduction and each living discovered source's penalty and remaining-production factor. Factors multiply; defeated bonuses are not counted as pressure. Pressure deepens with era progress. Disclosure needs no World access and reveals no coordinates or placement controls; positive-Arete prestige is the shipped permanent World discovery boundary (#526), explained by the merged #527 ledger.
+The shared Ledger explains the current wall's actual fixed reduction to nous production, or the absence of pressure. Only one wall can apply pressure; there are no stacked penalties or victory bonuses. Disclosure needs no World access and reveals no coordinates or placement controls.
 
 **Board ledger**:
 The ambient desktop resource panel above the board owns the production numbers and shared ledger door; pending Arete yield and one explicit Reset era control stand beside that door (#527). Reset is the sole independent resource action, confirms deliberately, and explains ineligible or non-upgrade state without hover. The resources group left: nous, rate, the arete read, the scrap read (issue #377), and the harmonic-capacity read (issue #333) — the per-voice whole-chord allowance with its canonical mark, the one ambient figure the allocation economy spends; the selected voice's used/available stays local to the reserved readout and Hex detail, never a board-wide meter. Each value with its unit, no session read anywhere on it. The arete read wears the resource's color and its canonical mark; before the first prestige it stands as a dim `— ◇` slot — the unconditional telegraph that prestige will bank there. The scrap read wears the scrap register and the chipped-hex mark; the balance's one home (ADR-0066). A hairline then separates the feats and chords chips, right-aligned as paired icon + count chips. The rate read is the door to the rate details: above the 760px breakpoint a hover or focus anywhere on the panel opens the module-linked roster as a ledger-wide popover (the rate read wears no inner border of its own — the panel is the affordance, not the figure); a tap on the rate read opens the same roster as a modal sheet at every width. (On portrait phone the door moves to the game-info strip's rate read.) Bonuses never ride the ledger — they show in the feats and chords sheets and in the rate details' one Feats · Discoveries line (ADR-0037 as amended by #334).
@@ -585,7 +585,7 @@ The muted list-row flag on session records carrying a missed honesty event. Mute
 ### World progression (implemented; final visual acceptance outstanding)
 
 **World layer**:
-The progression layer whose enemies give the module board's production and charge a purpose and resistance. Its encounters run automatically during flow; preparation happens between sessions. Discovered permanently by the first prestige that actually banks positive Arete, with one unplaced Charge Column and one once-only starter Charge Blade. Pending entitlement, Catalog spending, and zero-yield resets do not discover it. Before discovery its navigation, map previews, detail faces and placement controls are absent; enemy pressure still runs. Discovery, collection and placement survive later prestiges.
+The progression layer whose enemies give the module board's production and charge a purpose and resistance. Combat is automatic; preparation happens between sessions. The first prestige that actually banks positive Arete discovers it permanently and grants one unplaced starter kit: Sentinel, Charge Blade, Guard Plate, Pulse, Charge Column, and Conduit. Pending entitlement, Catalog spending, and zero-yield resets do not discover it. Navigation, map previews, detail faces and placement controls are absent before discovery; the Ledger can still explain pressure. Discovery, collection and placement survive later prestiges.
 
 **Practice-roll meter**:
 The habit–class pair's own roll meter (issue #423): credited flow time with the pair selected fills it one-for-one, it freezes while another habit or class is selected, and each crossing banks a module roll into the shared queue. The cadence keeps the one fast opening fill then flat shape; the Engineer tree's cadence upgrades discount the flat block only. Its fill reads only where the meter renders — the Focus sheet's habit/class face — and it persists through prestige. It replaces the retired player-wide flow meter (ADR-0041 as replaced by ADR-0074); the migration pays a migrated save's shared partial progress out as one final banked roll.
@@ -631,7 +631,7 @@ The greatest era-earned entitlement whose Arete has already been claimed through
 _Avoid_: high-water mark (the implementation reads entitlement, never depth), banked depth
 
 **Frontier entitlement**:
-The cumulative curve E assigning total Arete entitlement to era-earned nous depth: zero below the World entry depth (`BALANCE.world.entryNous`, calibrated at 20M era-earned — issue #490 — a short hold past the prestige horizon so the first positive claim banks around ten credited hours), then the calibrated curve's `2 + 2.5·log₁₀(x)` over x = era-earned ÷ entry — the unchanged discontinuous entry granting two Arete. The first positive bank independently grants the starter Column and Blade; neither is priced from this claim. Fractionally valued, always; increasing with diminishing marginal reward per nous. The entry depth is the first-worthwhile-prestige calibration (#490); the slope is the century calibration (#492, ADR-0079) as re-priced by the later-era repair (#484, ADR-0086) so each banked claim's push carries most of its era's credited time.
+The cumulative curve E assigning total Arete entitlement to era-earned nous depth: zero below the World entry depth (`BALANCE.world.entryNous`, calibrated at 20M era-earned — issue #490 — a short hold past the prestige horizon so the first positive claim banks around ten credited hours), then the calibrated curve's `2 + 2.5·log₁₀(x)` over x = era-earned ÷ entry — the unchanged discontinuous entry granting two Arete. The first positive bank independently grants the one-time World starter kit; it is not priced from this claim. Fractionally valued, always; increasing with diminishing marginal reward per nous. The entry depth is the first-worthwhile-prestige calibration (#490); the slope is the century calibration (#492, ADR-0079) as re-priced by the later-era repair (#484, ADR-0086) so each banked claim's push carries most of its era's credited time.
 _Avoid_: claim formula (the pending difference is the claim; the curve is the entitlement), accumulator claim (the retired prestige-count sense)
 
 **Pending claim**:
@@ -653,23 +653,19 @@ The charge-required exception to ordinary weapons: it equips an adjacent creatur
 _Avoid_: Arpeggiator (the pre-naming placeholder)
 
 **Charge Column**:
-The World layer's lift occupant: one World cell over an owned module cell, lifting the charge received at that module cell without draining it. The lifted supply is conserved — split equally among adjacent consumers with available storage, overflow redistributed to consumers still able to accept — and Columns never relay to Columns in the first experiment. Copies place and relocate free between sessions and persist through prestige; one unplaced starter copy is granted once at permanent World discovery. Columns are no longer sold for Arete; additional copies arrive through ordinary mixed drafts after discovery (#528). Existing saves with a banked frontier, old starter receipt, or retained World possessions translate to permanent discovery and receive the free Column once, in addition to any purchased copies. No Column spending is refunded. Its face carries the lifted supply figure alone; an unfed consumer reads unfed on its own face.
+The World layer's lift occupant: it copies the charge received at the corresponding Modules cell without draining it. Each lift is shared by reachable consumers with available storage, directly or through Conduits; when a reserve fills, its share goes to the remaining consumers. Columns do not relay to other Columns. An unplaced copy is in the one-time starter kit; additional copies arrive in mixed ordinary drafts after discovery. Former Column spending is not refunded.
 _Avoid_: relay (the board's charge-conduit sense), battery
 
 **Enemy**:
-The World layer's authored adversary: occupying an authored World position, applying its penalty until defeated. Discovered automatically at its progression threshold, attacked through an adjacent owned cell, restored at prestige. The player-facing word on every surface; encounter stays the system term for the authored position and its era reward and never renders. Its face reads remaining HP while undefeated; the HP gloss is implementation copy — weapon hits reduce it, zero clears the cell.
+A named World adversary with a position, HP, and its own attack cadence. The earliest uncleared enemy is the only candidate to become current: its own era-earned threshold must also be met. It can then fight an adjacent creature, be fought, and apply pressure. Zero HP is a lifetime victory; prestige never restores it.
 _Avoid_: encounter (on any surface), hostile, mob
 
 **Penalty**:
-A discovered enemy's bounded production reduction, deepening one authored band each time era-earned crosses a multiple of the enemy's own discovery threshold, and multiplying its remaining-production factors. The measure is era-earned, never the wallet balance, and the deepest band keeps a strictly positive floor. First-experiment penalties touch nous production alone, leaving charge generation, routing, and combat functional. Defeat replaces it with the era bonus; prestige restores the enemy at its discovery band.
+The current wall's fixed, bounded reduction to nous production only. Charge, combat, and prestige remain available. Spending nous does not undo a threshold achieved by era-earned production. Defeat removes the penalty for the lifetime; there is no era bonus.
 _Avoid_: debuff, curse, malus
 
-**Era bonus**:
-The modest era-local production bonus replacing a defeated enemy's penalty; prestige restores the enemy and removes the bonus, so lasting strength comes from Arete purchases, never from the bonus.
-_Avoid_: defeat reward, clear bonus
-
 **Reserved cell**:
-An enemy position's pre-discovery state: the cell stands visibly set aside with its identity concealed, silent until discovery activates its penalty. Reserved is the state's word on every surface.
+A living enemy's World position, unavailable for World placement. Inactive walls conceal their identity; only the current wall applies pressure. A reservation never blocks Modules placement beneath it or ownership of the cell.
 _Avoid_: claimed (the Arete claim family owns the word), occupied (owned cells' modules)
 
 **Unfed**:
@@ -677,12 +673,11 @@ A weapon's persistent without-supply state, read on its own face: placement-dete
 _Avoid_: starved, out of charge
 
 **Cleared**:
-A defeated enemy's face state: the encounter and its era bonus remain, the bonus engraved; the enemy returns at prestige. Defeat itself is silent — no broadcast, no combat log — the face flipping with a brief local accent.
+A defeated enemy's engraved state and a lifetime victory. The World reservation and pressure are gone. The cell is available for ordinary World placement when owned; a clear does not grant an unowned coordinate.
 _Avoid_: defeated (as the face's word), vanquished
 
-**Target priority**:
-A weapon's between-sessions control: an ordered preference among eligible enemies — discovered, undefeated, adjacent — defaulting to the authored sequence order when unconfigured. Locks with everything else in flow.
-_Avoid_: auto-target, target lock
+**Bearer**:
+The one adjacent creature a physical gear copy serves. One eligible creature equips it automatically in preparation; contested gear needs a choice. No reassignment occurs during flow, a pause, or a breather. Unbound gear may bank bounded charge but does not attack on its own.
 
 **Hone**:
 The Arete Catalog's persistent, rank-priced upgrade to the charged hit of every current and future Charge Blade. It doesn't change the cadence and does not apply to ordinary weapons.
@@ -692,9 +687,7 @@ _Avoid_: blade upgrade, sharpening, power up
 The World layer's unplaced-occupant browser, sharing the tray column's Modules/World switch after discovery: click inspects, Place arms, drag places, drag out retrieves; collapsed, it keeps the symbol and stored count.
 _Avoid_: weapon rack, armory, second inventory
 
-The World redesign's agreed contract is recorded in ADR-0074 and Wayfinder #419; the engine and economy of the class layer (#423) and the two-layer World (#425) are shipped. The claim curve's entry depth and slope are calibrated by #490 and #492 and frozen for save translation in ADR-0079. Other World figures — prices, HP and thresholds, cadence, storage — retain their hypothesis provenance in `research/world-frontier/findings.md` (commit `4eaac5f`); the pinned fixtures in `world.test.ts` distinguish them from the calibrated curve. Calibration evidence has explicit limits, including the boundary-wait re-recording gap in `docs/century-calibration.md`; a frozen figure alone does not establish recoverability. Existing progression entries below describe shipped behavior; the habit-build entries record the retirement (issue #444, ADR-0076).
-
-### World combat redesign (confirmed direction; not implemented)
+ADR-0074 and Wayfinder #419 record the historical experiment. ADR-0079's save-translation baseline and the later #484 claim/claim-grant arithmetic remain unchanged; neither historical combat numbers nor the historical pacing recordings validate #541's current fights.
 
 **Lifetime**:
 The span containing successive eras across which a credited enemy victory persists. Prestige starts a new era, not a new lifetime.
@@ -703,10 +696,13 @@ The span containing successive eras across which a credited enemy victory persis
 A player-side World combatant with its own HP and a base action, augmented by adjacent gear.
 
 **World regeneration**:
-Recovery of HP over time. Creatures regenerate in the World tray; a defeated creature stays owned but cannot deploy until fully healed. Living enemies can regain HP, but a lifetime victory is not reversed by regeneration.
+Recovery of HP on the World clock. Creatures regenerate in the World tray; a defeated creature stays owned but cannot deploy until fully healed. Living enemies can regain HP during combat or below their threshold; a lifetime victory never regenerates.
+
+**World clock**:
+The time for attacks and World regeneration. It runs during trusted online flow and running breathers, not in upgrade mode, pause, offline reconciliation, or provisional time. Production, charge and practice still follow their own existing accounting; accepting provisional practice does not replay combat.
 
 **World charge conduit**:
-A World occupant that carries charge within the World layer without generating it. The Charge Column lifts charge from Modules instead.
+The Conduit's role: route existing World charge along one selected outgoing edge, without generating or duplicating it. The Charge Column lifts received charge from Modules instead.
 
 **Blacksmith**:
 The level-one habit class available after permanent World discovery. Its selected habit–class pair earns weapon choices from credited flow. The player selects a Striker or a Maul between sessions and receives an unplaced copy; any remaining choices and partial progress stay with the pair. This meter never offers armor, spells, or creatures.
@@ -716,9 +712,6 @@ The Focus read for Blacksmith's progress toward the next banked weapon choice. I
 
 **Ordinary weapon**:
 An adjacent creature's independently timed piece of gear. It hits even without supply. If enough stored charge is present at the hit, it spends the fixed amount and uses the alternate hit instead. Striker lands earlier and more often; Maul trades cadence for a heavier hit. More charge does not amplify the alternate hit.
-
-**Distance band**:
-The cells at the same hex distance from the fixed origin. They share an expansion price; rearrangement does not move ownership into a farther band.
 
 ### Progression
 

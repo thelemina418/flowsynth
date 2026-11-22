@@ -152,7 +152,7 @@ export class SharedSave {
   // primary intact, and only completed backup writes need undoing.
   // Keep the source timestamp so a reload can still reconcile its gap
   // if the normal post-adoption session save fails.
-  adoptRecovered(raw: string, state: GameState, savedAt: number, source?: { from: "boot" | "import"; version?: number }): boolean {
+  adoptRecovered(raw: string, state: GameState, savedAt: number, source?: { from: "boot" | "import"; version: number | undefined }): boolean {
     const changed: { key: string; previous: string | null }[] = [];
     try {
       const text = serialize(state, savedAt);

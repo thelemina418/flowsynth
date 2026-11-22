@@ -1,6 +1,6 @@
 # World victories last for the lifetime and enemies take turns
 
-Accepted design; not implemented. A credited enemy victory lasts for the current lifetime: prestige neither restores that enemy nor reapplies its production penalty. Only one enemy at a time applies pressure, in authored order. Its pressure begins when both its predecessor is defeated (if it has one) and the current era reaches its nous threshold. A wall slows nous production without shutting off charge, combat, or the option to prestige.
+Accepted design, implemented by #544 after the #542 proof. Integrated verification is tracked in the [#541 criterion record](../evidence/issue-541/README.md). A credited enemy victory lasts for the current lifetime: prestige neither restores that enemy nor reapplies its production penalty. Only one enemy at a time applies pressure, in authored order. Its pressure begins when both its predecessor is defeated (if it has one) and the current era reaches its nous threshold. A wall slows nous production without shutting off charge, combat, or the option to prestige.
 
 Victory removes the enemy's reservation and penalty, not the normal purchase requirement for an unowned cell. There is no era-local victory multiplier. Old Blade-only clears do not become lifetime victories against the redesigned enemies; the migration preserves unrelated progression, collection, and valid placements.
 

@@ -1,6 +1,6 @@
 # World progression gives board power a purpose without demanding session attention
 
-Accepted design direction, 2026-10-19; design interview completed; simulation and prototype evidence precede production implementation.
+Accepted design direction, 2026-10-19. The original experiment and its assumptions are retained below as history; see the supersession notes for what ships.
 
 The module board remains the central optimization activity: it produces power, the World layer supplies the long-term objective and resistance, and habit classes let real practice shape the approach. An era can reach an effective ceiling where prestige buys lasting World strength for a meaningfully different attempt; waiting within one era need not be the intended solution to every enemy.
 
@@ -8,9 +8,9 @@ Combat runs automatically during flow. Deployment, spell behavior, and recovery 
 
 The first experiment tests one enemy sequence, one combat resource, scaling Arete claims, and Engineer as the first habit class. HP recovery and equipment combinations follow only after the reset loop proves compelling. 1T nous is the earliest-entry constraint; pacing remains to be established.
 
-> ADR-0087, implemented by #526–#530, supersedes this experiment's entry, acquisition, Mutator and refund promises: permanent discovery/kit on positive prestige, Columns/Blades through ordinary mixed drafts, persistent type-wide Hone, no new refunds, no live Mutator mechanics. Blacksmith/dedicated weapons remain deferred. Historical narrative and calibration provenance below are retained, not current economy validation.
+> ADR-0087, implemented by #526–#530, supersedes this experiment's entry, acquisition, Mutator and refund promises. Permanent discovery on positive prestige and type-wide Hone remain. The interim mixed-draft Blade path was superseded in #545: fresh World slots offer infrastructure and Blacksmith earns ordinary weapons.
 
-> ADR-0088 accepts the next design direction: lifetime victories, sequential pressure, and released enemy cells. It is not yet implemented. The [redesign brief](../world-combat-redesign-brief.md) records the rest of that approved direction.
+> ADR-0088 and ADR-0089 are implemented by #543–#544: lifetime victories, sequential pressure, released enemy cells, actual creature combat and recovery, and distance-priced expansion independent of pitch. See the [redesign brief](../world-combat-redesign-brief.md) for the live direction and [#541 record](../evidence/issue-541/README.md) for verification status. The historical experiment and calibration below do not validate the live redesign.
 
 ## Progression and reset contract
 

@@ -81,6 +81,20 @@ it("breather reload banks the clamped allowance without recovering or trading hi
   expect(app.state.world).toEqual(state.world);
 });
 
+it("a cached page restore credits the closed stretch without attacking or healing", () => {
+  const state = readyFight();
+  state.world.enemies.shale!.hp = 2;
+  expect(startSession(state, 600).ok).toBe(true);
+  const app = reloadAfter(state, 0);
+  const before = structuredClone(app.state.world);
+  vi.mocked(Date.now).mockReturnValue(savedAt + 20_000);
+  const restore = new Event("pageshow");
+  Object.defineProperty(restore, "persisted", { value: true });
+  window.dispatchEvent(restore);
+  expect(app.state.session!.accounting.creditedSeconds).toBe(20);
+  expect(app.state.world).toEqual(before);
+});
+
 it("paused reload does not bank time or fire a carried ready attack", () => {
   const state = readyFight();
   expect(startSession(state, 600).ok).toBe(true);

@@ -58,13 +58,15 @@ it("funds the same Striker beat with one second of supply or ten tenth-second sp
   expect(startSession(state, null).ok).toBe(true);
   const single = structuredClone(state);
   const short = structuredClone(state);
+  short.modules.find(m => m.type === "focusKeyed")!.reserve = 0.99999999;
   tick(single, 1);
   for (let i = 0; i < 10; i++) tick(state, 0.1);
-  tick(short, 0.99999999); // truly short, far outside floating-point noise
+  tick(short, 1); // The generator empties genuinely short of the cost.
   expect(single.world.enemies.shale!.hp).toBe(40);
   expect(state.world.enemies.shale!.hp).toBe(40);
   expect(state.world.weapons.find(w => w.id === striker.id)!.store).toBeCloseTo(0, 12);
-  expect(short.world.enemies.shale!.hp).toBe(48);
+  expect(short.world.enemies.shale!.hp).toBe(43);
+  expect(short.world.weapons.find(w => w.id === striker.id)!.store).toBeCloseTo(0.99999999, 12);
 });
 
 it("Charge Blade skips an unfed beat, then all copies use the same purchased Hone at the original cadence", () => {
