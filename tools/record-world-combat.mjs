@@ -1,4 +1,5 @@
-// #542 fixed-kit proof and #544 constructed scale branch. Neither is live-economy calibration.
+// #542 fixed-kit proof, #544 constructed scale branch, and #545's live
+// acquisition comparison. None is representative live-economy calibration.
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -11,30 +12,38 @@ import { recordingPayload, requireRuntimeEnvironment, resolveSmokeRoot, writeJso
 await requireRuntimeEnvironment();
 const [mode, file, ...extra] = process.argv.slice(2);
 const smoke = mode === "smoke" && file === undefined;
-if (!smoke && (mode !== "record" || !file || extra.length)) {
-  throw new Error("Usage: node tools/run-supported.mjs tools/record-world-combat.mjs smoke | record <output.json>");
+const blacksmith = mode === "blacksmith";
+if (!smoke && ((mode !== "record" && !blacksmith) || !file || extra.length)) {
+  throw new Error("Usage: node tools/run-supported.mjs tools/record-world-combat.mjs smoke | record <output.json> | blacksmith <output.json>");
 }
 const before = devProvenance();
 if (!smoke && !before.source?.clean) throw new Error("Freeze the source before recording the combat proof.");
 const output = smoke ? join(await resolveSmokeRoot("flowsynth-world-combat-"), "walks.json") : resolve(file);
 const compiled = await mkdtemp(join(tmpdir(), "flowsynth-world-combat-compile-"));
 try {
-  const entry = await compileEngineTo("src/engine/world-combat-walks.ts", "world-combat", compiled);
+  const entry = await compileEngineTo(blacksmith ? "src/engine/blacksmith-walk.ts" : "src/engine/world-combat-walks.ts", "world-combat", compiled);
   const engineSha256 = createHash("sha256").update(await readFile(entry)).digest("hex");
-  /** @type {typeof import('../src/engine/world-combat-walks')} */
-  const engine = await import(pathToFileURL(entry).href);
-  const walks = engine.walkWorldCombatProof();
+  const engineUrl = pathToFileURL(entry).href;
+  let walks;
+  if (blacksmith) {
+    /** @type {typeof import('../src/engine/blacksmith-walk')} */
+    const engine = await import(engineUrl);
+    walks = engine.recordBlacksmithShale();
+  } else {
+    /** @type {typeof import('../src/engine/world-combat-walks')} */
+    const engine = await import(engineUrl);
+    walks = { ...engine.walkWorldCombatProof(), scale: engine.walkWorldCombatScale() };
+  }
   const after = devProvenance();
   if (!smoke && (!after.source?.clean || before.commit !== after.commit)) {
     throw new Error("Source moved during the World combat proof; nothing was published.");
   }
   const report = recordingPayload({
-    kind: "isolated World prototype",
+    kind: blacksmith ? "Blacksmith comparison from a played World checkpoint" : "isolated World prototype",
     tier: smoke ? "smoke" : "proof",
     recordingCommit: before.commit,
     engineSha256,
     ...walks,
-    scale: engine.walkWorldCombatScale(),
   });
   if (smoke) await writeSmokeArtifact(output, report, "World combat smoke");
   else await writeJsonAtomic(output, report);

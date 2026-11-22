@@ -157,12 +157,14 @@ describe("the walked presets", () => {
   it("forges a Maul from ten credited minutes and clears Shale without charge where Striker and the starter Blade fall", { timeout: 60_000 }, () => {
     const result = walkBlacksmithShale(playthroughCheckpointPreset("world-enemy-active").state);
     expect(result).toMatchObject({ credited: 600, banked: 1 });
-    const [blade, striker, maul] = result.branches;
+    const [blade, striker, maul, routedStriker, routedMaul] = result.branches;
     expect(blade?.outcome).toMatchObject({ recovering: true, store: 0 });
     expect(striker?.firstBeat.wallHP).toBe(43);
     expect(striker?.outcome).toMatchObject({ recovering: true, store: 0 });
     expect(maul?.firstBeat.wallHP).toBe(48);
     expect(maul?.outcome).toMatchObject({ wallHP: 0, sentinelHP: 3, store: 0 });
+    expect(routedStriker?.firstBeat.wallHP).toBe(40);
+    expect(routedMaul?.eighthSecond.wallHP).toBeCloseTo(21.7);
   });
 
   it("carries the recipe and origin provenance on each preset descriptor", () => {

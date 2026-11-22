@@ -115,7 +115,10 @@ export function availableClasses(state: GameState): readonly ClassDef[] {
 }
 
 export function freshClassPair(id: ClassId = "engineer"): ClassPairState {
-  return { experience: 0, level: id === "blacksmith" ? 1 : 0, points: 0, spent: {}, rollMeter: { progress: 0, earned: 0 } };
+  return {
+    experience: 0, level: id === "blacksmith" ? 1 : 0, points: 0, spent: {}, rollMeter: { progress: 0, earned: 0 },
+    ...(id === "blacksmith" && { weaponClaims: 0 }),
+  };
 }
 
 export function createHabitClasses(): Habit["classes"] {
@@ -208,17 +211,18 @@ function generatePracticeOffer(state: GameState, pair: ClassPairState, def: Clas
 
 export function weaponChoicesOf(habit: Habit): number {
   const pair = habit.classes.blacksmith;
-  return pair ? pair.rollMeter.earned - (pair.weaponClaims ?? 0) : 0;
+  return pair?.weaponClaims !== undefined ? pair.rollMeter.earned - pair.weaponClaims : 0;
 }
 
 function creditWeaponForge(pair: ClassPairState, seconds: number): void {
   const meter = pair.rollMeter;
   const threshold = BALANCE.blacksmithForgeSeconds;
   const total = requireFinite(meter.progress + seconds, "Blacksmith forge progress");
-  const fills = Math.floor(total / threshold);
+  const progress = total % threshold;
+  const fills = Math.round((total - progress) / threshold);
   const earned = meter.earned + fills;
   if (!Number.isSafeInteger(earned)) throw new NumericFault("Blacksmith weapon choices");
-  meter.progress = total % threshold;
+  meter.progress = progress;
   meter.earned = earned;
 }
 
@@ -376,21 +380,24 @@ export function normalizeHabitClasses(habits: Habit[]): void {
       pair.level = Number.isInteger(pair.level) && pair.level > 0 ? pair.level : 0;
       pair.points = Number.isFinite(pair.points) && pair.points > 0 ? Math.floor(pair.points) : 0;
       const meter = pair.rollMeter && typeof pair.rollMeter === "object" ? pair.rollMeter : freshClassPair().rollMeter;
-      pair.rollMeter = {
-        progress: Number.isFinite(meter.progress) && meter.progress > 0 ? meter.progress : 0,
-        earned: Number.isFinite(meter.earned) && meter.earned > 0 ? Math.floor(meter.earned) : 0,
-      };
+      const progress = Number.isFinite(meter.progress) && meter.progress > 0 ? meter.progress : 0;
       if (id === "blacksmith") {
-        const { progress, earned } = pair.rollMeter;
+        // A lost claim count cannot turn prior claims back into banked weapons.
+        const claimed = pair.weaponClaims;
+        const validCounts = Number.isSafeInteger(meter.earned) && claimed !== undefined &&
+          Number.isSafeInteger(claimed) && claimed >= 0 && meter.earned >= claimed;
         pair.rollMeter = {
           progress: progress < BALANCE.blacksmithForgeSeconds ? progress : 0,
-          earned: Number.isSafeInteger(earned) ? earned : 0,
+          earned: validCounts ? meter.earned : 0,
         };
-        pair.weaponClaims = Number.isSafeInteger(pair.weaponClaims)
-          ? Math.max(0, Math.min(pair.rollMeter.earned, pair.weaponClaims!)) : 0;
+        pair.weaponClaims = validCounts ? claimed : 0;
         pair.level = 1;
         pair.points = 0;
       } else {
+        pair.rollMeter = {
+          progress,
+          earned: Number.isFinite(meter.earned) && meter.earned > 0 ? Math.floor(meter.earned) : 0,
+        };
         delete pair.weaponClaims;
       }
       const def = classDefOf(id);

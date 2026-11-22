@@ -442,8 +442,8 @@ function weaponChoiceHtml(app: App, habit: Habit): string {
   if (state.mode !== "upgrade" || habit.id !== state.activeHabitId || !weaponChoicesOf(habit)) return "";
   return `<div class="weapon-choices" role="group" aria-label="Banked weapon choice">${FORGE_WEAPONS.map((type) => `
     <div class="folio-row weapon-choice">
-      <span>${weaponEffect(state, type)}</span>
-      <button type="button" class="focus-action" data-forge-weapon="${type}" data-habit="${habit.id}">Forge ${WEAPONS[type].name}</button>
+      <button type="button" class="focus-action" data-forge-weapon="${type}" data-habit="${habit.id}" aria-describedby="weapon-effect-${type}">Forge ${WEAPONS[type].name}</button>
+      <span id="weapon-effect-${type}">${weaponEffect(state, type)}</span>
     </div>`).join("")}</div>`;
 }
 
@@ -487,7 +487,7 @@ function habitDevelopHtml(app: App, habit: Habit): string {
   const chips = classes.map((cls) => {
     const selected = habit.classId === cls.id;
     return upgrade
-      ? `<button class="class-chip${selected ? " st-selected" : ""}" data-class-pick="${cls.id}" data-habit="${habit.id}" aria-pressed="${selected}">${cls.name}</button>`
+      ? `<button type="button" class="class-chip${selected ? " st-selected" : ""}" data-class-pick="${cls.id}" data-habit="${habit.id}" aria-pressed="${selected}">${cls.name}<small>${cls.id === "blacksmith" ? "Weapon choices" : "Module rolls"}</small></button>`
       : `<span class="class-chip${selected ? " st-selected" : ""}">${cls.name}</span>`;
   }).join("");
   const nodeTerms: Record<string, CatalogTerm> = { governor: "Governor", reed: "Reed", "punch-card": "Punch card" };

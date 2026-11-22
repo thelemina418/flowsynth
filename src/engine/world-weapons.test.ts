@@ -1,9 +1,11 @@
 import { expect, it } from "vitest";
-import { buyHoneRank, endSession, placeWorldOccupant, prestige, startSession } from "./actions";
+import { buyHoneRank, endSession, pauseSession, placeWorldOccupant, prestige, resumeSession, setWorldConduitDirection, startSession } from "./actions";
 import { advance } from "./advance";
 import { hex } from "./hex";
 import { deserialize, serialize } from "./save";
 import { createInitialState, createWeapon } from "./state";
+import { scenarioOf } from "./scenarios";
+import { applyGap, flushPendingAway, resolveHonestyReport } from "./trust";
 import type { GameState, WeaponType } from "./types";
 
 const reload = (state: GameState) => deserialize(serialize(state, 0)).state!;
@@ -30,7 +32,7 @@ function equip(state: GameState, type: WeaponType, store: number) {
 }
 
 it("Striker strikes unfed on its own cadence and spends only a discrete charge payment when funded", () => {
-  for (const [banked, after, damage] of [[0, 0, 5], [0.99, 0.99, 5], [1, 0, 8], [20, 19, 8]] as const) {
+  for (const [banked, after, damage] of [[0, 0, 5], [1 - Number.EPSILON, 1 - Number.EPSILON, 5], [1, 0, 8], [20, 19, 8]] as const) {
     const state = openingFight();
     const weapon = equip(state, "striker", banked);
     tick(state, 3.99);
@@ -88,4 +90,41 @@ it("resolves two adjacent ordinary copies at their own beats and never spends on
   tick(state, 4);
   expect(state.world.enemies.shale!.hp).toBe(0);
   expect([first.store, second.store]).toEqual([0, 1]);
+});
+
+it("one Column shares conserved charge across two ordinary weapons without an unbound hit", () => {
+  // Fixed routing fixture with one charge per second reaching the Column.
+  const state = scenarioOf("world-combat")!.build(0);
+  const [column] = state.world.columns;
+  const [conduit] = state.world.conduits;
+  const striker = createWeapon(state, "striker");
+  const maul = createWeapon(state, "maul");
+  state.world.weapons.push(striker, maul);
+  for (const [id, q, r] of [[column!.id, 1, 1], [conduit!.id, 1, 0], [striker.id, 1, -1], [maul.id, 0, 1]] as const) {
+    expect(placeWorldOccupant(state, id, hex(q, r)).ok).toBe(true);
+  }
+  expect(startSession(state, null).ok).toBe(true);
+  tick(state, 8);
+  expect([striker.store, maul.store, state.world.enemies.shale!.hp]).toEqual([4, 4, 48]);
+  expect(endSession(state).ok).toBe(true);
+  expect(setWorldConduitDirection(state, conduit!.id, 5).ok).toBe(true);
+  expect(startSession(state, null).ok).toBe(true);
+  tick(state, 8);
+  expect([striker.store, maul.store]).toEqual([4, 12]);
+});
+
+it("does not advance an ordinary weapon on paused or provisional clocks, even after honesty credit", () => {
+  const state = openingFight();
+  const striker = equip(state, "striker", 1);
+  const rng = () => 0.3;
+  tick(state, 3);
+  expect(pauseSession(state).ok).toBe(true);
+  applyGap(state, 600, "visible", 0, rng);
+  expect(resumeSession(state).ok).toBe(true);
+  applyGap(state, 600, "away", 0, rng);
+  flushPendingAway(state, rng);
+  expect(resolveHonestyReport(state, "full", rng).ok).toBe(true);
+  expect([striker.store, state.world.enemies.shale!.hp]).toEqual([1, 48]);
+  tick(state, 1);
+  expect([striker.store, state.world.enemies.shale!.hp]).toEqual([0, 40]);
 });

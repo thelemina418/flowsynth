@@ -64,7 +64,8 @@ export function checkRecorderScripts({ scripts = RECORDER_SCRIPTS, overrides = [
     return ts.createSourceFile(fileName, text, languageVersion, true);
   };
   const program = ts.createProgram({
-    rootNames: scripts.map((script) => path.resolve(root, script)),
+    // Engine-entry declarations can reach the run provenance's Vite imports.
+    rootNames: [...scripts, "src/vite-env.d.ts"].map((script) => path.resolve(root, script)),
     options,
     host,
   });

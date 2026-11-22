@@ -141,6 +141,22 @@ it("refuses an unrepresentable fill without partial credit or a duplicated choic
   expect(weaponChoicesOf(loaded.habits[0]!)).toBe(0);
 });
 
+it("a broken saved fill or claim count does not invent another weapon", () => {
+  const { state, habit } = selectedBlacksmith();
+  start(state); tick(state, 650); finish(state);
+  expect(claimForgedWeapon(state, habit.id, "maul").ok).toBe(true);
+  for (const corrupt of ["claims", "fills"] as const) {
+    const file = JSON.parse(serialize(state, 10_000));
+    const ledger = file.state.habits[0].classes.blacksmith;
+    if (corrupt === "claims") delete ledger.weaponClaims;
+    else ledger.rollMeter.earned = 2.5;
+    const loaded = deserialize(JSON.stringify(file)).state!;
+    expect(loaded.habits[0]!.classes.blacksmith?.rollMeter.progress).toBe(50);
+    expect(claimForgedWeapon(loaded, habit.id, "striker").ok).toBe(false);
+    expect(loaded.world.weapons.map(({ type }) => type)).toEqual(["chargeBlade", "maul"]);
+  }
+});
+
 it("old discovered saves retain Engineer and allow a fresh Blacksmith without a free choice", () => {
   const state = createInitialState();
   const habit = createHabit(state, "Legacy").habit!;
