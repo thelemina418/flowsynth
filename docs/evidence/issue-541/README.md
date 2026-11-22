@@ -28,6 +28,25 @@ Earlier full runs on this lineage:
 | Real-device touch, pinch/pan, screen-reader output | — | **Unavailable:** headless Chromium only, with emulated touch. |
 | Phone outer-Add target size | [`browser/add-outer-a498b85/`](browser/add-outer-a498b85/) | **Measured observation for the owner:** 43×50 px for this constructed spur's fit (below 44 px wide). The size depends on the fit and was not judged. |
 
+### Commit identity rewrite (author only)
+
+The repository's pre-push identity guard refused the four cherry-picked corrections, which kept the legacy author. By owner decision (2026-11-22), the author was rewritten to the live identity; content was not touched. Each rewritten commit has the **same tree hash** as the commit the evidence and checks name, so every SHA cited in this directory refers to byte-identical source. Check any row with `git rev-parse <new>^{tree}`. The pre-rewrite history exists only as the local ref `t3/541-review-port-pre-identity` and cannot be pushed under the guard.
+
+| Cited (pre-rewrite) | Pushed | Tree (identical) | Subject |
+| --- | --- | --- | --- |
+| `311f997a2898` | `ed6ab325e9e1` | `30da381682e5` | Resolve World clock, thresholds, save recovery, and affordance findings |
+| `9449ce335e0b` | `c9a8bb538c75` | `6c5c70e7f041` | Complete #541 preliminary review candidate and criterion record |
+| `711a1b7e21ef` | `b02e3760a3f6` | `2a7e339e0050` | Close remaining #541 source-gate regressions |
+| `22930f7d737d` | `35339c57e44b` | `02a659d41dc3` | Conserve World charge and preserve live miniature disclosure (#541) |
+| `1d70ba346508` | `058a5533edf0` | `3f8304e7ff2e` | Port #541 review corrections to the live repository lineage |
+| `5bc3e0a90925` | `508abeece645` | `4c7c0df0199f` | Keep basic facts on the selected layer miniature (#539 rule) |
+| `4d81a5908794` | `7269c2f58c38` | `fc769d00add1` | Record the selected-miniature tooltip exception in the #539 amendment |
+| `a498b85ca967` | `d1575ca6bf12` | `6920e0026528` | Hide and disarm Upgrade All while Add is armed (#541 F1/F4) |
+| `fdf315d43ba6` | `92e486f9d74b` | `df4c965fb0bb` | Record final #541 integrated recordings and browser evidence at a498b85 |
+| `3442abd7327d` | `e45595b3c937` | `163ae1fc4a04` | Recapture all #541 browser areas at the a498b85 freeze |
+
+The freeze `a498b85` is therefore pushed as `d1575ca6bf12`.
+
 **Browser findings outside this change**, filed rather than fixed by owner decision (none are introduced by #541 except the F3 copy, which follows the app-wide `say()` pattern):
 - F2, the phone Hex-detail header overlapping the reset reason in flow: [#10](https://github.com/thelemina418/flowsynth/issues/10)
 - F3, migration notes reaching only screen readers: [#11](https://github.com/thelemina418/flowsynth/issues/11)
