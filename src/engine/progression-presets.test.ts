@@ -12,6 +12,13 @@ import {
 } from "./playthrough";
 import { SCENARIOS, scenarioOf } from "./scenarios";
 import { horizonReached } from "./accumulator";
+import { hex, sameHex } from "./hex";
+import { advance } from "./advance";
+import { placeModule, placeWorldOccupant, startSession } from "./actions";
+import { CATEGORY_OF } from "./constants";
+import { chargeLineCells } from "./playthrough-placement";
+import { worldCellReserved } from "./world";
+import { walkBlacksmithShale } from "./blacksmith-walk";
 
 // The progression presets (issue #471, parent #465): three scenario
 // checkpoints grown from declared playthrough recipes — the approaching
@@ -73,7 +80,7 @@ describe("the walked presets", () => {
   it("stops the approaching walk at the open door of the played first era", () => {
     const preset = playthroughCheckpointPreset("approaching-prestige");
     expect(preset.record.stop.kind).toBe("checkpoint");
-    expect(preset.record.stop.reason).toContain("Approaching prestige reached at day 9");
+    expect(preset.record.stop.reason).toContain(`Approaching prestige reached at day ${preset.record.days}`);
     expect(preset.record.complete).toBe(false);
     expect(preset.record.bottleneck).toBeNull();
     expect(playthroughNote(preset.record)).toContain("Prompt prestige ◆");
@@ -89,16 +96,11 @@ describe("the walked presets", () => {
   it("stops the pushing walk immediately after its first earned bank, before the spending", () => {
     const preset = playthroughCheckpointPreset("after-first-bank");
     expect(preset.record.stop.kind).toBe("checkpoint");
-    expect(preset.record.stop.reason).toContain("After first bank reached at day 3");
-    // The walk banks at the first break the pending claim reaches its
-    // target; a 600-minute session carries the era measure well past the
-    // entry depth, so the banked floor is the curve's honest 3 at the
-    // later-era-calibrated slope (issue #484: entitlement 2 + 2.5·depth
-    // at the door reads one and a fraction decades past the entry), above
-    // the configured 2 — intent and outcome stay distinguishable in the
-    // note.
-    expect(preset.record.claims).toEqual([3]);
-    expect(playthroughNote(preset.record)).toContain("claim 3/2 Arete");
+    expect(preset.record.stop.reason).toContain(`After first bank reached at day ${preset.record.days}`);
+    // The checkpoint reads its earned bank, not a claim or day pinned to
+    // the former footprint economy. #543 measures the pacing separately.
+    expect(preset.record.claims).toEqual([preset.state.arete]);
+    expect(playthroughNote(preset.record)).toContain(`claim ${preset.state.arete}/2 Arete`);
     expect(playthroughNote(preset.record)).toContain("no Arete spent");
     const state = preset.state;
     // The earned claim sits unspent — banked by the walk's own practice
@@ -116,22 +118,53 @@ describe("the walked presets", () => {
   it("stops the pushing walk at the living fight with the placement unplayed", () => {
     const preset = playthroughCheckpointPreset("world-enemy-active");
     expect(preset.record.stop.kind).toBe("checkpoint");
-    // The claim grant (issue #484) funds the second era's rebuild, so the
-    // discovered enemy's threshold crosses a day earlier than the
-    // pre-grant walk's day 4 — the fixture pins the grant-funded day.
-    expect(preset.record.stop.reason).toContain("World enemy reached at day 3");
-    // No retired entry gate; the declared expansion rule spends three
-    // Arete on the two Rack Extenders before other lasting purchases.
-    expect(playthroughNote(preset.record)).toContain("spent 2× Rack Extenders");
+    expect(preset.record.stop.reason).toContain(`World enemy reached at day ${preset.record.days}`);
+    expect(preset.record.areteSpent.rowUnlocks).toBe(0);
+    expect(playthroughNote(preset.record)).not.toContain("Rack Extenders");
     expect(preset.record.areteSpent.columns).toBe(0);
     const state = preset.state;
     const living = Object.entries(state.world.enemies).filter(([, enemy]) => enemy.discovered && enemy.hp > 0);
     expect(living.length).toBeGreaterThanOrEqual(1);
     expect(state.world.weapons.some((weapon) => weapon.pos === null)).toBe(true);
     expect(state.catalogEntryOwned).toBe(false);
-    expect(state.world.columns.some((column) => column.pos !== null)).toBe(true);
-    expect(state.arete).toBe(0);
+    const column = state.world.columns.find((column) => column.pos !== null);
+    expect(column).toBeDefined();
+    expect(worldCellReserved(state, column!.pos!)).toBe(false);
+    expect(chargeLineCells(state).some(pos => sameHex(pos, column!.pos!))).toBe(true);
+    expect(state.arete).toBeLessThanOrEqual(preset.record.claims[0]!);
     scenarioOf("world-enemy")!.assert(state, 0);
+  });
+
+  it("can win Shale from the earned World checkpoint with the starter kit, ordinary moves and no new grant", () => {
+    const { state } = playthroughCheckpointPreset("world-enemy-active");
+    const { creatures: [sentinel], armor: [armor], weapons: [blade], spells: [spell], columns: [column] } = state.world;
+    const host = state.modules.find((module) => CATEGORY_OF[module.type] === "oscillator")!;
+    const generator = state.modules.find((module) => module.type === "focusKeyed" && module.reserve > 20)!;
+    expect(generator).toBeDefined();
+    expect(placeModule(state, host.id, hex(1, -1))).toMatchObject({ ok: true });
+    expect(placeModule(state, generator.id, hex(1, 0)).ok).toBe(true);
+    for (const [id, q, r] of [
+      [column!.id, 1, -1], [sentinel!.id, 0, 0], [armor!.id, -1, 1],
+      [blade!.id, 1, 0], [spell!.id, 0, -1],
+    ] as const) expect(placeWorldOccupant(state, id, hex(q, r)), `${id} at ${q},${r}`).toMatchObject({ ok: true });
+    expect(startSession(state, null).ok).toBe(true);
+    expect(advance(state, 32, () => 0.3).fault).toBeUndefined();
+    expect(state.world.enemies.shale?.hp).toBe(0);
+    expect(sentinel!.hp).toBeGreaterThan(0);
+    expect(state.world.enemies.basalt?.discovered).toBe(false); // own threshold still unmet
+  });
+
+  it("forges a Maul from ten credited minutes and clears Shale without charge where Striker and the starter Blade fall", { timeout: 60_000 }, () => {
+    const result = walkBlacksmithShale(playthroughCheckpointPreset("world-enemy-active").state);
+    expect(result).toMatchObject({ credited: 600, banked: 1 });
+    const [blade, striker, maul, routedStriker, routedMaul] = result.branches;
+    expect(blade?.outcome).toMatchObject({ recovering: true, store: 0 });
+    expect(striker?.firstBeat.wallHP).toBe(43);
+    expect(striker?.outcome).toMatchObject({ recovering: true, store: 0 });
+    expect(maul?.firstBeat.wallHP).toBe(48);
+    expect(maul?.outcome).toMatchObject({ wallHP: 0, sentinelHP: 3, store: 0 });
+    expect(routedStriker?.firstBeat.wallHP).toBe(40);
+    expect(routedMaul?.eighthSecond.wallHP).toBeCloseTo(21.7);
   });
 
   it("carries the recipe and origin provenance on each preset descriptor", () => {
@@ -141,6 +174,7 @@ describe("the walked presets", () => {
       "after-first-bank",
       "world-enemy",
       "focus",
+      "world-combat",
     ]);
     const approaching = scenarioOf("approaching-prestige")!;
     expect(approaching.origin).toBe("recipe checkpoint");

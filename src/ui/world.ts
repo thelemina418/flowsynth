@@ -1,32 +1,20 @@
 import { SHORTCUTS } from "./shortcuts";
-import { BALANCE, WORLD_ENEMIES } from "../engine/constants";
-// The World layer's UI (issue #426, ADR-0074): the board's second face,
-// built to the design round's approved presentation language
-// (`world-faces.prototype.html` at c32438a, variant A — recorded on the
-// issue). The layer legend's World face leads the pair; the layer renders
-// one steel hex plate per coordinate (#529 / ADR-0087) — the reserved enemy positions with
-// their identity concealed, the discovered enemies' HP and penalty, the
-// cleared plates' engraved era bonus, the occupants' own figures, and the
-// quiet open cells — while the module layer never enters the drawing at
-// all (the issue #298/#386 discipline the Mutator Grid established).
-// Placement and relocation are free between sessions through the board's
-// gesture families — drag, arm-and-place, and the Hex detail — and every
-// placement preview reads the engine's one lift function
-// (columnLiftsOf), never a UI-side re-derivation. Combat never demands
-// attention: the faces carry their own figures, a fed weapon's fill
-// breathes at low amplitude, and reduced motion stands fully static.
-import { enemyDefAt, enemyDefeated, enemyPenaltyOf, enemyStateOf, attackPowerOf, columnLiftsOf, eligibleTargetsOf, worldOccupantAt } from "../engine/world";
-import { adjacent, sameHex } from "../engine/hex";
+// World shares the Modules hex chassis. All combat and routing reads come
+// from the engine; only preparation exposes configuration controls.
+import { columnLiftsOf, enemyStateOf, worldCellReserved, worldEnemiesOf, worldEnemyAt, worldOccupantAt, worldPieceOf, worldPiecesOf, type WorldLift, type WorldPiece } from "../engine/world";
+import { neighbors, sameHex } from "../engine/hex";
+import { COMBAT, type CombatWall } from "../engine/world-combat";
 import { cellNoteOf } from "../engine/lattice";
 import { displayedRates } from "../engine/economy";
-import type { GameState, Hex, RateSnapshot, WeaponCopy, WorldColumn } from "../engine/types";
+import type { GameState, Hex, RateSnapshot } from "../engine/types";
 import type { App } from "./app";
 import { startPointerDrag } from "./pointer-drag";
 import { HEX_RADIUS, boardPoint, hexPoints } from "./face";
-import { COLUMN_SHORT, COLUMN_WORD, WORLD_META } from "./meta";
-import { formatInt, formatNumber } from "./format";
+import { COLUMN_SHORT } from "./meta";
+import { WEAPONS } from "../engine/weapons";
+import { formatNumber } from "./format";
 import { wireTooltips } from "./instrument";
-import { termTipHtml } from "./terms";
+import { COMBAT_GLYPHS, enemyPenaltyFigure, worldPieceRead, worldPieceName } from "./world-combat";
 
 /* ── The layer's liveness ───────────────────────────── */
 
@@ -63,10 +51,13 @@ export function layerLegendActiveFace(app: App): "modules" | "world" {
   return app.ui.detail ? app.ui.detail.face : app.ui.boardLayer;
 }
 
-// World keeps the steel plate and functional glyph register, with a
-// flat-crowned hex distinct from Modules' pointy chassis, rails and rings.
-export const LAYER_WORLD_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 12 6 4h12l3 8-3 8H6Z"/><path d="M8.5 15.5v-4.2l3.5-3.3 3.5 3.3v4.2z"/></svg>`;
-export const LAYER_MODULES_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 2.6 20.2 7.3v9.4L12 21.4 3.8 16.7V7.3Z"/><path d="M12 8.2v7.6M8.4 10.1l7.2 3.8M15.6 10.1l-7.2 3.8"/></svg>`;
+// The abstract board symbols share a chassis too. The inner mark, not
+// the cut, distinguishes the layer when no specific occupant is shown.
+function layerSymbol(mark: string): string {
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><polygon transform="translate(12 12)" points="${hexPoints(9.4)}"/><path d="${mark}"/></svg>`;
+}
+export const LAYER_WORLD_SVG = layerSymbol("M8.5 15.5v-4.2l3.5-3.3 3.5 3.3v4.2z");
+export const LAYER_MODULES_SVG = layerSymbol("M12 8.2v7.6M8.4 10.1l7.2 3.8M15.6 10.1l-7.2 3.8");
 
 export function layerLegendHtml(app: App): string {
   const { state } = app;
@@ -76,12 +67,6 @@ export function layerLegendHtml(app: App): string {
   // Discovery reveals a real door, never a locked preview.
   return `${locked ? "" : `<button class="legend-symbol${worldSelected ? " active" : ""}" data-legend-layer="world" aria-pressed="${worldSelected}" aria-label="World layer" title="World — enemies, weapons, Columns · ${SHORTCUTS.layer.label} cycles layers">${LAYER_WORLD_SVG}</button>`}
     <button class="legend-symbol${active === "modules" ? " active" : ""}" data-legend-layer="modules" aria-pressed="${active === "modules"}" aria-label="Modules layer" title="Modules — the production grid · ${SHORTCUTS.layer.label} cycles layers">${LAYER_MODULES_SVG}</button>`;
-}
-
-// The locked World face's preview line: the reveal's threshold in figures
-// — the click's whole answer, in flow as in upgrade.
-export function worldRevealPreview(): string {
-  return `${formatNumber(BALANCE.world.entryNous)} era-earned`;
 }
 
 const boundLegends = new WeakSet<HTMLElement>();
@@ -119,16 +104,14 @@ export function renderLayerLegend(app: App): void {
    One steel hex per coordinate: reserved, discovered, cleared, occupant
    and open. The World amendment changes the visible plate only; the
    coordinate projection, full-cell hits and engine footprint stay intact.
-   Flat crowns keep the existing name/figure bands legible and distinguish
-   World from Modules without borrowing module rarity or merge rings. */
-
-const PLATE_HALF = 37;
+   The shared chassis wears World steel, paired side slots and functional
+   glyphs instead of category rails, rarity marks or merge rings. */
 
 // The plates' content rhythm (the design round's): the nameplate in the
 // top band, the glyph or bar at center, the figures beneath, the verdict
 // (when a face has one) in the bottom band.
-const NAME_Y = -PLATE_HALF + 13;
-const VERDICT_Y = PLATE_HALF - 6;
+const NAME_Y = -24;
+const VERDICT_Y = 39;
 
 // The occupants' and enemies' stroke glyphs, drawn centered on the origin
 // in the layer's register — the tray tiles, the drag ghost, and the Hex
@@ -139,66 +122,19 @@ export const WORLD_GLYPH = {
   column: '<rect x="-7" y="-12" width="14" height="24"/><path d="M-11-12h22M-11 12h22"/>',
 };
 
-function worldGlyph(kind: "enemy" | "weapon" | "column", dimmed: boolean, scale = 1): string {
-  return `<g class="world-glyph${dimmed ? " dimmed" : ""}" transform="scale(${scale})">${WORLD_GLYPH[kind]}</g>`;
+type WorldGlyphKind = keyof typeof WORLD_GLYPH | keyof typeof COMBAT_GLYPHS;
+
+function worldGlyph(kind: WorldGlyphKind, dimmed: boolean, scale = 1, rotation = 0): string {
+  const glyph = kind in COMBAT_GLYPHS ? COMBAT_GLYPHS[kind as keyof typeof COMBAT_GLYPHS] : WORLD_GLYPH[kind as keyof typeof WORLD_GLYPH];
+  return `<g class="world-glyph${dimmed ? " dimmed" : ""}" transform="scale(${scale})${rotation ? ` rotate(${rotation})` : ""}">${glyph}</g>`;
 }
 
-// The coordinate's World verdict: why the cell takes no placement, in the
-// face's own words. Null on an open cell.
-export function worldPlacementVerdict(state: GameState, pos: Hex): string | null {
-  if (enemyDefAt(pos)) return enemyDefeated(state, enemyDefAt(pos)!.key) ? "cleared" : "reserved";
-  const occupant = worldOccupantAt(state, pos);
-  if (occupant) return "occupied";
-  return null;
-}
+const WORLD_SIDE_SLOTS = '<path class="world-side-slots" d="M-47-6h13m-13 12h13M34-6h13m-13 12h13"/>';
+const WORLD_RESERVATION_HATCH = '<path class="world-hatch" d="M-30 14l10-10m0 10 10-10m0 10 10-10m0 10 10-10m0 10 10-10m0 10 10-10"/>';
 
-// The plate's polygon, shared by every face variant; the Hex detail's
-// enlarged chassis takes the bigger cut (the mutator chassis's own scale).
-function worldHexPoints(half: number): string {
-  return `${-half * 1.25},0 ${-half * 0.8},${-half} ${half * 0.8},${-half} ${half * 1.25},0 ${half * 0.8},${half} ${-half * 0.8},${half}`;
-}
-
-function plate(cls: string, half: number = PLATE_HALF): string {
-  return `<polygon class="world-plate ${cls}" points="${worldHexPoints(half)}"/>`;
-}
-
-// The weapon's charge bar: the stored charge against capacity, the fill in
-// the charge register. A fed weapon's fill breathes at low amplitude; an
-// unfed or full one stands still. Reduced motion renders static (CSS).
-function chargeBar(store: number, live: boolean, width = 52): string {
-  const cap = BALANCE.world.storageCap;
-  const fill = Math.max(0, Math.min(1, store / cap)) * width;
-  return `<rect class="world-bar" x="${-width / 2}" y="0" width="${width}" height="5"/><rect class="world-bar-fill${live ? " live" : ""}" x="${-width / 2}" y="0" width="${fill.toFixed(2)}" height="5"/>`;
-}
-
-// The weapons' face: nameplate, glyph, the stored charge against capacity,
-// the attack power — and the unfed verdict on the plate itself when no
-// Column routes supply to it (the mechanic the board shows, never a
-// tooltip apology).
-function weaponFaceHtml(state: GameState, weapon: WeaponCopy, lift: number, pos: Hex): string {
-  const fed = lift > 0;
-  const short = WORLD_META[weapon.type].short;
-  return `${plate("firm")}
-    <text class="world-word" y="${NAME_Y}" text-anchor="middle">${short}${fed ? "" : " · UNFED"}</text>
-    <g transform="translate(0,-11)">${worldGlyph("weapon", !fed, 0.7)}</g>
-    <g transform="translate(0,4)">${chargeBar(weapon.store, fed)}</g>
-    <text class="world-fig${fed ? " charge" : " dim"}" y="22" text-anchor="middle">⌁${formatInt(Math.floor(weapon.store))}/${BALANCE.world.storageCap}</text>
-    <text class="world-fig" y="${VERDICT_Y}" text-anchor="middle">ATK ${formatInt(attackPowerOf(state, weapon.type))}</text>
-    <polygon class="world-hit" tabindex="0" role="button" aria-label="World cell at ${cellNoteOf(pos)}" data-world-cell="${pos.q},${pos.r}" points="${hexPoints(HEX_RADIUS)}" fill="none" stroke="none"/>`;
-}
-
-// The Column's face: its lifted supply figure alone — the one figure the
-// glossary grants it. A hostless cell wears the inert verdict; a fed one
-// shows the copy rate in the charge register.
-function columnFaceHtml(state: GameState, lift: number, pos: Hex): string {
-  const hostless = !state.modules.some((m) => m.pos !== null && sameHex(m.pos, pos));
-  return `${plate("firm")}
-    <text class="world-word" y="${NAME_Y}" text-anchor="middle">${COLUMN_SHORT}</text>
-    ${worldGlyph("column", hostless || lift <= 0, 0.8)}
-    ${hostless
-      ? `<text class="world-word" y="22" text-anchor="middle">inert · no host</text>`
-      : `<text class="world-fig${lift > 0 ? " charge" : " dim"}" y="22" text-anchor="middle">⌁${formatNumber(lift)}/s</text>`}
-    <polygon class="world-hit" tabindex="0" role="button" aria-label="World cell at ${cellNoteOf(pos)}" data-world-cell="${pos.q},${pos.r}" points="${hexPoints(HEX_RADIUS)}" fill="none" stroke="none"/>`;
+function plate(cls: string): string {
+  const inset = cls === "reserved" ? WORLD_RESERVATION_HATCH : cls === "firm" || cls === "engraved" ? WORLD_SIDE_SLOTS : "";
+  return `<polygon class="world-plate ${cls}" points="${hexPoints(HEX_RADIUS)}"/>${inset}`;
 }
 
 // The reserved cell's face: claimed-but-unknown — the hatch says the
@@ -206,41 +142,15 @@ function columnFaceHtml(state: GameState, lift: number, pos: Hex): string {
 // with a discovered enemy's firm plate.
 function reservedFaceHtml(pos: Hex): string {
   return `${plate("reserved")}
-    <polygon class="world-hatch" points="${worldHexPoints(PLATE_HALF)}"/>
     <text class="world-word" y="-6" text-anchor="middle">RESERVED</text>
     <polygon class="world-hit" tabindex="0" role="button" aria-label="World cell at ${cellNoteOf(pos)}" data-world-cell="${pos.q},${pos.r}" points="${hexPoints(HEX_RADIUS)}" fill="none" stroke="none"/>`;
 }
 
-// The discovered enemy's face: the firm plate, the hostile glyph, the
-// remaining HP, the live penalty figure — the shared read, not the
-// authored base, so the plate shows the era's current pressure (issue
-// #489).
-function enemyFaceHtml(state: GameState, pos: Hex, key: string): string {
-  const def = enemyDefAt(pos)!;
-  const live = enemyStateOf(state, key);
-  return `${plate("firm")}
-    <text class="world-word" y="${NAME_Y}" text-anchor="middle">ENEMY</text>
-    ${worldGlyph("enemy", false, 0.85)}
-    <text class="world-fig" y="16" text-anchor="middle">HP ${formatInt(Math.max(0, Math.ceil(live.hp)))}/${formatInt(Math.ceil(def.maxHp))}</text>
-    <text class="world-fig penalty" y="${VERDICT_Y}" text-anchor="middle">${enemyPenaltyFigure(state, key)}</text>
-    <polygon class="world-hit" tabindex="0" role="button" aria-label="World cell at ${cellNoteOf(pos)}" data-world-cell="${pos.q},${pos.r}" points="${hexPoints(HEX_RADIUS)}" fill="none" stroke="none"/>`;
-}
-
-// The one penalty figure every enemy surface prints — the plate, the Hex
-// detail's chassis, the Hex detail's World line: the shared live read,
-// rendered in exactly one place (issue #489).
-export function enemyPenaltyFigure(state: GameState, key: string): string {
-  return `−${Math.round(enemyPenaltyOf(state, key) * 100)}% ν`;
-}
-
-// The cleared plate: the encounter retained, the era bonus engraved — the
-// completion read in the state grammar, quiet in the register.
-function clearedFaceHtml(pos: Hex): string {
+function clearedFaceHtml(wall: CombatWall): string {
   return `${plate("engraved")}
-    <text class="world-word" y="${NAME_Y}" text-anchor="middle">CLEARED</text>
-    ${worldGlyph("enemy", true, 0.7)}
-    <text class="world-fig dim engraved-fig" y="20" text-anchor="middle">+${Math.round(enemyDefAt(pos)!.bonus * 100)}% ν</text>
-    <polygon class="world-hit" tabindex="0" role="button" aria-label="World cell at ${cellNoteOf(pos)}" data-world-cell="${pos.q},${pos.r}" points="${hexPoints(HEX_RADIUS)}" fill="none" stroke="none"/>`;
+    <text class="world-word" y="${NAME_Y}" text-anchor="middle">${wall.name}</text>
+    <text class="world-fig engraved-fig" y="10" text-anchor="middle">✓</text>
+    <text class="world-word" y="30" text-anchor="middle">CLEARED</text>`;
 }
 
 // The open cell's face: quiet dashed hairline — owned space a placement
@@ -249,6 +159,43 @@ function clearedFaceHtml(pos: Hex): string {
 function openFaceHtml(pos: Hex, armed: boolean): string {
   return `${plate(armed ? "open pulse" : "open")}
     <polygon class="world-hit" tabindex="0" role="button" aria-label="World cell at ${cellNoteOf(pos)}" data-world-cell="${pos.q},${pos.r}" points="${hexPoints(HEX_RADIUS)}" fill="none" stroke="none"/>`;
+}
+
+function combatEngraving(name: string, mark: string, read: string, verdict: string, large: boolean): string {
+  return `${plate("firm")}
+    <text class="world-word" y="${large ? -27 : NAME_Y}" text-anchor="middle">${name}</text>
+    <g transform="translate(0,${large ? -10 : -5})">${mark}</g>
+    <text class="world-fig" y="${large ? 22 : 17}" text-anchor="middle">${read}</text>
+    <text class="world-fig" y="${large ? 36 : VERDICT_Y}" text-anchor="middle">${verdict}</text>`;
+}
+
+function pieceEngraving(state: GameState, piece: WorldPiece, lift: WorldLift, large: boolean) {
+  const name = worldPieceName(piece);
+  const label = piece.kind === "column" ? COLUMN_SHORT : piece.kind === "weapon" ? WEAPONS[piece.copy.type].plate : name;
+  const { read, stateWord, tip } = worldPieceRead(state, piece, lift);
+  let rotation = 0;
+  if (piece.kind === "conduit" && piece.copy.pos) {
+    const [x, y] = boardPoint(piece.copy.pos);
+    const [toX, toY] = boardPoint(neighbors(piece.copy.pos)[piece.copy.direction]!);
+    rotation = Math.atan2(toY - y, toX - x) * (180 / Math.PI);
+  }
+  const mark = worldGlyph(piece.kind, false, large ? 1.15 : 0.8, rotation);
+  return { inner: combatEngraving(label, mark, read, stateWord, large), name, read, stateWord, tip };
+}
+
+function wallEngraving(state: GameState, wall: CombatWall, large: boolean) {
+  const read = `${Math.ceil(enemyStateOf(state, wall.key).hp)}/${wall.maxHp} HP`;
+  const pressure = enemyPenaltyFigure(state, wall.key);
+  const mark = wall.key === "shale" || wall.key === "basalt" ? worldGlyph(wall.key, false, large ? 1.15 : 0.8) : `<text class="world-word" y="4" text-anchor="middle">${wall.symbol}</text>`;
+  return { inner: combatEngraving(wall.name, mark, read, pressure, large), label: `${wall.name} · ${read} · ${pressure}` };
+}
+
+function wallMechanic(wall: CombatWall): string {
+  return `Hits for ${wall.damage} HP / ${COMBAT.enemyCadence} s · heals ${wall.regeneration} HP/s`;
+}
+
+function worldGridHit(pos: Hex, label: string): string {
+  return `<polygon class="world-hit" tabindex="0" role="button" aria-label="${label} · ${cellNoteOf(pos)}" data-world-cell="${pos.q},${pos.r}" points="${hexPoints(HEX_RADIUS)}" fill="none" stroke="none"/>`;
 }
 
 /* ── The grid decorations ───────────────────────────── */
@@ -264,28 +211,30 @@ export function worldGridDecorations(app: App, snapshot: RateSnapshot): string {
   const lift = columnLiftsOf(state, snapshot);
   const armed = worldLayerLive(app) && ui.worldArmed !== null;
   const parts: string[] = [];
-  for (const def of WORLD_ENEMIES) {
+  for (const def of worldEnemiesOf(state)) {
+    if (!worldCellReserved(state, def.pos)) continue;
     const [x, y] = boardPoint(def.pos);
-    const live = state.world.enemies[def.key];
-    const face = !live?.discovered
-      ? reservedFaceHtml(def.pos)
-      : enemyDefeated(state, def.key)
-        ? clearedFaceHtml(def.pos)
-        : enemyFaceHtml(state, def.pos, def.key);
+    const live = enemyStateOf(state, def.key);
+    let face: string;
+    if (!live.discovered) face = reservedFaceHtml(def.pos);
+    else {
+      const { inner, label } = wallEngraving(state, def, false);
+      face = inner + worldGridHit(def.pos, label);
+    }
     parts.push(`<g data-key="world-${def.key}" transform="translate(${x.toFixed(2)},${y.toFixed(2)})">${face}</g>`);
   }
   for (const pos of state.cells) {
-    if (enemyDefAt(pos)) continue;
+    if (worldCellReserved(state, pos)) continue;
     const [x, y] = boardPoint(pos);
     const occupant = worldOccupantAt(state, pos);
     if (!occupant) {
-      parts.push(`<g data-key="world-open-${pos.q},${pos.r}" transform="translate(${x.toFixed(2)},${y.toFixed(2)})">${openFaceHtml(pos, armed)}</g>`);
+      const cleared = worldEnemyAt(state, pos);
+      const face = cleared && !armed ? clearedFaceHtml(cleared) + worldGridHit(pos, `${cleared.name} cleared · open World cell`) : openFaceHtml(pos, armed);
+      parts.push(`<g data-key="world-open-${pos.q},${pos.r}" transform="translate(${x.toFixed(2)},${y.toFixed(2)})">${face}</g>`);
       continue;
     }
-    const inner =
-      occupant.kind === "weapon"
-        ? weaponFaceHtml(state, state.world.weapons.find((w) => w.id === occupant.id)!, lift.byWeapon.get(occupant.id) ?? 0, pos)
-        : columnFaceHtml(state, lift.byColumn.get(occupant.id) ?? 0, pos);
+    const engraving = pieceEngraving(state, worldPieceOf(state, occupant.id)!, lift, false);
+    const inner = engraving.inner + worldGridHit(pos, [engraving.name, engraving.read, engraving.stateWord].filter(Boolean).join(" · "));
     parts.push(`<g data-key="world-occ-${pos.q},${pos.r}" class="world-occupant" transform="translate(${x.toFixed(2)},${y.toFixed(2)})">${inner}</g>`);
   }
   return `<g data-key="world-grid">${parts.join("")}</g>`;
@@ -294,45 +243,26 @@ export function worldGridDecorations(app: App, snapshot: RateSnapshot): string {
 // The lens's World extent: the authored positions sit on coordinates the
 // owned patch may not cover, so the board's bounds read includes them
 // while the layer stands — zoom and pan hold the whole face.
-export function worldLensCoordinates(): Hex[] {
-  return WORLD_ENEMIES.map((def) => def.pos);
+export function worldLensCoordinates(state: GameState): Hex[] {
+  return worldEnemiesOf(state).filter((def) => worldCellReserved(state, def.pos)).map((def) => def.pos);
 }
 
 /* ── The reserved readout's ask ─────────────────────── */
 
-// Hovering a plate asks its deeper routing and reset facts into the reserved
-// readout — one spot, never floating over the board. The weapons carry
-// their routing (fed, by whom); the enemies their threat; the reserved
-// cells their silence.
+// The reserved readout carries deeper mechanics, not a second copy of the
+// plate's identity or state.
 export function worldAskHtml(app: App, pos: Hex, snapshot: RateSnapshot): string {
   const { state } = app;
-  const def = enemyDefAt(pos);
-  if (def) {
-    const live = state.world.enemies[def.key];
-    if (!live?.discovered) {
-      return `<span class="chord-readout-chip mono" style="--cc:var(--world)">Reserved cell · ${cellNoteOf(pos)} — the World holds this position</span>`;
-    }
-    if (enemyDefeated(state, def.key)) {
-      return `<span class="chord-readout-chip mono" style="--cc:var(--world)">Cleared · returns at prestige</span>`;
-    }
-    return `<span class="chord-readout-chip mono" style="--cc:var(--world)">Enemy · returns at prestige</span>`;
-  }
+  const def = worldEnemyAt(state, pos);
   const occupant = worldOccupantAt(state, pos);
-  if (!occupant) return `<span class="chord-readout-chip mono" style="--cc:var(--world)">Open World cell · ${cellNoteOf(pos)}</span>`;
-  if (occupant.kind === "column") {
-    const lift = columnLiftsOf(state, snapshot);
-    const rate = lift.byColumn.get(occupant.id) ?? 0;
-    const hostless = !state.modules.some((m) => m.pos !== null && sameHex(m.pos, pos));
-    const fed = state.world.weapons
-      .filter((w) => w.pos !== null && adjacent(w.pos, pos) && (lift.byWeapon.get(w.id) ?? 0) > 0)
-      .map((w) => WORLD_META[w.type].short);
-    return `<span class="chord-readout-chip mono" style="--cc:var(--world)">${COLUMN_WORD} · ${hostless ? "inert · no host" : `lifts ⌁${formatNumber(rate)}/s${fed.length ? ` → ${fed.join(", ")}` : " · no adjacent weapon"}`}</span>`;
+  let read: string | undefined;
+  if (def && worldCellReserved(state, pos)) {
+    if (enemyStateOf(state, def.key).discovered) read = wallMechanic(def);
+  } else if (occupant) {
+    const item = worldPieceOf(state, occupant.id)!;
+    read = worldPieceRead(state, item, columnLiftsOf(state, snapshot)).tip;
   }
-  const weapon = state.world.weapons.find((w) => w.id === occupant.id)!;
-  const lift = columnLiftsOf(state, snapshot).byWeapon.get(weapon.id) ?? 0;
-  const targets = eligibleTargetsOf(state, weapon);
-  const targetWords = targets.map((key) => `at ${cellNoteOf(WORLD_ENEMIES.find((d) => d.key === key)!.pos)}`);
-  return `<span class="chord-readout-chip mono" style="--cc:var(--world)">${WORLD_META[weapon.type].name}${lift > 0 ? ` · fed ⌁${formatNumber(lift)}/s` : " · unfed"} · ATK ${formatInt(attackPowerOf(state, weapon.type))}${targetWords.length ? ` · engages ${targetWords.join(", ")}` : " · no target in reach"}</span>`;
+  return read ? `<span class="chord-readout-chip mono" style="--cc:var(--world)">${read}</span>` : "";
 }
 
 /* ── The placement preview ────────────────────────────
@@ -350,35 +280,20 @@ export interface WorldPreview {
 // engine would take. Null off valid targets (the register shows nothing).
 export function worldPlacementPreview(state: GameState, id: string, pos: Hex | null): WorldPreview | null {
   if (pos === null || state.mode !== "upgrade") return null;
-  const isColumn = state.world.columns.some((c) => c.id === id);
-  const isWeapon = state.world.weapons.some((w) => w.id === id);
-  if (!isColumn && !isWeapon) return null;
-  if (enemyDefAt(pos)) return null;
+  const piece = worldPieceOf(state, id);
+  if (!piece || (piece.kind === "creature" && piece.copy.recovering)) return null;
+  if (worldCellReserved(state, pos) || !state.cells.some((cell) => sameHex(cell, pos))) return null;
   const occupant = worldOccupantAt(state, pos);
   if (occupant && occupant.id !== id) return null;
   const snapshot = displayedRates(state, true);
   const before = columnLiftsOf(state, snapshot);
   const after = columnLiftsOf(state, snapshot, { id, pos });
   const rows: string[] = [];
-  const share = (lift: { byWeapon: Map<string, number> }, weaponId: string): number => lift.byWeapon.get(weaponId) ?? 0;
-  const routeWord = (rate: number): string => (rate > 0 ? `⌁${formatNumber(rate)}/s` : "unfed");
-  if (isWeapon) {
-    const was = share(before, id);
-    const now = share(after, id);
-    rows.push(`this ${WORLD_META[state.world.weapons.find((w) => w.id === id)!.type].short}: ${routeWord(was)} → ${routeWord(now)}`);
-  }
-  if (isColumn) {
-    const was = before.byColumn.get(id) ?? 0;
-    const now = after.byColumn.get(id) ?? 0;
-    rows.push(`${COLUMN_SHORT}: ⌁${formatNumber(was)}/s → ⌁${formatNumber(now)}/s`);
-  }
-  // The neighbors: every other weapon whose routing share the move changes.
-  for (const weapon of state.world.weapons) {
-    if (weapon.id === id || weapon.pos === null) continue;
-    const was = share(before, weapon.id);
-    const now = share(after, weapon.id);
-    if (Math.abs(was - now) < 1e-9) continue;
-    rows.push(`${WORLD_META[weapon.type].short}: ${routeWord(was)} → ${routeWord(now)}`);
+  for (const item of worldPiecesOf(state)) {
+    if (item.kind !== "column" && item.kind !== "spell" && item.kind !== "weapon") continue;
+    const rates = (lift: WorldLift) => (item.kind === "column" ? lift.byColumn : item.kind === "spell" ? lift.bySpell : lift.byWeapon).get(item.copy.id) ?? 0;
+    const prior = rates(before), moved = rates(after);
+    if (item.copy.id === id || Math.abs(prior - moved) > 1e-9) rows.push(`${worldPieceName(item)}: ⌁${formatNumber(prior)}/s → ⌁${formatNumber(moved)}/s`);
   }
   return { moved: id, rows };
 }
@@ -395,87 +310,40 @@ export function worldPreviewHtml(preview: WorldPreview): string {
     drag out retrieves; collapsed, it keeps the symbol and stored count —
     the inventory's own grammar, one count, nowhere doubled. */
 
-export function worldTrayOccupants(state: GameState): { weapons: WeaponCopy[]; columns: WorldColumn[] } {
-  return {
-    weapons: state.world.weapons.filter((w) => w.pos === null),
-    columns: state.world.columns.filter((c) => c.pos === null),
-  };
-}
-
 // Inventory and the real pointer ghost share the board's steel hex.
-export function worldTileInner(kind: "weapon" | "column"): string {
-  return `<polygon class="world-tile-plate" points="${worldHexPoints(46)}"/>
-    ${worldGlyph(kind === "weapon" ? "weapon" : "column", false, 1.9)}`;
+export function worldTileInner(kind: WorldPiece["kind"]): string {
+  return `<polygon class="world-tile-plate" points="${hexPoints(HEX_RADIUS)}"/>
+    ${WORLD_SIDE_SLOTS}${worldGlyph(kind, false, 1.9)}`;
 }
 
-export function worldTileSvg(kind: "weapon" | "column"): string {
-  return `<svg viewBox="-70 -70 140 140" aria-hidden="true" style="color: var(--world)">${worldTileInner(kind)}</svg>`;
+export function worldTileSvg(kind: WorldPiece["kind"]): string {
+  return `<svg viewBox="-70 -70 140 140" aria-hidden="true">${worldTileInner(kind)}</svg>`;
 }
 
 // The collapsed tray's one mark: the plate symbol + the stored count — the
 // inventory's own collapsed grammar.
 const WORLD_TRAY_ICON = LAYER_WORLD_SVG;
 
-function weaponTrayRead(state: GameState, weapon: WeaponCopy): string {
-  return `⌁${formatInt(Math.floor(weapon.store))}/${BALANCE.world.storageCap} · ATK ${formatInt(attackPowerOf(state, weapon.type))}`;
-}
-
 function worldInspectHtml(app: App): string {
   const { state } = app;
   const id = app.ui.worldTray.inspect!;
-  const weapon = state.world.weapons.find((w) => w.id === id && w.pos === null);
-  const column = state.world.columns.find((c) => c.id === id && c.pos === null);
-  if (!weapon && !column) return `<button data-world-back>Back to tray</button><p class="inventory-empty">This occupant is no longer in the tray.</p>`;
-  const locked = state.mode !== "upgrade";
-  const kind = weapon ? "weapon" : "column";
-  const target = app.ui.detail?.pos;
-  const preview = target ? worldPlacementPreview(state, id, target) : null;
+  const piece = worldPieceOf(state, id);
+  if (!piece || piece.copy.pos) return `<button data-world-back>Back to tray</button>`;
+  const { read, stateWord, tip } = worldPieceRead(state, piece);
+  const isRecovering = piece.kind === "creature" && piece.copy.recovering;
+  const preview = app.ui.detail && worldPlacementPreview(state, id, app.ui.detail.pos);
   return `<button data-world-back>Back to tray</button>
     <div class="inventory-inspection">
-      <div class="inventory-detail-face">${worldTileSvg(kind)}</div>
-      <h3 class="inventory-detail-name">${weapon ? WORLD_META[weapon.type].name : COLUMN_WORD}</h3>
-      <p>${weapon ? `Stores charge to ⌁${BALANCE.world.storageCap} · attacks adjacent enemies · ${weaponTrayRead(state, weapon)}` : `Lifts its module cell's received charge to adjacent weapons`}</p>
-      ${weapon ? targetPriorityHtml(state, weapon) : ""}
-      ${preview ? `<div class="world-placement-preview" aria-label="Placement supply preview">${worldPreviewHtml(preview)}</div>` : ""}
-      <button class="primary" data-world-place="${id}"${locked ? " disabled" : ""}>Place</button>
+      <div class="inventory-detail-face">${worldTileSvg(piece.kind)}</div>
+      <h3 class="inventory-detail-name">${worldPieceName(piece)}</h3>
+      ${read && piece.kind !== "column" ? `<p class="mono">${piece.kind === "creature" ? `${read} · ${stateWord}` : read}</p>` : ""}
+      <p>${tip}</p>
+      ${preview?.rows.length ? `<div class="world-placement-preview" aria-label="Placement supply preview">${worldPreviewHtml(preview)}</div>` : ""}
+      <button class="primary" data-world-place="${id}"${state.mode !== "upgrade" || isRecovering ? " disabled" : ""}>Place</button>
     </div>`;
 }
 
-// The weapon's target priority control (the face's own, between sessions
-// only): the effective order — stored preference first, authored roster
-// behind it — one row per authored enemy, the raise and lower controls
-// moving preference. Locks with everything else in flow.
-export function targetPriorityHtml(state: GameState, weapon: WeaponCopy): string {
-  const locked = state.mode !== "upgrade";
-  const stored = weapon.targetPriority;
-  const effective: string[] = [];
-  for (const key of [...stored, ...WORLD_ENEMIES.map((def) => def.key)]) {
-    if (!effective.includes(key)) effective.push(key);
-  }
-  const rows = effective.map((key, index) => {
-    const def = WORLD_ENEMIES.find((entry) => entry.key === key)!;
-    const live = state.world.enemies[key];
-    const eligible = !!live?.discovered && !enemyDefeated(state, key);
-    const inPreference = index < stored.length;
-    return `<div class="world-priority-row${eligible ? "" : " dim"}">
-      <span class="world-priority-order mono">${index + 1}</span>
-      <span class="world-priority-name">Enemy at ${cellNoteOf(def.pos)}${inPreference ? "" : " · roster default"}</span>
-      <span class="world-priority-controls">
-        <button class="world-priority-move" data-world-priority="${key}" data-dir="-1" aria-label="Raise Enemy at ${cellNoteOf(def.pos)} in target priority"${locked || index === 0 ? " disabled" : ""}>↑</button>
-        <button class="world-priority-move" data-world-priority="${key}" data-dir="1" aria-label="Lower Enemy at ${cellNoteOf(def.pos)} in target priority"${locked || index === effective.length - 1 ? " disabled" : ""}>↓</button>
-      </span>
-    </div>`;
-  });
-  return `<div class="world-priority" role="group" aria-label="Target priority">
-    <span class="world-priority-head">${termTipHtml("Target priority")}${stored.length === 0 ? " · roster default" : ""}${locked ? " · locked in flow" : ""}
-      ${stored.length > 0 && !locked ? `<button data-world-priority-reset aria-label="Reset to the roster's default order">Reset</button>` : ""}
-    </span>
-    ${rows.join("")}
-  </div>`;
-}
-
-// The tray content's rebuild key inputs — the occupants' placement and
-// stores, the priority order, the inspect and arm state.
+// The occupants' placement and readiness share the inspect and arm key.
 function trayKey(app: App): string {
   const { state, ui } = app;
   return JSON.stringify([
@@ -483,8 +351,8 @@ function trayKey(app: App): string {
     ui.worldTray.inspect,
     ui.worldArmed,
     ui.detail?.pos,
-    state.world.weapons.map((w) => [w.id, w.pos, w.store, w.targetPriority]),
-    state.world.columns.map((c) => [c.id, c.pos]),
+    worldPiecesOf(state),
+    state.world.hone,
   ]);
 }
 
@@ -493,7 +361,8 @@ export function renderWorldTrayContent(app: App, host: HTMLElement, sheet: boole
   const { state, ui } = app;
   const locked = state.mode !== "upgrade";
   const collapsed = !sheet && ui.inventory.collapsed && !ui.inventory.dragOpen;
-  const count = state.world.weapons.filter((w) => w.pos === null).length + state.world.columns.filter((c) => c.pos === null).length;
+  const pieces = worldPiecesOf(state).filter(({ copy }) => copy.pos === null);
+  const count = pieces.length;
   const key = trayKey(app) + JSON.stringify([sheet, collapsed, count]);
   if (host.dataset.worldKey === key) return;
   const active = document.activeElement;
@@ -502,13 +371,16 @@ export function renderWorldTrayContent(app: App, host: HTMLElement, sheet: boole
   host.classList.toggle("inventory-collapsed", collapsed);
   host.classList.add("inventory-browser", ...(sheet ? [] : ["inst-panel"]));
   host.classList.toggle("inventory-subview", ui.worldTray.inspect !== null);
-  const { weapons, columns } = worldTrayOccupants(state);
-  const row = (id: string, kind: "weapon" | "column", name: string, read: string): string =>
+  const row = (id: string, kind: WorldPiece["kind"], name: string, read: string): string =>
     `<div class="inventory-row"><button class="inventory-copy world-tile" data-world-tray="${id}" aria-label="Inspect ${name}${read ? ` · ${read}` : ""}">
       <span class="inventory-mark">${worldTileSvg(kind)}</span><span class="inventory-copy-read"><strong>${name}</strong>${read ? `<span class="inventory-level mono">${read}</span>` : ""}</span>
     </button></div>`;
   const browse = `<div class="inventory-list" data-world-scroll>${
-    [...weapons.map((w) => row(w.id, "weapon", WORLD_META[w.type].name, weaponTrayRead(state, w))), ...columns.map((c) => row(c.id, "column", COLUMN_WORD, ""))].join("")
+    pieces.sort((a, b) => Number(a.kind === "column") - Number(b.kind === "column")).map((piece) => {
+      const facts = worldPieceRead(state, piece);
+      const label = piece.kind === "creature" ? `${facts.read} · ${facts.stateWord}` : piece.kind === "column" ? "" : facts.read;
+      return row(piece.copy.id, piece.kind, worldPieceName(piece), label);
+    }).join("")
     || `<p class="inventory-empty">No stored World occupants.</p>`
   }</div>`;
   const subview = ui.worldTray.inspect !== null ? worldInspectHtml(app) : browse;
@@ -536,14 +408,6 @@ export function renderWorldTrayContent(app: App, host: HTMLElement, sheet: boole
     if (sheet) app.closeModal();
     app.worldArmTray(id);
   });
-  on("[data-world-priority]", (el) => {
-    if (locked || !ui.worldTray.inspect) return;
-    app.worldMovePriority(ui.worldTray.inspect, el.dataset.worldPriority!, Number(el.dataset.dir));
-  });
-  on("[data-world-priority-reset]", () => {
-    if (locked || !ui.worldTray.inspect) return;
-    app.setWeaponPriority(ui.worldTray.inspect, []);
-  });
   if (!locked) host.querySelectorAll<HTMLElement>("[data-world-tray]").forEach((el) => bindDrag(el, el.dataset.worldTray!));
   if (locked) host.querySelectorAll<HTMLButtonElement>("[data-world-place]").forEach((el) => { el.disabled = true; });
   wireTooltips(host, app.signal);
@@ -565,7 +429,8 @@ export function renderWorldPill(app: App): void {
     return;
   }
   host.hidden = false;
-  host.innerHTML = `Place ${app.ui.worldArmedKind === "column" ? COLUMN_WORD : WORLD_META.chargeBlade.name} · free<span class="pill-esc">Cancel · Esc</span>`;
+  const piece = worldPieceOf(app.state, app.ui.worldArmed);
+  host.innerHTML = `Place ${piece ? worldPieceName(piece) : "occupant"} · free<span class="pill-esc">Cancel · Esc</span>`;
   if (host.dataset.bound) return;
   host.dataset.bound = "true";
   app.listen(host, "click", () => app.worldCancelGestures());
@@ -640,13 +505,15 @@ function startWorldDrag(app: App, event: PointerEvent, id: string, origin: Hex |
   const overTray = (ev: PointerEvent): boolean => trayHitAt(ev) !== null;
   const tray = document.getElementById("world-tray");
   const sheet = () => (app.ui.modal === "inventory" ? document.getElementById("modal-content") : null);
-  const kind = app.state.world.columns.some((c) => c.id === id) ? "column" : "weapon";
+  const piece = worldPieceOf(app.state, id);
+  if (!piece || (piece.kind === "creature" && piece.copy.recovering)) return;
+  const kind = piece.kind;
   app.cancelWorldDrag = startPointerDrag(app, event, {
     start: () => {
       app.ui.worldCarrying = id;
       const ghost = document.createElement("div");
       ghost.className = "drag-ghost world-ghost";
-      ghost.innerHTML = worldTileSvg(kind as "weapon" | "column");
+      ghost.innerHTML = worldTileSvg(kind);
       return ghost;
     },
     move: (ev) => {
@@ -709,66 +576,35 @@ export function refreshWorldPreview(app: App): void {
 
 export function worldCountBadge(app: App): number {
   const { state } = app;
-  return state.world.weapons.filter((w) => w.pos === null).length + state.world.columns.filter((c) => c.pos === null).length;
+  return worldPiecesOf(state).filter(({ copy }) => copy.pos === null).length;
 }
 
-export function deployedWeaponAt(state: GameState, pos: Hex): WeaponCopy | undefined {
-  const occupant = worldOccupantAt(state, pos);
-  return occupant?.kind === "weapon" ? state.world.weapons.find((w) => w.id === occupant.id) : undefined;
-}
+const WORLD_DETAIL_MARKER = `<polygon class="hex-stack-marker" points="${hexPoints(HEX_RADIUS - 3)}"/>`;
 
-// The Hex detail's World chassis: the coordinate's plate at readable
-// scale, its state spoken once in the tooltip. Pre-reveal the plate is
-// the locked one — the layer has not arrived, whatever the coordinate.
-export function worldChassisHtml(state: GameState, pos: Hex, snapshot: RateSnapshot): { chassis: string; tip: string } {
+// The engraving supplies the chassis' accessible name. Only details not
+// engraved on the plate belong in its mechanics tooltip. The miniature
+// may use the label while the full-sized World face is not visible.
+export function worldChassisHtml(state: GameState, pos: Hex, snapshot: RateSnapshot): { chassis: string; label: string; tip?: string; preview?: boolean } {
   if (!worldEntered(state)) {
     return {
-      chassis: `<svg class="world-stack locked" viewBox="-70 -70 140 140" aria-hidden="true">${plate("locked")}<g class="world-glyph dimmed" transform="translate(0,-6) scale(1.6)"><rect x="-4.5" y="-1" width="9" height="7"/><path d="M-2.6-1v-2.2a2.6 2.6 0 0 1 5.2 0V-1"/></g><text class="world-word" y="22" text-anchor="middle">LOCKED</text><polygon class="hex-stack-marker" points="${hexPoints(53)}"/></svg>`,
-      tip: `The World reveals at ${worldRevealPreview()}`,
+      chassis: `<svg class="world-stack locked" viewBox="-70 -70 140 140" aria-hidden="true">${plate("locked")}<g class="world-glyph dimmed" transform="translate(0,-6) scale(1.6)"><rect x="-4.5" y="-1" width="9" height="7"/><path d="M-2.6-1v-2.2a2.6 2.6 0 0 1 5.2 0V-1"/></g><text class="world-word" y="22" text-anchor="middle">LOCKED</text>${WORLD_DETAIL_MARKER}</svg>`,
+      label: "World locked",
+      tip: "A prestige that banks Arete discovers World",
     };
   }
-  const def = enemyDefAt(pos);
-  if (def) {
-    const live = state.world.enemies[def.key];
-    if (!live?.discovered) {
-      return {
-        chassis: `<svg class="world-stack" viewBox="-70 -70 140 140" aria-hidden="true">${plate("reserved", 52)}<polygon class="world-hatch" points="${worldHexPoints(52)}"/><text class="world-word" y="4" text-anchor="middle">RESERVED</text><polygon class="hex-stack-marker" points="${hexPoints(53)}"/></svg>`,
-        tip: `Reserved cell · silent until its reveal`,
-      };
-    }
-    if (enemyDefeated(state, def.key)) {
-      return {
-        chassis: `<svg class="world-stack" viewBox="-70 -70 140 140" aria-hidden="true">${plate("engraved", 52)}<text class="world-word" y="-38" text-anchor="middle">CLEARED</text><g transform="translate(0,-12)">${worldGlyph("enemy", true, 1)}</g><text class="world-fig dim" y="30" text-anchor="middle">+${Math.round(def.bonus * 100)}% ν</text><polygon class="hex-stack-marker" points="${hexPoints(53)}"/></svg>`,
-        tip: `Cleared · the enemy returns at prestige`,
-      };
-    }
-    return {
-      chassis: `<svg class="world-stack" viewBox="-70 -70 140 140" aria-hidden="true">${plate("firm", 52)}<text class="world-word" y="-38" text-anchor="middle">ENEMY</text><g transform="translate(0,-14)">${worldGlyph("enemy", false, 1.2)}</g><text class="world-fig" y="24" text-anchor="middle">HP ${formatInt(Math.max(0, Math.ceil(live.hp)))}/${formatInt(Math.ceil(def.maxHp))}</text><text class="world-fig penalty" y="44" text-anchor="middle">${enemyPenaltyFigure(state, def.key)}</text><polygon class="hex-stack-marker" points="${hexPoints(53)}"/></svg>`,
-      tip: `Enemy · attacked by adjacent weapons on their cadence`,
-    };
+  const def = worldEnemyAt(state, pos);
+  const reserved = worldCellReserved(state, pos);
+  const wrap = (content: string) => `<svg class="world-stack" viewBox="-70 -70 140 140" aria-hidden="true">${content}${WORLD_DETAIL_MARKER}</svg>`;
+  if (def && reserved) {
+    if (!enemyStateOf(state, def.key).discovered) return { chassis: wrap(plate("reserved") + `<text class="world-word" y="-7" text-anchor="middle">RESERVED</text>`), label: "Reserved World cell" };
+    const { inner, label } = wallEngraving(state, def, true);
+    return { chassis: wrap(inner), label, tip: wallMechanic(def), preview: true };
   }
   const occupant = worldOccupantAt(state, pos);
-  if (!occupant) {
-    return {
-      chassis: `<svg class="world-stack" viewBox="-70 -70 140 140" aria-hidden="true">${plate("open", 52)}<polygon class="hex-stack-marker" points="${hexPoints(53)}"/></svg>`,
-      tip: `Open World cell · an occupant places free`,
-    };
-  }
+  if (!occupant) return def
+    ? { chassis: wrap(clearedFaceHtml(def)), label: `${def.name} cleared`, preview: true }
+    : { chassis: wrap(plate("open")), label: "Open World cell" };
   const lift = columnLiftsOf(state, snapshot);
-  if (occupant.kind === "weapon") {
-    const weapon = state.world.weapons.find((w) => w.id === occupant.id)!;
-    const rate = lift.byWeapon.get(weapon.id) ?? 0;
-    const fed = rate > 0;
-    return {
-      chassis: `<svg class="world-stack" viewBox="-70 -70 140 140" aria-hidden="true">${plate("firm", 52)}<text class="world-word" y="-38" text-anchor="middle">${WORLD_META[weapon.type].short}${fed ? "" : " · UNFED"}</text><g transform="translate(0,-16)">${worldGlyph("weapon", !fed, 1)}</g><g transform="translate(0,4)">${chargeBar(weapon.store, fed, 72)}</g><text class="world-fig${fed ? " charge" : " dim"}" y="26" text-anchor="middle">⌁${formatInt(Math.floor(weapon.store))}/${BALANCE.world.storageCap}</text><text class="${fed ? "world-fig" : "world-word"}" y="44" text-anchor="middle">ATK ${formatInt(attackPowerOf(state, weapon.type))}${fed && rate ? ` · ⌁${formatNumber(rate)}/s` : ""}</text><polygon class="hex-stack-marker" points="${hexPoints(53)}"/></svg>`,
-      tip: fed ? `${WORLD_META[weapon.type].name} · attacks its top target every ${BALANCE.world.attackCadenceSeconds} s` : `${WORLD_META[weapon.type].name} · place beside a Column to feed`,
-    };
-  }
-  const column = state.world.columns.find((c) => c.id === occupant.id)!;
-  const rate = lift.byColumn.get(column.id) ?? 0;
-  const hostless = !state.modules.some((m) => m.pos !== null && sameHex(m.pos, pos));
-  return {
-    chassis: `<svg class="world-stack" viewBox="-70 -70 140 140" aria-hidden="true">${plate("firm", 52)}<text class="world-word" y="-38" text-anchor="middle">${COLUMN_SHORT}</text><g transform="translate(0,-10)">${worldGlyph("column", hostless || rate <= 0, 1.3)}</g><text class="world-fig${rate > 0 ? " charge" : " dim"}" y="32" text-anchor="middle">${hostless ? "inert · no host" : `⌁${formatNumber(rate)}/s`}</text><polygon class="hex-stack-marker" points="${hexPoints(53)}"/></svg>`,
-    tip: hostless ? `${COLUMN_WORD} · place over a module cell to lift` : `${COLUMN_WORD} · lifts ⌁${formatNumber(rate)}/s from the module beneath`,
-  };
+  const { inner, name, read, stateWord, tip } = pieceEngraving(state, worldPieceOf(state, occupant.id)!, lift, true);
+  return { chassis: wrap(inner), label: [name, read, stateWord].filter(Boolean).join(" · "), tip, preview: true };
 }

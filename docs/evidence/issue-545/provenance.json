@@ -1,0 +1,91 @@
+{
+  "app": "flowsynth",
+  "check": "capture-preflight",
+  "acceptedAt": "2026-11-22T00:09:09.630Z",
+  "url": "http://localhost:5176/",
+  "worktree": "/home/lem/.t3/worktrees/flowsynth/t3-b4a5880f-92c32415fc118ae6",
+  "branch": "t3/world-blacksmith-meter",
+  "commit": "29a4666574a365c4ef2e79614c3d936cbdcfbcc5",
+  "source": {
+    "clean": true,
+    "changes": [],
+    "evidence": [
+      {
+        "path": "docs/evidence/issue-545/README.md",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-545/browser.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-545/capture.mjs",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-545/desktop-choice.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-545/desktop-class-gray.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-545/desktop-class.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-545/desktop-credited.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-545/desktop-disclosure.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-545/desktop-flow-banked.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-545/desktop-world-inspect.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-545/phone-choice.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-545/phone-class-gray.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-545/phone-class.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-545/phone-credited.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-545/phone-disclosure.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-545/phone-flow-banked.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-545/phone-world-inspect.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-545/provenance.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-545/walks.json",
+        "state": "??"
+      }
+    ]
+  }
+}

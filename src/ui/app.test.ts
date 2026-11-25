@@ -315,11 +315,11 @@ describe("the feats page's milestone group (issue #268)", () => {
     app.openModal("achievements");
     const content = document.getElementById("modal-content")!;
     expect(content.querySelector(".eyebrow")!.textContent).toBe("FEATS");
-    expect(content.querySelector("#modal-title")!.textContent).toBe("1 of 22 feats.");
+    expect(content.querySelector("#modal-title")!.textContent).toBe("1 of 21 feats.");
     const sections = [...content.querySelectorAll(".ach-section")];
     expect(sections[0]!.querySelector(".catalog-section-title")!.textContent).toBe("Milestones");
     const rows = [...sections[0]!.querySelectorAll(".ach-milestone")];
-    expect(rows).toHaveLength(5);
+    expect(rows).toHaveLength(4);
     const entry = rows[0]!;
     expect(entry.querySelector(".ach-name")!.textContent).toBe("Mutator entry");
     expect(entry.querySelector(".ach-unlock")!.textContent).toBe("Retired");
@@ -353,30 +353,28 @@ describe("the feats page's milestone group (issue #268)", () => {
     expect(tip.classList.contains("inst-show")).toBe(false);
   });
 
-  it("a pre-existing save's satisfied milestones grant silently on load (N/22, no toast)", () => {
+  it("a pre-existing save's satisfied milestones grant silently on load (N/21, no toast)", () => {
     const s = createInitialState();
     s.sessionsCompleted = 1;
     s.catalogEntryOwned = true;
     s.rollPoolJoined = true;
     s.prestiges = 1;
-    s.unlockedRows.push(2);
     s.purchased = { generator: true, infusor: true, forge: true };
     localStorage.setItem(STORAGE_KEY, serialize(s, Date.now() - 1_000));
     const booted = boot();
     // first-light rides along: the save's completed session satisfies it
     // unstamped — the eager sync is achievement-wide, and silent throughout.
     expect([...Object.keys(booted.state.achievements)].sort()).toEqual(
-      ["first-light", "first-prestige", "first-row", "shelf-complete"].sort(),
+      ["first-light", "first-prestige", "shelf-complete"].sort(),
     );
     // No toast announced the retro-grant.
     expect(document.getElementById("status")!.textContent).not.toContain("Feat unlocked");
-    // The chip reads the full count — the five milestones plus first-light.
     booted.render();
-    expect(document.getElementById("feats-chip")!.textContent).toContain("4/22");
+    expect(document.getElementById("feats-chip")!.textContent).toContain("3/21");
     booted.openModal("achievements");
-    expect(document.getElementById("modal-content")!.querySelector("#modal-title")!.textContent).toBe("4 of 22 feats.");
+    expect(document.getElementById("modal-content")!.querySelector("#modal-title")!.textContent).toBe("3 of 21 feats.");
     const crossed = document.querySelectorAll(".ach-milestone.crossed");
-    expect(crossed).toHaveLength(3);
+    expect(crossed).toHaveLength(2);
   });
 });
 

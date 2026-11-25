@@ -23,6 +23,7 @@ export const RECORDER_SCRIPTS = [
   // Issue #509: the retained-recording profiler — the same plain-.mjs
   // tier, statically checked with the CLIs it shares the runtime with.
   "tools/record-profile.mjs",
+  "tools/record-world-combat.mjs",
 ];
 
 const repoRoot = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
@@ -63,7 +64,8 @@ export function checkRecorderScripts({ scripts = RECORDER_SCRIPTS, overrides = [
     return ts.createSourceFile(fileName, text, languageVersion, true);
   };
   const program = ts.createProgram({
-    rootNames: scripts.map((script) => path.resolve(root, script)),
+    // Engine-entry declarations can reach the run provenance's Vite imports.
+    rootNames: [...scripts, "src/vite-env.d.ts"].map((script) => path.resolve(root, script)),
     options,
     host,
   });

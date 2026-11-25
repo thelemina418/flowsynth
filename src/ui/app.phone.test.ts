@@ -64,7 +64,7 @@ describe("the thumb bar (§7, portrait phone)", () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]!.querySelector("svg")).not.toBeNull();
     expect(rows[0]!.textContent).toContain("Feats");
-    expect(rows[0]!.textContent).toContain("1/22");
+    expect(rows[0]!.textContent).toContain("1/21");
     expect(rows[1]!.textContent).toContain("Chords");
     expect(rows[1]!.textContent).toContain("0/11");
     // The feats row opens the feats sheet, and the sheet carries the
@@ -135,7 +135,7 @@ describe("the thumb bar (§7, portrait phone)", () => {
     s.catalogEntryOwned = true;
     s.eraEarned = BALANCE.world.entryNous * 1.5;
     s.world.unlocked = true;
-    s.world.weapons.push({ id: "wp2", type: "chargeBlade", pos: null, store: 0, cooldown: 0, targetPriority: [] });
+    s.world.weapons.push({ id: "wp2", type: "chargeBlade", pos: null, store: 0, cooldown: 0, bearer: null });
     app.returnToInventory("m1");
     app.openModal("inventory");
     const modal = document.getElementById("modal-content")!;
@@ -203,16 +203,14 @@ describe("the thumb bar (§7, portrait phone)", () => {
     }
   });
 
-  it("Add arms the mode's action — the cell in module mode, the slot unlock in mutator mode", () => {
+  it("Add opens the shared purchase frontier on Modules and from World", () => {
     const s = app.state;
     s.mode = "upgrade";
     s.catalogEntryOwned = true;
     s.mutatorSlots = [hex(0, 0)];
     s.mutators = [{ id: "mu1", family: "power", rarity: "common", pos: hex(0, 0) }];
     app.render();
-    // Module mode: the cell purchase (the icon prices at zero ν, so grant
-    // the first cell's cost — the same affordably-armed shape as desktop).
-    app.state.nous = BALANCE.cellFirstCost;
+    // Even the opening balance can inspect the purchase frontier.
     app.render();
     document.querySelector<HTMLButtonElement>('#board-tools [data-op="cell"]')!.click();
     expect(app.ui.buyingCell).toBe(true);
@@ -637,6 +635,30 @@ describe("the small-screen composition (issue #389)", () => {
     document.getElementById("hex-detail-return")!.click();
     expect(app.ui.detail).toBeNull();
     expect(app.ui.boardLayer).toBe("world");
+  });
+
+  it("Add armed from World hides Upgrade All so the outer destination takes the tap (#541 F1)", () => {
+    const s = app.state;
+    s.eraEarned = BALANCE.world.entryNous * 1.5;
+    s.world.unlocked = true;
+    s.cells.push(...Array.from({ length: 7 }, (_, i) => hex(0, i + 2)));
+    s.nous = 1_474_560;
+    app.setBoardLayer("world");
+    app.render();
+    const cluster = document.getElementById("upgrade-all")!;
+    expect(cluster.hidden).toBe(false);
+    const staleChip = cluster.querySelector<HTMLButtonElement>('[data-sweep="1"]')!;
+    document.querySelector<HTMLButtonElement>('#thumb-bar [data-op="cell"], #board-tools [data-op="cell"]')!.click();
+    expect(app.ui.buyingCell).toBe(true);
+    expect(cluster.hidden).toBe(true);
+    staleChip.click();
+    expect(s.nous).toBe(1_474_560);
+    clickCell(0, 9);
+    expect(s.cells).toContainEqual(hex(0, 9));
+    expect(s.nous).toBe(0);
+    expect(cluster.hidden).toBe(true);
+    document.getElementById("cell-arm-pill")!.click();
+    expect(cluster.hidden).toBe(false);
   });
 
   it.each([320, 360, 390])("Upgrade All buys at %ipx and hides during flow", (width) => {

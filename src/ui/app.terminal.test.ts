@@ -238,7 +238,8 @@ describe("terminal commands", () => {
     expect(app.devTerminalRun(`levels ${id} 2`)).toMatch(/^✓/);
     expect(app.state.modules.find((module) => module.id === id)!.level).toBe(2);
     // A bad cell is the engine's named refusal, not a crash.
-    expect(app.devTerminalRun("cell 9 9")).toBe("✗ New cells must touch the board.");
+    expect(app.devTerminalRun("cell 9 9")).toBe("✗ That cell lies outside the board's lattice.");
+    expect(app.devTerminalRun("cell 0 9")).toBe("✗ New cells must touch the board.");
   });
 
   it("rejects unknown commands and malformed input by name", () => {

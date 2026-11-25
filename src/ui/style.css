@@ -734,7 +734,8 @@ h1, h2, h3, p { margin: 0; }
   font: 600 12px var(--font-condensed); letter-spacing: 0.04em;
   padding: 6px 10px; border: 1px solid var(--line); background: var(--panel-soft); color: var(--muted);
 }
-button.class-chip { cursor: pointer; }
+button.class-chip { cursor: pointer; min-height: 44px; text-align: left; }
+.class-chip small { display: block; color: var(--muted); font: 11px var(--font-sans); text-transform: none; }
 button.class-chip:hover:not(:disabled) { color: var(--ink); border-color: var(--line); }
 .class-chip.st-selected { border-color: var(--ink); color: var(--ink); box-shadow: inset 0 -3px var(--ink); }
 .class-meter-row { align-items: flex-start; }
@@ -742,6 +743,9 @@ button.class-chip:hover:not(:disabled) { color: var(--ink); border-color: var(--
 .class-meter-track { display: block; width: 100%; height: 4px; background: var(--line); }
 .class-meter-track i { display: block; height: 100%; background: var(--ink); }
 .class-meter small { color: var(--muted); font-size: 10px; text-align: right; }
+.weapon-choices { border-top: 1px solid var(--line); }
+.weapon-choice > span { min-width: 0; font-size: 12px; }
+.weapon-choice .focus-action { flex: none; min-height: 44px; }
 .class-tree-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .class-presets { display: flex; gap: 6px; flex-wrap: wrap; }
 .habit-detail-read .habit-class { margin-top: 12px; }
@@ -1807,28 +1811,13 @@ button.tree-node:hover { background: var(--hover-bg); border-color: var(--line);
 .lead-tip-dim { fill: var(--charge); opacity: 0.5; }
 .highlight-ring { fill: none; stroke: var(--charge); stroke-width: 1.5; opacity: 0.8; pointer-events: none; }
 
-/* The Row unlock's shaded rows (§7, issue #197): the still-locked octave
-   row past the launch band shades violet behind one banner per side while
-   add-cell mode stands — the Arete register's tint at rest, and the banner
-   the one live target. Locked (unaffordable) dims the label; the click
-   still asks the engine, which answers plainly. */
-.row-band-hex { fill: var(--arete-tint); stroke: var(--arete-line); stroke-width: 1; stroke-dasharray: 5 4; }
-.row-unlock { cursor: pointer; }
-.row-unlock-label {
-  font: 500 13px var(--mono);
-  letter-spacing: 0.04em;
-  text-anchor: middle;
-  dominant-baseline: middle;
-  fill: var(--arete);
-  paint-order: stroke;
-  stroke: var(--panel-deep);
-  stroke-width: 4px;
-  stroke-linejoin: round;
-  transition: fill 0.2s;
-}
-.row-unlock:hover .row-unlock-label,
-.row-unlock:focus-visible .row-unlock-label { fill: var(--ink); }
-.row-unlock.locked .row-unlock-label { fill: var(--muted); }
+/* Add marks each destination, not an octave or a second purchase surface. */
+.cell-offer .hex.future { fill: var(--panel-deep); }
+.cell-offer[aria-disabled="true"] { cursor: not-allowed; }
+.cell-price, .cell-price-state { text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.cell-price { fill: var(--ink); font: 600 17px var(--mono); font-variant-numeric: tabular-nums; }
+.cell-price.compact { font-size: 13px; }
+.cell-price-state { fill: var(--muted); font: 600 13px var(--font-condensed); }
 
 /* The chord annotation (§6, #137) — the dense-board language (#174, #201):
    two-voice chords seal the shared edge with bracket twins; chords whose
@@ -2254,11 +2243,7 @@ body.hex-detail-open .upgrade-all {
 
 .hex-stack-face.empty .hex { fill: var(--panel-deep); fill-opacity: 0.45; stroke: var(--line-strong); stroke-dasharray: 3 5; }
 .hex-stack-face.empty .face-note { font-size: 13px; }
-/* The mutator chassis: the arete register, the slot face's own voice at
-   detail scale. */
-.world-stack { color: var(--world); }
-.world-stack .world-plate { stroke-width: 1.8; }
-.world-stack .world-word { font-size: 12px; letter-spacing: 0.14em; }
+/* Enlarged World engraving. */
 .world-stack .world-fig { font-size: 10px; }
 .hex-stack-mut .hex-stack-lock {
   fill: none;
@@ -2603,6 +2588,10 @@ body.hex-detail-open .upgrade-all {
 }
 .hex-shift-chip:hover { background: var(--hover-bg); border-color: var(--line-strong); }
 .hex-shift-chip.active { background: var(--hue-voice); border-color: var(--hue-voice); color: var(--accent-ink); }
+.world-outlet { display: grid; grid-template-columns: repeat(3, minmax(44px, 1fr)); }
+.world-outlet > span { grid-column: 1 / -1; text-align: left; }
+.world-outlet button { font-size: 12px; }
+.world-outlet [aria-pressed="true"] { border-color: var(--ink); color: var(--ink); box-shadow: inset 0 -3px var(--ink); }
 
 /* The Spotlight's recipient picker (issue #374): the Bend picker's chip
     row carrying note names, the inactive verdict a muted line above the
@@ -2898,44 +2887,39 @@ body.hex-detail-open .upgrade-all {
    included. The old stylesheet hiding is gone with the leak: there is
    nothing left for it to hide. */
 
-/* ── The World layer's plates (issue #426) ────────────
-   The second face's own silhouette from the design round: the square-cut
-   plate in the layer's steel register, one per coordinate. States ride
-   the shared grammar — muted outline reserved, firm discovered, engraved
-   cleared, dashed open — never color alone; the figures live where the
-   mechanics live. */
-
-/* The hatch: the reserved plate's claimed-but-unknown read. */
-.world-hatch {
-  fill: url(#world-hatch);
-  stroke: none;
+/* ── World faceplates (#426, #546) ────────────────────
+   The Modules perimeter in the World steel register. Inside the cut,
+   paired side slots and functional glyphs distinguish a populated plate;
+   hatch, engraving and dashed outline still carry the cell's state. */
+.world-hatch, .world-side-slots {
+  fill: none;
+  stroke: var(--muted);
   pointer-events: none;
 }
+.world-hatch { stroke-width: 1.4; }
+.world-side-slots { stroke-width: 2.7; }
 .world-plate {
   fill: var(--hex-face);
   stroke: var(--world-line);
-  stroke-width: 2;
+  stroke-width: 1;
 }
-.world-plate.firm {
+.world-plate.firm, .world-tile-plate {
   stroke: var(--world);
-  stroke-width: 2.4;
-  fill: color-mix(in srgb, var(--world) 6%, var(--hex-face));
+  fill: color-mix(in srgb, var(--world) 11%, var(--hex-face));
 }
 .world-plate.reserved {
   fill: color-mix(in srgb, var(--panel-deep) 40%, var(--hex-face));
   stroke: var(--line-strong);
-  stroke-width: 2;
 }
 .world-plate.engraved {
   fill: none;
   stroke: var(--line-strong);
-  stroke-width: 1.4;
 }
+.world-plate.engraved + .world-side-slots { stroke: var(--line-strong); }
 .world-plate.open {
   fill: none;
   stroke: var(--line);
   stroke-dasharray: 5 5;
-  stroke-width: 1.6;
 }
 .world-word {
   font: 600 11px var(--font-condensed);
@@ -2960,7 +2944,7 @@ body.hex-detail-open .upgrade-all {
   stroke-linejoin: round;
   pointer-events: none;
 }
-.world-glyph.dimmed { stroke: var(--line-strong); }
+.world-glyph.dimmed { stroke: color-mix(in srgb, var(--muted) 65%, var(--line-strong)); }
 .world-bar { fill: none; stroke: var(--line); stroke-width: 1; pointer-events: none; }
 .world-bar-fill { fill: var(--charge); pointer-events: none; }
 /* Quiet activity (the instrument standards): the fed weapon's fill
@@ -2969,8 +2953,8 @@ body.hex-detail-open .upgrade-all {
   .world-bar-fill.live { animation: world-breath 3.2s ease-in-out infinite; }
   @keyframes world-breath { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.95; } }
 }
-.world-plate.pulse { animation: world-pulse 1.4s ease-in-out infinite; }
-@keyframes world-pulse { 50% { stroke-width: 3.2; } }
+.world-plate.pulse { stroke: var(--muted); animation: world-pulse 1.4s ease-in-out infinite; }
+@keyframes world-pulse { 0%, 100% { stroke-opacity: 0.55; } 50% { stroke-opacity: 1; } }
 /* Reduced motion: fully static — the pulse reads as the dashed target
    alone, the breath as the static fill; the pill carries the arm. */
 @media (prefers-reduced-motion: reduce) {
@@ -3022,8 +3006,9 @@ body.hex-detail-open .upgrade-all {
 .mut-tile .mut-tile-glyph { color: currentColor; }
 .mut-tile .mut-tile-ticks { fill: currentColor; }
 .mut-tile .mut-tile-effect { font-size: 11px; fill: var(--muted); }
-.world-tile .mut-tile-hex { fill: none; }
-.world-tile-plate { fill: none; stroke: currentColor; stroke-width: 4.5; }
+.world-tile-plate { stroke-width: 4.5; }
+.inventory-detail-face .world-tile-plate { stroke-width: 1; }
+.world-tile-plate + .world-side-slots { stroke-width: 4; }
 
 /* The armed placement's pill (issue #426): the arm's one spot over the
    board's top edge — World placement is free, so the pill carries only
@@ -3763,7 +3748,6 @@ body.hex-detail-open .upgrade-all {
   .layer-legend { left: 8px; top: 50%; bottom: auto; transform: translateY(-50%); }
   .world-tray { padding: 8px; }
   .world-place-pill { top: 46px; }
-  .cell-arm-pill { top: 46px; }
   /* The arc card rides above the board's lower lanes (issue #350): the
      horizon bar's (64 + 46) and, above it, the zoom cluster's — three
      44px coarse-floor targets over bottom 64 reach 208, so the card
@@ -3902,9 +3886,7 @@ body.cell-arming #grid .cell-node:has(.hex.empty) {
 body.cell-arming #grid .cell-node:has(.buy-here) { filter: none; opacity: 1; pointer-events: auto; }
 body.cell-arming #grid .hex.buy-here { stroke-width: 2.5; stroke-dasharray: none; }
 
-/* The add-cell pill (#201): the armed purchase's one cost spot over the
-   board's top edge — "Add · <price> ν — Cancel · Esc" — and the pill
-   itself is the cancel. */
+/* Add's exit is separate from the destination prices. */
 .cell-arm-pill {
   max-width: calc(100% - 24px);
   flex-wrap: wrap;
@@ -3916,10 +3898,10 @@ body.cell-arming #grid .hex.buy-here { stroke-width: 2.5; stroke-dasharray: none
   z-index: 24;
   display: flex;
   align-items: center;
-  gap: 8px;
   padding: 8px 14px;
+  min-height: 44px;
   cursor: pointer;
-  background: color-mix(in srgb, var(--panel-soft) 94%, transparent);
+  background: var(--panel-soft);
   border: 1px solid var(--danger);
   color: var(--ink);
   font: 600 11px/1.3 var(--font-condensed);
@@ -3927,12 +3909,11 @@ body.cell-arming #grid .hex.buy-here { stroke-width: 2.5; stroke-dasharray: none
 }
 .cell-arm-pill[hidden] { display: none; }
 .cell-arm-pill:hover { background: color-mix(in srgb, var(--danger) 20%, transparent); }
-.cell-arm-pill .mono { color: var(--accent); }
-.cell-arm-pill .pill-esc {
-  padding: 2px 6px;
-  border: 1px solid var(--line-strong);
-  font: 600 9px/1 var(--font-condensed);
-  color: var(--muted);
+@container app (max-width: 600px) {
+  /* The left end of the zoom lane stays clear of the ledger and the priced
+     cells. The layer selector returns when Add yields the board. */
+  .cell-arm-pill { top: auto; bottom: 64px; left: 8px; transform: none; }
+  .board-space:has(.cell-arm-pill:not([hidden])) .layer-legend { visibility: hidden; }
 }
 .cell-node:hover .hex { stroke-width: 2; }
 .cell-node:focus-visible { outline: none; }

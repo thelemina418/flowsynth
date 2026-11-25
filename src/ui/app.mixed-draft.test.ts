@@ -4,12 +4,20 @@ import { createAppFixture, setAppWidth } from "./testing/app-fixture";
 import { generateOffer } from "../engine/rolls";
 import { stubRng } from "../engine/fixtures";
 import { serialize, STORAGE_KEY } from "../engine/save";
-import { isModuleCandidate } from "../engine/types";
+import { isModuleCandidate, type RollOffer } from "../engine/types";
 import { TYPE_RARITY } from "../engine/constants";
 
 const fixture = createAppFixture();
 beforeEach(() => localStorage.clear());
 afterEach(() => fixture.release());
+
+function pendingBlade(): RollOffer {
+  return { id: "legacy-offer", candidates: [
+    { id: "old-field", type: "field", tier: 0 },
+    { id: "old-spotlight", type: "spotlight", tier: 0 },
+    { id: "old-blade", type: "chargeBlade" },
+  ] };
+}
 
 it.each([1280, 390])("mixed drafts route repeated World choices through inventory inspection and placement at %ipx", (width) => {
   let app = fixture.boot();
@@ -22,7 +30,7 @@ it.each([1280, 390])("mixed drafts route repeated World choices through inventor
     const offer = generateOffer(app.state, stubRng([...Array(9).fill(0.5), 0, split]));
     app.state.bankedRolls.push(offer);
     app.openModal("forge");
-    const name = split === 0 ? "Column" : "Charge Blade";
+    const name = split === 0 ? "Column" : "Conduit";
     const pick = document.querySelector<HTMLButtonElement>(`[data-choice="${offer.candidates[2].id}"]`)!;
     expect(pick.getAttribute("aria-label")).toBe(`Take ${name}`);
     expect(document.querySelector(".forge-choice-cue")!.textContent).toBe("Choose a new item");
@@ -30,7 +38,7 @@ it.each([1280, 390])("mixed drafts route repeated World choices through inventor
     expect(app.state.modules).toHaveLength(moduleCount);
     expect(app.state.bankedRolls).toHaveLength(0);
     app.setBoardLayer("world");
-    const copies = split === 0 ? app.state.world.columns : app.state.world.weapons;
+    const copies = split === 0 ? app.state.world.columns : app.state.world.conduits;
     const copy = copies.at(-1)!;
     expect(copy.pos).toBeNull();
     app.ui.inventory.collapsed = false;
@@ -51,17 +59,18 @@ it.each([1280, 390])("mixed drafts route repeated World choices through inventor
   app = fixture.boot();
   expect(app.state.world).toEqual(world);
   expect(app.state.world.columns).toHaveLength(2);
-  expect(app.state.world.weapons).toHaveLength(2);
+  expect(app.state.world.conduits).toHaveLength(2);
+  expect(app.state.world.weapons).toHaveLength(0);
 });
 
-it("Blade draft retains its effect and the section Charge reference returns without consuming the offer", () => {
+it("Blade draft explains the Sentinel's charged strike and the Charge reference does not consume the offer", () => {
   const app = fixture.boot();
   app.state.world.unlocked = true;
-  const offer = generateOffer(app.state, stubRng([...Array(9).fill(0.5), 0, 0.5]));
+  const offer = pendingBlade();
   app.state.bankedRolls.push(offer);
   app.openModal("forge");
   const effect = document.getElementById(`forge-effect-${offer.candidates[2].id}`)!;
-  expect(effect.textContent).toBe("Store charge → strike enemies");
+  expect(effect.textContent).toBe("Spend charge → armed Sentinel strikes");
   expect(effect.querySelector('[aria-label="charge — what it means"]')).toBeNull();
   const help = document.getElementById("forge-about-charge")!;
   help.focus(); help.click();
@@ -81,7 +90,7 @@ it("reload preserves a pending mixed choice and the unlocked Catalog's special d
   app.state.world.unlocked = true;
   app.state.world.starterColumnGranted = true;
   app.state.world.starterWeaponGranted = true;
-  const pending = generateOffer(app.state, stubRng([...Array(9).fill(0.5), 0, 0.5]));
+  const pending = pendingBlade();
   app.state.bankedRolls.push(pending);
   const save = serialize(app.state, Date.now());
   fixture.release();
@@ -102,4 +111,5 @@ it("reload preserves a pending mixed choice and the unlocked Catalog's special d
   expect(document.querySelectorAll('[data-choice]')).toHaveLength(3);
   expect(document.querySelector('[aria-label="Take Column"]')).toBeNull();
   expect(document.querySelector('[aria-label="Take Charge Blade"]')).toBeNull();
+  expect(document.querySelector('[aria-label="Take Conduit"]')).toBeNull();
 });

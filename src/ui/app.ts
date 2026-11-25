@@ -1,7 +1,7 @@
 import { SHORTCUTS, isLayerShortcut } from "./shortcuts";
 import { GAME_COMMANDS } from "./game-commands";
 import { advance, earnNous, emptyAdvanceResult } from "../engine/advance";
-import type { AdvanceResult } from "../engine/types";
+import { isModuleCandidate, type AdvanceResult } from "../engine/types";
 import {
   buyCapacity,
   buyCapacityCeiling,
@@ -10,7 +10,6 @@ import {
   buyCell,
   buyDraftUpgrade,
   buyMergeCapIncrease,
-  buyRowUnlock,
   buyShelfModule,
   buySpecialDraft,
   buyChargeColumn,
@@ -37,7 +36,8 @@ import {
   scrapModule,
   setBendShift,
   setBoosterTarget,
-  setWeaponTargetPriority,
+  setWorldGearBearer,
+  setWorldConduitDirection,
   skipRoll,
   startBreather as startBreatherAction,
   startSession,
@@ -48,13 +48,16 @@ import {
   type BulkPurchase,
 } from "../engine/actions";
 import { ARETE_HORIZON, bankableClaimOf, horizonReached } from "../engine/accumulator";
-import { worldOccupantAt } from "../engine/world";
+import { syncWorldDiscoveries, worldOccupantAt, worldPieceOf } from "../engine/world";
+import { WORLD_DRAFTS, worldPieceName } from "./world-combat";
 import type { WeaponType, ResponseCurveId } from "../engine/types";
+import { WEAPONS, type ForgeWeapon } from "../engine/weapons";
 import { neighbors, hex, sameHex } from "../engine/hex";
+import { cellFrontier } from "../engine/footprint";
 import { preferredChordCue } from "../engine/chords";
 import { displayedRates, flowLive, deployedAt, syncRates, wholeNous } from "../engine/economy";
 import { worldEntered, refreshWorldPreview, worldBoardLive } from "./world";
-import { WORLD_ENEMIES, RESPONSE_CURVES } from "../engine/constants";
+import { RESPONSE_CURVES } from "../engine/constants";
 import { newlyActiveTermsOf, type AllocatedInstance } from "../engine/allocation";
 import { serialize, STORAGE_KEY, type MigrationReport } from "../engine/save";
 import { SharedSave, browserSaveStorage, memorySaveStorage, type LoadedSave } from "./shared-save";
@@ -66,7 +69,7 @@ import { formatInt, formatNumber } from "./format";
 import { applyBreatherGap, applyGap, flushPendingAway, poolOutstanding, resolveHonestyReport, type HonestyOutcome } from "../engine/trust";
 import { availableEntries, encounterEntries, type EntryId } from "../engine/encyclopedia";
 import { isPhoneWidth } from "./container";
-import { createInitialState, createModule, createWeapon, createWorldColumn } from "../engine/state";
+import { createInitialState, createModule, createWeapon, createWorldColumn, grantCombatStarter } from "../engine/state";
 import { SCENARIOS, scenarioOf, type ScenarioDescriptor } from "../engine/scenarios";
 import {
   composePlaythroughRecipe,
@@ -94,7 +97,7 @@ import { BALANCE } from "../engine/constants";
 import type { FocusApp } from "../engine/apps";
 import { writeNote } from "../engine/notes";
 import { achievementName, syncAchievements } from "../engine/achievements";
-import { CATEGORY_OF, SHELF_MODULE, CHIME } from "../engine/constants";
+import { CATEGORY_OF, SHELF_MODULE, CHIME, DRIFT_NOISE_SECONDS } from "../engine/constants";
 import { cellNoteOf } from "../engine/lattice";
 import {
   activeHabit,
@@ -105,7 +108,7 @@ import {
   selectHabit,
   setHabitColor,
 } from "../engine/habits";
-import { allocateClassNode, applyClassPreset, classDefOf, respecClassTree, selectHabitClass } from "../engine/classes";
+import { allocateClassNode, applyClassPreset, claimForgedWeapon, classDefOf, respecClassTree, selectHabitClass } from "../engine/classes";
 import { createGoal, deleteGoal, editGoal, retainGoalChoice, rollGoalOccurrences } from "../engine/goals";
 import { allocatedDevScenarioRates, createDevScenario, type DevBoardResult } from "../engine/dev-scenario";
 import type { StressProgress, StressRow } from "../engine/allocation-stress";
@@ -113,10 +116,21 @@ import type { Category, ClassId, GameState, HabitColor, Hex, ModuleInstance, Mod
 import type { FocusFace, NotesFace } from "./focus";
 import { render, updateChordReadout } from "./render";
 import { FAMILY_WORD } from "./mutators";
-import { HISTORY_PAGE_ROWS, META, CATEGORY_WORD, SPECIAL_DRAFT_NAME, tierWord, WORLD_META, COLUMN_WORD } from "./meta";
+import { HISTORY_PAGE_ROWS, META, CATEGORY_WORD, SPECIAL_DRAFT_NAME, tierWord } from "./meta";
 import { browserChannels, type SignalChannels } from "./signals";
 import { suppressNextClick } from "./click";
 import { createInventoryState, type InventoryState } from "./inventory";
+
+function saveTransitionNote(loaded: LoadedSave): string {
+  const combat = loaded.combatMigration;
+  const adjustment = combat?.discovered ? `World: new starter gear is in the tray. ${combat.oldClears ? "Old Blade-only clears do not count;" : "The new sequence starts fresh;"} new victories last through prestige.` : "";
+  const refund = loaded.footprintMigration?.areteRefunded;
+  return [refund ? footprintRefundNote(refund) : "", adjustment].filter(Boolean).join(" ");
+}
+
+function footprintRefundNote(arete: number): string {
+  return `Rack Extenders retired · ${arete} Arete returned. Your cells stay owned.`;
+}
 
 // The session modal surfaces (§5.5, §5.7): the session starts through the
 // Focus sheet's PLAN face (or instantly, per the session-start preference);
@@ -386,7 +400,6 @@ export interface UiState {
   // mirroring ui.placing), with the kind the pill names. Light furniture —
   // never saved.
   worldArmed: string | null;
-  worldArmedKind: "weapon" | "column" | null;
   // The entry sequence's pending automation (issue #274): set when the
   // entry purchase lands, spent when the entry roll's choice is taken or
   // the Forge modal closes. The choice itself mints to the roster like
@@ -553,7 +566,6 @@ export class App {
     inventory: createInventoryState(),
     detail: null,
     worldArmed: null,
-    worldArmedKind: null,
     entryRollPending: false,
     worldTray: { inspect: null },
     worldCarrying: null,
@@ -569,6 +581,7 @@ export class App {
   // The presence state that held since the last boundary (§1): presence is
   // visibility — focus loss alone is not away.
   presence = true;
+  private clockLifecycle: "running" | "suspended" | "resumed" = "running";
   // Set when exit was requested while the honesty report still waits: the
   // answer is mandatory and final before the session ends (§2).
   exitPending = false;
@@ -632,6 +645,8 @@ export class App {
     // same host and signal is idempotent.
     wireTooltips(document.getElementById("console-session") ?? document.body, this.signal);
     if (!resumingBreather || this.state.mode === "breather") this.greet();
+    const transition = loaded && saveTransitionNote(loaded);
+    if (transition) this.say(transition);
     this.render();
     this.save();
   }
@@ -717,7 +732,7 @@ export class App {
       // deadline; past it the phase completed itself and the return finds
       // upgrade mode with the completion read.
       const gapSeconds = Math.max(0, (Date.now() - loaded.savedAt) / 1000);
-      const { result, completed } = applyBreatherGap(this.state, gapSeconds);
+      const { result, completed } = applyBreatherGap(this.state, gapSeconds, Math.random, gapSeconds);
       this.reportAdvance(result);
       this.syncBoundaryClock(Date.now());
       if (completed) {
@@ -732,7 +747,7 @@ export class App {
     // document.wasDiscarded only records that it happened.
     this.resumedFromDiscard = (document as Document & { wasDiscarded?: boolean }).wasDiscarded === true;
     const gapSeconds = Math.max(0, (Date.now() - loaded.savedAt) / 1000);
-    applyGap(this.state, gapSeconds, "away", 0);
+    applyGap(this.state, gapSeconds, "offline", 0);
     this.reportAdvance(flushPendingAway(this.state));
     this.syncBoundaryClock(Date.now());
     // The report fires at this return when the pool is outstanding, and
@@ -760,16 +775,22 @@ export class App {
   // advances by it — never by tick count, which throttling falsifies. The
   // breather runs its own boundary (docs/breather-spec.md §4): pre-trusted,
   // presence classifies nothing, and the deadline completes the phase.
-  private applyBoundary(now: number): void {
+  private applyBoundary(now: number, absence?: "offline" | "suspended"): void {
+    if (this.clockLifecycle === "suspended") return;
     if (this.state.mode === "breather") {
       if (this.lastWall === null) {
         this.syncBoundaryClock(now);
         return;
       }
       const gapSeconds = (now - this.lastWall) / 1000;
+      const driftStepSeconds = (dualDriftMs() - this.lastDrift) / 1000;
       this.syncBoundaryClock(now);
       if (gapSeconds <= 0) return;
-      const { result, completed } = applyBreatherGap(this.state, gapSeconds);
+      // Breather production still banks against wall time. The portion
+      // spent asleep or suspended is not time the World actually ran.
+      const offlineSeconds = absence || driftStepSeconds < -DRIFT_NOISE_SECONDS ? gapSeconds
+        : driftStepSeconds > DRIFT_NOISE_SECONDS ? Math.min(gapSeconds, driftStepSeconds) : 0;
+      const { result, completed } = applyBreatherGap(this.state, gapSeconds, Math.random, offlineSeconds);
       this.reportAdvance(result);
       if (completed) {
         this.completeBreather();
@@ -791,18 +812,33 @@ export class App {
     const gapSeconds = (now - this.lastWall) / 1000;
     const driftStepSeconds = (dualDriftMs() - this.lastDrift) / 1000;
     this.syncBoundaryClock(now);
-    if (gapSeconds <= 0 && driftStepSeconds <= 0) return;
+    if (!absence && gapSeconds <= 0 && driftStepSeconds <= 0) return;
     rollGoalOccurrences(this.state, now);
-    const result = applyGap(this.state, gapSeconds, this.presence ? "visible" : "away", driftStepSeconds);
+    const result = applyGap(this.state, gapSeconds, absence ?? (this.presence ? "visible" : "away"), driftStepSeconds);
     this.reportAdvance(result);
     if (now - this.lastSaveWall > 5000) this.save(now);
   }
 
-  // A return (§1): the buffered absence — the hidden stretch, reconciled
-  // whole — classifies once, then live presence resumes banking behind it.
-  private processReturn(now: number): void {
+  // Unlike idle hidden time, a suspended document cannot fight. Persist
+  // the last running boundary, even on hosts where both clocks keep time
+  // through suspension. A paired pagehide/freeze cannot move it twice.
+  private suspendClock(now: number): void {
+    if (this.clockLifecycle === "suspended") return;
     this.applyBoundary(now);
-    if (document.visibilityState === "visible") {
+    this.clockLifecycle = "suspended";
+    this.save(now);
+  }
+
+  // A return (§1): classify the whole contiguous absence when visible.
+  // Whichever signal returns first consumes the suspended interval. A
+  // later pageshow must not reclassify the active tail as offline.
+  private processReturn(now: number, cachedRestore = false): void {
+    const absence = this.clockLifecycle === "suspended" ? "suspended"
+      : cachedRestore && this.clockLifecycle === "running" ? "offline" : undefined;
+    if (absence) this.clockLifecycle = "resumed";
+    this.applyBoundary(now, absence);
+    this.presence = document.visibilityState === "visible";
+    if (this.presence) {
       this.reportAdvance(flushPendingAway(this.state));
     }
     this.tick();
@@ -926,6 +962,8 @@ export class App {
         ? "Save imported while a session was running — the honesty report is waiting."
         : "Save imported.",
     );
+    const transition = saveTransitionNote(parsed);
+    if (transition) this.say(transition);
     this.save(Date.now(), true);
     this.render();
     // The import's dismissal returns focus to the walk's opener — unless
@@ -1018,6 +1056,8 @@ export class App {
     document.addEventListener("visibilitychange", () => {
       if (!this.ownsBoard()) return;
       if (document.visibilityState === "hidden") {
+        if (this.clockLifecycle === "suspended") return;
+        if (this.presence) this.clockLifecycle = "running";
         // The gap that just ended was present: classify it, then persist —
         // the transition to hidden is the last reliably observable save
         // point (§10), carrying the session, the bucket, and the absence
@@ -1026,7 +1066,6 @@ export class App {
         this.presence = false;
         this.save();
       } else {
-        this.presence = true;
         // The return catch-up (#128): a save another tab wrote while we
         // were hidden is adopted before this tab's own reconcile runs, so
         // the stale in-memory copy never clobbers what the slot gained.
@@ -1034,14 +1073,24 @@ export class App {
         this.processReturn(Date.now());
       }
     }, { signal: this.signal });
-    // A bfcache restore is a return: the frozen stretch classifies as away,
-    // and a save another tab wrote while this page sat frozen is adopted
-    // through the same reconcile path (#128).
+    document.addEventListener("freeze", () => {
+      if (this.ownsBoard()) this.suspendClock(Date.now());
+    }, { signal: this.signal });
+    document.addEventListener("resume", () => {
+      if (!this.ownsBoard() || this.clockLifecycle !== "suspended") return;
+      if (document.visibilityState === "visible") this.adoptNewerSave();
+      this.processReturn(Date.now());
+    }, { signal: this.signal });
+    window.addEventListener("pagehide", (event) => {
+      if (this.ownsBoard() && (event as PageTransitionEvent).persisted) this.suspendClock(Date.now());
+    }, { signal: this.signal });
+    // bfcache return also adopts a save written by another tab (#128).
+    // A restore without an observed departure conservatively treats the
+    // pending gap as offline, just like a reload.
     window.addEventListener("pageshow", (event) => {
       if (!this.ownsBoard() || !(event as PageTransitionEvent).persisted) return;
-      this.presence = document.visibilityState === "visible";
       this.adoptNewerSave();
-      this.processReturn(Date.now());
+      this.processReturn(Date.now(), true);
     }, { signal: this.signal });
     // Another tab's save, announced here in every tab but the writer
     // (#128): outside a live session the tab adopts a save newer than
@@ -1059,7 +1108,7 @@ export class App {
       if (this.ownsBoard()) this.processReturn(Date.now());
     }, { signal: this.signal });
     window.addEventListener("beforeunload", () => {
-      if (this.ownsBoard()) this.save();
+      if (this.ownsBoard() && this.clockLifecycle !== "suspended") this.save();
     }, { signal: this.signal });
     // The tick timer can outlive its document (a discarded environment, a
     // torn-down test): a dead document is simply not ours to tick.
@@ -1233,7 +1282,7 @@ export class App {
   }
 
   tick(): void {
-    if (this.released) return;
+    if (this.released || this.clockLifecycle === "suspended") return;
     // Recurring goals roll on every tick, not only across flow boundaries:
     // a tab resting in upgrade mode must read the new day's state too —
     // the Focus sheet's GOALS face with it. Idempotent with the
@@ -1594,10 +1643,6 @@ export class App {
     this.act(this.gameAction("joinRollPool", () => joinRollPool(this.state)), "The Mutator Forge joined the module roll pool.");
   }
 
-  buyRowUnlockAction(row: number): void {
-    this.act(this.gameAction("buyRowUnlock", () => buyRowUnlock(this.state, row)), "Octave row unlocked — its cells now buy with nous.");
-  }
-
   // The harmonic-capacity ladder's landings (issue #259): the nous rung
   // and the two Arete offerings, each through the shared act() shape.
   buyCapacityAction(): void {
@@ -1621,7 +1666,7 @@ export class App {
   // ── The World layer's gestures (issue #426) ─────────────────────────────
   // The second face over the board: every landing routes through the engine
   // actions from #425 — placeWorldOccupant, retrieveWorldOccupant,
-  // setWeaponTargetPriority — so the UI can never drift from the contracts
+  // setWorldGearBearer — so the UI can never drift from the contracts
   // those tests pin. Upgrade-mode-only: each engine gate owns its refusal,
   // and the renderers simply stop drawing.
 
@@ -1669,7 +1714,6 @@ export class App {
   private worldDisarm(): void {
     this.cancelWorldDrag?.();
     this.ui.worldArmed = null;
-    this.ui.worldArmedKind = null;
     this.ui.worldCarrying = null;
     this.ui.worldDropHover = null;
   }
@@ -1687,15 +1731,11 @@ export class App {
       this.say("The board is locked between sessions.");
       return;
     }
-    const kind = this.state.world.columns.some((c) => c.id === id)
-      ? "column"
-      : this.state.world.weapons.some((w) => w.id === id)
-        ? "weapon"
-        : null;
-    if (!kind) return;
+    const piece = worldPieceOf(this.state, id);
+    if (!piece || (piece.kind === "creature" && piece.copy.recovering)) return;
+    const wasArmed = this.ui.worldArmed === id;
     this.worldDisarm();
-    this.ui.worldArmed = this.ui.worldArmed === id ? null : id;
-    this.ui.worldArmedKind = this.ui.worldArmed ? kind : null;
+    this.ui.worldArmed = wasArmed ? null : id;
     if (this.ui.worldArmed) this.say("Choose an open World cell.");
     this.render();
   }
@@ -1715,7 +1755,6 @@ export class App {
     if (ui.worldArmed !== null) {
       const id = ui.worldArmed;
       ui.worldArmed = null;
-      ui.worldArmedKind = null;
       this.worldPlace(id, pos);
       return;
     }
@@ -1745,29 +1784,16 @@ export class App {
   }
 
   private worldOccupantName(id: string): string {
-    const column = this.state.world.columns.find((c) => c.id === id);
-    if (column) return COLUMN_WORD;
-    const weapon = this.state.world.weapons.find((w) => w.id === id);
-    return weapon ? WORLD_META[weapon.type].name : "Occupant";
+    const piece = worldPieceOf(this.state, id);
+    return piece ? worldPieceName(piece) : "Occupant";
   }
 
-  // The weapon's between-session target priority (issue #426): the rail's
-  // and tray's controls land here, the engine deduplicating and dropping
-  // unknown keys. The move walks the effective order — stored preference
-  // first, authored roster behind.
-  setWeaponPriority(id: string, keys: string[]): void {
-    this.act(this.gameAction("setWeaponTargetPriority", () => setWeaponTargetPriority(this.state, id, keys)), "Target priority set.");
+  routeWorldConduit(id: string, direction: number): void {
+    this.act(this.gameAction("setWorldConduitDirection", () => setWorldConduitDirection(this.state, id, direction)), "Conduit outlet set.");
   }
 
-  worldMovePriority(id: string, key: string, dir: number): void {
-    const weapon = this.state.world.weapons.find((w) => w.id === id);
-    if (!weapon) return;
-    const order = [...weapon.targetPriority, ...WORLD_ENEMIES.map((def) => def.key)].filter((entry, index, all) => all.indexOf(entry) === index);
-    const from = order.indexOf(key);
-    const to = Math.max(0, Math.min(order.length - 1, from + dir));
-    if (from === to) return;
-    order.splice(to, 0, ...order.splice(from, 1));
-    this.setWeaponPriority(id, order);
+  equipWorldGear(id: string, bearerId: string): void {
+    this.act(this.gameAction("setWorldGearBearer", () => setWorldGearBearer(this.state, id, bearerId)), "Bearer equipped.");
   }
 
   // The Arete Catalog's World purchases (issue #426): the Column ladder and
@@ -1777,7 +1803,7 @@ export class App {
   }
 
   buyHoneRankAction(type: WeaponType): void {
-    this.act(this.gameAction("buyHoneRank", () => buyHoneRank(this.state, type)), `${WORLD_META[type].name} attack power honed.`);
+    this.act(this.gameAction("buyHoneRank", () => buyHoneRank(this.state, type)), `${WEAPONS[type].name} attack power honed.`);
   }
 
   // The live drop preview over the second face (issue #426): hover state
@@ -1818,11 +1844,8 @@ export class App {
     if (this.ui.modal === null) this.restoreModalInvoker();
   }
 
-  // Cell purchase (ADR-0013): armed from the toolbar's cell icon (or the
-  // catalog row), resolved by clicking a frontier hex. The buy only lands
-  // when a frontier cell is clicked; the icon toggles, Esc and right-click
-  // cancel. On the World face the Add walks to Modules first — the
-  // purchase's pulsing frontier lives there.
+  // Add (ADR-0089) quotes each connected destination on the Modules face.
+  // The icon toggles; a destination commits; Esc and right-click cancel.
   armCellPurchase(): void {
     if (this.state.mode !== "upgrade") {
       this.say("Purchases happen between sessions.");
@@ -1879,6 +1902,8 @@ export class App {
   // levelable module, deployed and tray alike, spacers never. The toast
   // reports what landed, whatever the chip promised.
   upgradeAllAction(want: number | "max"): void {
+    // Inert while Add is armed, as the face upgrades are (#541 F4).
+    if (this.ui.buyingCell) return;
     this.landBulk(this.gameAction("upgradeAll", () => upgradeAll(this.state, want)), (bulk) =>
       want === "max"
         ? `UPGRADE ALL MAX: ${bulk.levels} levels across ${bulk.modules} modules · ${formatNumber(bulk.spent)} ν`
@@ -2161,7 +2186,8 @@ export class App {
   detailPlaceWorld(id: string): void {
     const detail = this.ui.detail;
     if (!detail || this.state.mode !== "upgrade") return;
-    if (!this.state.world.weapons.some((w) => w.id === id && w.pos === null) && !this.state.world.columns.some((c) => c.id === id && c.pos === null)) return;
+    const piece = worldPieceOf(this.state, id);
+    if (!piece || piece.copy.pos !== null) return;
     if (this.act(this.gameAction("placeWorldOccupant", () => placeWorldOccupant(this.state, id, detail.pos)), `${this.worldOccupantName(id)} placed at ${cellNoteOf(detail.pos)}.`)) {
       focusDetailFace(this.ui.detail!.face);
     }
@@ -2373,8 +2399,7 @@ export class App {
     if (ui.buyingCell) {
       if (state.mode !== "upgrade") return;
       // The arm persists across buys: sweep several cells, then back out
-      // yourself via the banner's Cancel (or Esc). act() re-renders each
-      // time, so the banner hint and hex prices step to the next scaler rung.
+      // yourself via Cancel (or Esc). Each render quotes the new frontier.
       this.act(this.gameAction("buyCell", () => buyCell(state, pos)), "Cell bought.");
       return;
     }
@@ -2504,6 +2529,10 @@ export class App {
     this.habitAction(() => selectHabitClass(this.state, habitId, classId), `${def.name} selected.`);
   }
 
+  claimForgedWeaponAction(habitId: string, type: ForgeWeapon): void {
+    this.habitAction(() => claimForgedWeapon(this.state, habitId, type), `${WEAPONS[type].name} added to World tray.`);
+  }
+
   allocateClassNodeAction(habitId: string, nodeId: string): void {
     this.habitAction(() => allocateClassNode(this.state, habitId, nodeId), "Point allocated — respec is free.");
   }
@@ -2595,8 +2624,9 @@ export class App {
       return;
     }
     const more = this.state.bankedRolls.length > 0 ? ` ${this.state.bankedRolls.length} more choice${this.state.bankedRolls.length === 1 ? "" : "s"} wait in the Forge.` : "";
-    const name = candidate.type === "column" ? "Column" : candidate.type === "chargeBlade" ? "Charge Blade" : META[candidate.type].name;
-    this.announceUnlocks(result.unlocked, `${name} added to ${candidate.type === "column" || candidate.type === "chargeBlade" ? "World collection" : "inventory"}.${more}`);
+    const module = isModuleCandidate(candidate);
+    const name = module ? META[candidate.type].name : WORLD_DRAFTS[candidate.type].name;
+    this.announceUnlocks(result.unlocked, `${name} added to ${module ? "inventory" : "World collection"}.${more}`);
     this.forgeAfterConsume();
     this.save();
     this.render();
@@ -2881,7 +2911,7 @@ export class App {
       return;
     }
     try {
-      if (!this.sharedSave.adoptRecovered(offer.raw, parsed.state, parsed.savedAt)) {
+      if (!this.sharedSave.adoptRecovered(offer.raw, parsed.state, parsed.savedAt, { from: offer.from, version: parsed.recovered?.fromVersion })) {
         this.ui.recovery = { ...offer, error: "The original could not be retained or the recovered save could not be saved. Nothing was adopted; retry after making storage available." };
         this.render();
         return;
@@ -2895,7 +2925,7 @@ export class App {
     this.ui.modal = null;
     this.ui.importError = null;
     this.resumeFromSave(parsed);
-    this.say("Save recovered — the economy opens calibrated; your practice record stands.");
+    this.say(saveTransitionNote(parsed) || "Save recovered — the economy opens calibrated; your practice record stands.");
     this.save(Date.now(), true);
     this.render();
     if (this.ui.modal === null) this.restoreModalInvoker();
@@ -3069,6 +3099,8 @@ export class App {
     s.world.unlocked = true;
     s.world.starterWeaponGranted = true;
     s.world.starterColumnGranted = true;
+    grantCombatStarter(s);
+    syncWorldDiscoveries(s);
     if (!s.world.weapons.some((w) => w.pos !== null)) {
       const weapon = createWeapon(s, "chargeBlade");
       weapon.pos = hex(1, 0);
@@ -3185,6 +3217,7 @@ export class App {
     this.devRunOriginId = walked?.runId ?? null;
     if (walked) this.upsertRunResult({ record: walked, imported: false, modified: false, interventions: [] });
     this.state = candidate;
+    if (candidate.world.proof) this.ui.boardLayer = "world";
     this.lastWall = null;
     this.exitPending = false;
     this.save(now, true);
@@ -3649,8 +3682,8 @@ export class App {
     return this.devGameAction(`Retrieve World ${id}`, () => retrieveWorldOccupant(this.state, id));
   }
 
-  devActionWorldPriority(id: string, keys: string[]): ActionResult {
-    return this.devGameAction(`World priority ${id}: ${keys.join(", ")}`, () => setWeaponTargetPriority(this.state, id, keys));
+  devActionWorldBearer(id: string, bearerId: string): ActionResult {
+    return this.devGameAction(`World bearer ${id}: ${bearerId}`, () => setWorldGearBearer(this.state, id, bearerId));
   }
 
   devActionEndBreather(): ActionResult {
@@ -3736,7 +3769,7 @@ export class App {
     const [verb, ...args] = command.split(/\s+/);
     switch (verb) {
       case "help":
-        return "commands: actions · action <name> [JSON argument array] · scenarios · launch <id> · assert · inspect · run [k=v…] · runs · select <runId> · export · import <artifact JSON> · start <min|open> · end · pause · resume · honesty <full|planned|missed> · breather · end-breather · world-buy · world-hone <chargeBlade> · world-place <id> <q> <r> · world-retrieve <id> · world-priority <id> [keys…] · advance <s> · buy <type> · cell <q> <r> · place <id> <q> <r> · levels <id> <n|max> · prestige · grant <nous|synth|world> · tuning";
+        return "commands: actions · action <name> [JSON argument array] · scenarios · launch <id> · assert · inspect · run [k=v…] · runs · select <runId> · export · import <artifact JSON> · start <min|open> · end · pause · resume · honesty <full|planned|missed> · breather · end-breather · world-buy · world-hone <chargeBlade> · world-place <id> <q> <r> · world-retrieve <id> · world-bearer <gear-id> <creature-id> · advance <s> · buy <type> · cell <q> <r> · place <id> <q> <r> · levels <id> <n|max> · prestige · grant <nous|synth|world> · tuning";
       case "actions":
         return Object.keys(GAME_COMMANDS).join(" · ");
       case "action": {
@@ -3872,9 +3905,9 @@ export class App {
         if (!args[0]) throw new Error("world-retrieve needs an occupant id.");
         return this.terminalResult(this.devActionWorldRetrieve(args[0]), "World occupant retrieved.");
       }
-      case "world-priority": {
-        if (!args[0]) throw new Error("world-priority needs a weapon id and ordered enemy keys.");
-        return this.terminalResult(this.devActionWorldPriority(args[0], args.slice(1)), "target priority set.");
+      case "world-bearer": {
+        if (!args[0] || !args[1]) throw new Error("world-bearer needs a gear id and a creature id.");
+        return this.terminalResult(this.devActionWorldBearer(args[0], args[1]), "bearer equipped.");
       }
       case "breather": {
         const result = this.devActionBreather();
@@ -4077,15 +4110,7 @@ export class App {
   }
 
   frontierCells(): Hex[] {
-    const { state } = this;
-    const out: Hex[] = [];
-    const seen = (h: Hex) => state.cells.some((c) => sameHex(c, h)) || out.some((c) => sameHex(c, h));
-    for (const cell of state.cells) {
-      for (const n of neighbors(cell)) {
-        if (!seen(n)) out.push(n);
-      }
-    }
-    return out;
+    return cellFrontier(this.state);
   }
 
   // The global mute toggle (§5): one switch in PREFERENCES gating every

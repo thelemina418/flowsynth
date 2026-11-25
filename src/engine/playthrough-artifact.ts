@@ -1,5 +1,6 @@
 import { CATEGORY_OF } from "./constants";
 import { deepFreeze, type PlaythroughRecord } from "./playthrough";
+import { isWeaponType } from "./weapons";
 
 // The run artifact (issue #473, parent stories 34–36): the versioned file
 // format that owns persisted provenance and results. One artifact carries
@@ -96,7 +97,7 @@ function historicalState(value: unknown): boolean {
   return isRecord(world) && isRecord(world.enemies) && Object.values(world.enemies).every(item =>
     isRecord(item) && typeof item.discovered === "boolean" && finiteFields(item, ["hp"])) &&
     Array.isArray(world.weapons) && world.weapons.every(item => positioned(item) &&
-      item.type === "chargeBlade" && finiteFields(item, ["store"])) &&
+      isWeaponType(item.type) && finiteFields(item, ["store"])) &&
     Array.isArray(world.columns) && world.columns.every(positioned);
 }
 

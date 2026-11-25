@@ -1,0 +1,75 @@
+{
+  "app": "flowsynth",
+  "check": "capture-preflight",
+  "acceptedAt": "2026-11-21T15:33:59.704Z",
+  "url": "http://localhost:5175/",
+  "worktree": "/home/lem/.t3/worktrees/flowsynth/t3-55a49d06-faf1ae2ae894f813",
+  "branch": "t3/implement-world-combat-544",
+  "commit": "3376f5dbb07f2de31239a97cbb475bb0496e464e",
+  "source": {
+    "clean": true,
+    "changes": [],
+    "evidence": [
+      {
+        "path": "docs/evidence/issue-544/README.md",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-544/browser.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-544/desktop-flow.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-544/desktop-keyboard-disclosure.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-544/desktop-live-clear.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-544/desktop-live-rig.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-544/desktop-origin.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-544/desktop-reduced-motion.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-544/isolated-browser.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-544/phone-board.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-544/phone-recovery-gray.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-544/phone-recovery.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-544/phone-touch-disclosure.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-544/provenance.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-544/walks.json",
+        "state": "??"
+      }
+    ]
+  }
+}

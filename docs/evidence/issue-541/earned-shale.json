@@ -1,0 +1,354 @@
+{
+  "kind": "earned live approach into real Shale",
+  "scope": "One declared earned checkpoint (seed 468 pushing, long-session schedule) and two fight branches. Not representative acquisition, median first-clear time, or pacing calibration.",
+  "recordingCommit": "4d81a5908794f426ff797f2f3632b59255b9f936",
+  "engineSha256": "87d60f81143d8c15dddfbed475497a35a8ea244eb2ab0f3fd53f5e9894797cbc",
+  "origin": {
+    "recipe": {
+      "scenarioId": "fresh-start",
+      "seed": 468,
+      "policyId": "pushing",
+      "claimTarget": 2,
+      "schedule": {
+        "sessionsPerDay": 2,
+        "sessionMinutes": 600,
+        "breatherMinutes": 5,
+        "habitName": "Practice",
+        "goalMinutes": 25,
+        "startAt": 1767603600000,
+        "timeZone": "America/Chicago"
+      },
+      "budgetDays": 36,
+      "eras": 1,
+      "stopCreditedHours": 0,
+      "responseCurve": "shipped",
+      "overrides": {}
+    },
+    "days": 3,
+    "claims": [
+      2
+    ],
+    "stop": {
+      "kind": "checkpoint",
+      "reason": "World enemy reached at day 3 — a living discovered enemy with the placement decision unplayed."
+    },
+    "arete": 1,
+    "ownedCells": 11,
+    "prestiges": 1
+  },
+  "branches": [
+    {
+      "variant": "routed starter kit",
+      "moves": [
+        {
+          "layer": "modules",
+          "id": "m1",
+          "type": "additive",
+          "to": [
+            1,
+            -1
+          ]
+        },
+        {
+          "layer": "modules",
+          "id": "m99",
+          "type": "focusKeyed",
+          "to": [
+            1,
+            0
+          ]
+        },
+        {
+          "layer": "world",
+          "id": "m395",
+          "to": [
+            1,
+            -1
+          ]
+        },
+        {
+          "layer": "world",
+          "id": "m397",
+          "to": [
+            0,
+            0
+          ]
+        },
+        {
+          "layer": "world",
+          "id": "m398",
+          "to": [
+            -1,
+            1
+          ]
+        },
+        {
+          "layer": "world",
+          "id": "m396",
+          "to": [
+            1,
+            0
+          ]
+        },
+        {
+          "layer": "world",
+          "id": "m399",
+          "to": [
+            0,
+            -1
+          ]
+        }
+      ],
+      "flywheelReserveBefore": 3768,
+      "ledgerBeforeFight": {
+        "nous": 32793585.94074574,
+        "arete": 1,
+        "weapons": 1,
+        "creatures": 1
+      },
+      "ledgerAfterFight": {
+        "nous": 32795838.8536537,
+        "arete": 1,
+        "weapons": 1,
+        "creatures": 1
+      },
+      "outcome": "cleared",
+      "worldSecondsToOutcome": 2,
+      "end": {
+        "second": 2,
+        "shaleHp": 0,
+        "sentinelHp": 24,
+        "recovering": false,
+        "bladeStore": 30,
+        "spellStore": 6,
+        "basaltDiscovered": false
+      },
+      "samples": [
+        {
+          "second": 0,
+          "shaleHp": 48,
+          "sentinelHp": 24,
+          "recovering": false,
+          "bladeStore": 0,
+          "spellStore": 0,
+          "basaltDiscovered": false
+        },
+        {
+          "second": 1,
+          "shaleHp": 15.243231920400236,
+          "sentinelHp": 24,
+          "recovering": false,
+          "bladeStore": 19.66879996223736,
+          "spellStore": 1.6687999622373628,
+          "basaltDiscovered": false
+        },
+        {
+          "second": 2,
+          "shaleHp": 0,
+          "sentinelHp": 24,
+          "recovering": false,
+          "bladeStore": 30,
+          "spellStore": 6,
+          "basaltDiscovered": false
+        }
+      ]
+    },
+    {
+      "variant": "bare Sentinel",
+      "moves": [
+        {
+          "layer": "world",
+          "id": "m397",
+          "to": [
+            0,
+            0
+          ]
+        }
+      ],
+      "flywheelReserveBefore": 3768,
+      "ledgerBeforeFight": {
+        "nous": 32793585.94074574,
+        "arete": 1,
+        "weapons": 1,
+        "creatures": 1
+      },
+      "ledgerAfterFight": {
+        "nous": 32812038.220454782,
+        "arete": 1,
+        "weapons": 1,
+        "creatures": 1
+      },
+      "outcome": "Sentinel defeated (recovering)",
+      "worldSecondsToOutcome": 16,
+      "end": {
+        "second": 16,
+        "shaleHp": 45.5,
+        "sentinelHp": 0,
+        "recovering": true,
+        "bladeStore": 0,
+        "spellStore": 0,
+        "basaltDiscovered": false
+      },
+      "samples": [
+        {
+          "second": 0,
+          "shaleHp": 48,
+          "sentinelHp": 24,
+          "recovering": false,
+          "bladeStore": 0,
+          "spellStore": 0,
+          "basaltDiscovered": false
+        },
+        {
+          "second": 1,
+          "shaleHp": 48,
+          "sentinelHp": 24,
+          "recovering": false,
+          "bladeStore": 0,
+          "spellStore": 0,
+          "basaltDiscovered": false
+        },
+        {
+          "second": 2,
+          "shaleHp": 48,
+          "sentinelHp": 24,
+          "recovering": false,
+          "bladeStore": 0,
+          "spellStore": 0,
+          "basaltDiscovered": false
+        },
+        {
+          "second": 3,
+          "shaleHp": 48,
+          "sentinelHp": 24,
+          "recovering": false,
+          "bladeStore": 0,
+          "spellStore": 0,
+          "basaltDiscovered": false
+        },
+        {
+          "second": 4,
+          "shaleHp": 48,
+          "sentinelHp": 18,
+          "recovering": false,
+          "bladeStore": 0,
+          "spellStore": 0,
+          "basaltDiscovered": false
+        },
+        {
+          "second": 5,
+          "shaleHp": 48,
+          "sentinelHp": 18,
+          "recovering": false,
+          "bladeStore": 0,
+          "spellStore": 0,
+          "basaltDiscovered": false
+        },
+        {
+          "second": 6,
+          "shaleHp": 45,
+          "sentinelHp": 18,
+          "recovering": false,
+          "bladeStore": 0,
+          "spellStore": 0,
+          "basaltDiscovered": false
+        },
+        {
+          "second": 7,
+          "shaleHp": 45.35,
+          "sentinelHp": 18,
+          "recovering": false,
+          "bladeStore": 0,
+          "spellStore": 0,
+          "basaltDiscovered": false
+        },
+        {
+          "second": 8,
+          "shaleHp": 45.7,
+          "sentinelHp": 12,
+          "recovering": false,
+          "bladeStore": 0,
+          "spellStore": 0,
+          "basaltDiscovered": false
+        },
+        {
+          "second": 9,
+          "shaleHp": 46.05,
+          "sentinelHp": 12,
+          "recovering": false,
+          "bladeStore": 0,
+          "spellStore": 0,
+          "basaltDiscovered": false
+        },
+        {
+          "second": 10,
+          "shaleHp": 46.4,
+          "sentinelHp": 12,
+          "recovering": false,
+          "bladeStore": 0,
+          "spellStore": 0,
+          "basaltDiscovered": false
+        },
+        {
+          "second": 11,
+          "shaleHp": 46.75,
+          "sentinelHp": 12,
+          "recovering": false,
+          "bladeStore": 0,
+          "spellStore": 0,
+          "basaltDiscovered": false
+        },
+        {
+          "second": 12,
+          "shaleHp": 44.1,
+          "sentinelHp": 6,
+          "recovering": false,
+          "bladeStore": 0,
+          "spellStore": 0,
+          "basaltDiscovered": false
+        },
+        {
+          "second": 13,
+          "shaleHp": 44.45,
+          "sentinelHp": 6,
+          "recovering": false,
+          "bladeStore": 0,
+          "spellStore": 0,
+          "basaltDiscovered": false
+        },
+        {
+          "second": 14,
+          "shaleHp": 44.8,
+          "sentinelHp": 6,
+          "recovering": false,
+          "bladeStore": 0,
+          "spellStore": 0,
+          "basaltDiscovered": false
+        },
+        {
+          "second": 15,
+          "shaleHp": 45.15,
+          "sentinelHp": 6,
+          "recovering": false,
+          "bladeStore": 0,
+          "spellStore": 0,
+          "basaltDiscovered": false
+        },
+        {
+          "second": 16,
+          "shaleHp": 45.5,
+          "sentinelHp": 0,
+          "recovering": true,
+          "bladeStore": 0,
+          "spellStore": 0,
+          "basaltDiscovered": false
+        }
+      ]
+    }
+  ],
+  "recordingEnvironment": {
+    "node": "v22.23.4",
+    "timeZone": "America/Chicago",
+    "utcOffsetMinutes": -360
+  }
+}

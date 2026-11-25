@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ACHIEVEMENTS, achievementBoostOf, achievementById, syncAchievements } from "./achievements";
 import { ARETE_HORIZON } from "./accumulator";
-import { buyCatalogEntry, buyCell, buyRowUnlock, buyShelfModule, combine, endSession, joinRollPool, placeModule, prestige, startSession } from "./actions";
+import { buyCatalogEntry, buyCell, buyShelfModule, combine, endSession, joinRollPool, placeModule, prestige, startSession } from "./actions";
 import { advance } from "./advance";
 import { BALANCE } from "./constants";
 import { allocateRates, computeRates, displayedRates } from "./economy";
@@ -32,23 +32,22 @@ function unlockIds(s: GameState): string[] {
 }
 
 describe("the achievement registry", () => {
-  it("ships 22 feats — five milestones leading 17 encouragers — with unique ids and copy", () => {
-    expect(ACHIEVEMENTS).toHaveLength(22);
+  it("ships 21 feats — four milestones leading 17 encouragers — with unique ids and copy", () => {
+    expect(ACHIEVEMENTS).toHaveLength(21);
     const ids = ACHIEVEMENTS.map((a) => a.id);
-    expect(new Set(ids).size).toBe(22);
+    expect(new Set(ids).size).toBe(21);
     for (const def of ACHIEVEMENTS) {
       expect(def.name.length).toBeGreaterThan(0);
       expect(def.description.length).toBeGreaterThan(0);
     }
   });
 
-  it("splits the registry by the milestone flag: five beats, first, carrying the row facts", () => {
+  it("leads the registry with milestone beats carrying their row facts", () => {
     const milestones = ACHIEVEMENTS.filter((d) => d.milestone);
     expect(milestones.map((d) => d.id)).toEqual([
       "mutator-entry",
       "roll-pool-join",
       "first-prestige",
-      "first-row",
       "shelf-complete",
     ]);
     // The page builds the Milestones section from the flag itself; leading
@@ -66,14 +65,14 @@ describe("the achievement registry", () => {
     }
   });
 
-  it("every feat carries its own mark — 22 distinct glyphs (issue #269)", () => {
+  it("every feat carries its own mark — 21 distinct glyphs (issue #269)", () => {
     const icons = ACHIEVEMENTS.map((d) => d.icon);
     // The instrument's line language: one stroke wrapper, one voice.
     for (const icon of icons) {
       expect(icon).toContain('<svg viewBox="0 0 24 24"');
       expect(icon).toContain('stroke="currentColor"');
     }
-    expect(new Set(icons).size).toBe(22);
+    expect(new Set(icons).size).toBe(21);
   });
 
   it("never unlocks anything during session one", () => {
@@ -162,8 +161,6 @@ describe("the milestone feats (ADR-0015 amended)", () => {
     expect(syncAchievements(s, { now: NOW + 1 }).map((d) => d.id)).toEqual([]);
     s.prestiges = 1;
     expect(syncAchievements(s, { now: NOW + 2 }).map((d) => d.id)).toEqual(["first-prestige"]);
-    s.unlockedRows.push(2);
-    expect(syncAchievements(s, { now: NOW + 3 }).map((d) => d.id)).toEqual(["first-row"]);
     s.purchased.forge = true;
     expect(syncAchievements(s, { now: NOW + 4 }).map((d) => d.id)).toEqual(["shelf-complete"]);
   });
@@ -175,13 +172,11 @@ describe("the milestone feats (ADR-0015 amended)", () => {
     s.catalogEntryOwned = true;
     s.rollPoolJoined = true;
     s.prestiges = 1;
-    s.unlockedRows.push(2);
     for (const type of ["generator", "infusor", "forge"] as const) s.purchased[type] = true;
     // The load's silent grant lands before anything else reads the ledger.
     const granted = syncAchievements(s, { silent: true });
     expect(granted.map((d) => d.id)).toEqual([
       "first-prestige",
-      "first-row",
       "shelf-complete",
     ]);
     for (const def of granted) expect(typeof s.achievements[def.id]).toBe("number");
@@ -204,9 +199,6 @@ describe("the milestone feats (ADR-0015 amended)", () => {
     expect(buyCatalogEntry(s).ok).toBe(false);
     s.arete = BALANCE.rollPoolJoinCost;
     expect(joinRollPool(s).ok).toBe(false);
-    s.cells.push(hex(0, BALANCE.launchRowsAbove));
-    s.arete = 1;
-    expect(buyRowUnlock(s, BALANCE.launchRowsAbove + 1).unlocked).toEqual(["first-row"]);
     s.purchased.generator = true;
     s.purchased.infusor = true;
     s.nous = BALANCE.shelfPrices.forge;

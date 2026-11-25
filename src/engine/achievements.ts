@@ -174,18 +174,6 @@ const MILESTONES: readonly AchievementDef[] = [
     progress: (s) => fraction(s.prestiges, 1),
   },
   {
-    id: "first-row",
-    category: "milestone",
-    milestone: true,
-    name: "First row",
-    description: "Unlock an octave row beyond the launch band.",
-    unlock: "An octave row joins the board",
-    gate: "In New cell mode, reach the next octave row and buy its board unlock banner with Arete.",
-    icon: glyph('<path d="M4 6.5h16M4 17.5h16"/><path d="M7 12h10"/>'),
-    evaluate: (s) => s.unlockedRows.length >= 1,
-    progress: (s) => fraction(s.unlockedRows.length, 1),
-  },
-  {
     id: "shelf-complete",
     category: "milestone",
     milestone: true,
@@ -397,6 +385,7 @@ export function achievementById(id: string): AchievementDef | undefined {
 // ledger's truth and the retired stamps are the ledger's entries.
 const RETIRED_ACHIEVEMENT_NAMES: Record<string, string> = {
   "breaking-the-horizon": "Breaking the horizon",
+  "first-row": "First row",
 };
 
 export function achievementName(id: string): string {

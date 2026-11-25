@@ -6,11 +6,12 @@ import { createHabit } from "../engine/habits";
 import type { Habit } from "../engine/types";
 import { BALANCE } from "../engine/constants";
 import { ARETE_HORIZON } from "../engine/accumulator";
-import { displayedRates, allocateRates, cellCost, cellPurchasePrice, affordableLevels, levelCost, levelsCost } from "../engine/economy";
+import { displayedRates, allocateRates, affordableLevels, levelCost, levelsCost } from "../engine/economy";
 import { startSession, endSession } from "../engine/actions";
 import { advance } from "../engine/advance";
 import { give } from "../engine/fixtures";
 import { hex, sameHex } from "../engine/hex";
+import { syncWorldDiscoveries } from "../engine/world";
 import { formatFixed, formatInt, formatNumber } from "./format";
 import { createAppFixture, clickCell, setAppWidth } from "./testing/app-fixture";
 import { syncGlowLens } from "./zoom";
@@ -33,28 +34,18 @@ function stubChannels() {
 }
 
 describe("the board ledger (§7, issue #270)", () => {
-  it("ledger explains pre-unlock pressure with multiplicative sources and live deepening", () => {
-    app.state.world.enemies.w0 = { discovered: true, hp: 100 };
-    app.state.world.enemies.w1 = { discovered: true, hp: 100 };
+  it("explains one actual pressure in the Ledger before discovery without revealing the map", () => {
+    app.state.eraEarned = 2e15;
+    syncWorldDiscoveries(app.state);
     app.render();
     document.getElementById("ledger-overview")!.click();
-    const pressure = () => document.getElementById("ledger-pressure")!.textContent!;
-    // Two 20% sources leave 0.8 × 0.8 = 64%, not 60%.
-    expect(pressure()).toContain("36.0% production reduction");
-    expect(pressure()).toContain("−20.0% · ×0.800 remaining");
-    expect(pressure()).toContain("Enemy 1");
-    expect(pressure()).toContain("Enemy 2");
-    expect(pressure()).toContain("Pressure deepens with era progress");
-    expect(pressure()).toContain("positive Arete unlocks World");
-    expect(document.querySelector("#ledger-pressure button")).toBeNull();
-    app.state.eraEarned = 1e15;
-    app.render();
-    expect(pressure()).toContain("87.8% production reduction");
-    expect(pressure()).toContain("−65.0% · ×0.350 remaining");
-    app.state.world.enemies.w0.hp = 0;
-    app.render();
-    expect(pressure()).not.toContain("Enemy 1");
-    expect(pressure()).toContain("65.0% production reduction");
+    const pressure = document.getElementById("ledger-pressure")!;
+    expect(pressure.textContent).toContain("One enemy");
+    expect(pressure.textContent).toContain("−20% ν");
+    expect(pressure.textContent).toContain("Bank Arete at prestige to discover World");
+    expect(pressure.textContent).not.toMatch(/Shale|Basalt|−35%/);
+    expect(pressure.querySelector("button")).toBeNull();
+    expect(document.querySelector('[data-legend-layer="world"], [data-world-cell]')).toBeNull();
   });
 
   it("ambient reset on desktop and phone explains eligibility and retains zero-yield confirmation", () => {
@@ -112,7 +103,7 @@ describe("the board ledger (§7, issue #270)", () => {
     // The hairline, then the paired chips: icon + count.
     expect(ledger.querySelectorAll(".ledger-overview button")).toHaveLength(0);
     expect(ledger.querySelectorAll("button.ledger-overview")).toHaveLength(1);
-    expect(document.getElementById("feats-chip")!.textContent).toContain("0/22");
+    expect(document.getElementById("feats-chip")!.textContent).toContain("0/21");
     expect(document.getElementById("feats-chip")!.querySelector("svg")).not.toBeNull();
     expect(document.getElementById("library-chip")!.textContent).toContain("0/11");
     // The chips open their sheets.
@@ -736,7 +727,7 @@ describe("the action row (§7)", () => {
     expect(app.state.bankedRolls).toHaveLength(1);
   });
 
-  it("the cell tool shows the price and arms the frontier pick", () => {
+  it("the cell tool opens the priced frontier pick", () => {
     app.state.nous = BALANCE.cellFirstCost;
     app.render();
     document.querySelector<HTMLButtonElement>('#board-tools [data-op="cell"]')!.click();
@@ -754,7 +745,7 @@ describe("the action row (§7)", () => {
   it("flow locks the dock's three tools, and the tray column hides with the board (#272)", () => {
     app.render();
     const dockOps = () => [...document.querySelectorAll<HTMLButtonElement>('#board-tools [data-op]')];
-    // Catalog and Forge stand open in upgrade mode; Add is price-gated.
+    // Catalog, Forge, and Add stand open in upgrade mode.
     expect(dockOps()[0]!.getAttribute("aria-disabled")).toBe("false");
     expect(dockOps()[1]!.getAttribute("aria-disabled")).toBe("false");
     expect(document.getElementById("inventory-zone")!.classList.contains("off")).toBe(false);
@@ -789,18 +780,6 @@ describe("the action row (§7)", () => {
     expect(app.ui.modal).toBeNull();
     touch();
     expect(app.ui.modal).toBe("catalog");
-  });
-
-  it("unaffordable Add stays focusable but refuses activation", () => {
-    app.state.nous = 0;
-    app.render();
-    const add = document.querySelector<HTMLButtonElement>('#board-tools [data-op="cell"]')!;
-    expect(add.getAttribute("aria-disabled")).toBe("true");
-    add.focus();
-    expect(document.activeElement).toBe(add);
-    expect(add.querySelector<HTMLElement>(".tool-detail")!.hidden).toBe(false);
-    add.click();
-    expect(app.ui.buyingCell).toBe(false);
   });
 
   it("every tool icon's extended description rides the tooltip layer, never title= (issue #354)", () => {
@@ -1074,39 +1053,48 @@ describe("the always-live board (§5)", () => {
     expect(grid.querySelector('.module-node:not([data-type="spacer"]) .face-level')!.textContent).toBe("Lv. 0");
   });
 
-  it("the armed frontier wears one cost spot: the pill carries the price, the hexes rest bare (#201)", () => {
-    app.state.nous = BALANCE.cellFirstCost;
-    app.render();
-    document.querySelector<HTMLButtonElement>('#board-tools [data-op="cell"]')!.click();
-    expect(app.ui.buyingCell).toBe(true);
+  it("Add opens at any balance and shows the price and refusal on each destination", () => {
+    const button = document.querySelector<HTMLButtonElement>('#board-tools [data-op="cell"]')!;
+    expect(button.getAttribute("aria-disabled")).toBe("false");
+    button.click();
     const grid = document.getElementById("grid")!;
-    // Per-hex price stamps retire: no NEW CELL label, no stamped figure,
-    // no plus — the frontier hex keeps only its accent outline.
-    expect(grid.querySelector(".hex-sub")).toBeNull();
-    const armed = [...grid.querySelectorAll(".hex.buy-here")];
-    expect(armed.length).toBeGreaterThan(0);
-    // The pill over the board's top edge carries the single cost spot.
+    const inner = grid.querySelector('[data-cell="1,-1"]')!;
+    const outer = grid.querySelector('[data-cell="2,0"]')!;
+    expect(inner.querySelector(".cell-price")?.textContent).toBe("30 ν");
+    expect(outer.querySelector(".cell-price")?.textContent).toBe("90 ν");
+    expect(inner.getAttribute("aria-disabled")).toBe("true");
+    expect(inner.getAttribute("aria-label")).toContain("Not enough whole nous");
+    expect(inner.textContent).toContain("Short on ν");
+    const originalCells = app.state.cells.length;
+    inner.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(app.state.cells).toHaveLength(originalCells);
+    app.state.nous = 32;
+    app.render();
+    expect(inner.getAttribute("aria-disabled")).toBe("false");
+    expect(outer.getAttribute("aria-disabled")).toBe("true");
+    grid.querySelector('[data-cell="1,-1"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(app.state.nous).toBe(2);
+    expect(app.state.cells).toContainEqual(hex(1, -1));
+    expect(app.ui.buyingCell).toBe(true);
     const pill = document.getElementById("cell-arm-pill")!;
-    expect(pill.hidden).toBe(false);
-    expect(pill.textContent).toContain("Add");
-    expect(pill.textContent).toContain(`${formatInt(BALANCE.cellFirstCost)} ν`);
-    expect(pill.textContent).toContain("Cancel · Esc");
-    // The pill is the cancel: one click backs out and the pill rests.
+    expect(pill.textContent).toBe("Cancel Add");
     pill.click();
     expect(app.ui.buyingCell).toBe(false);
-    expect(document.getElementById("cell-arm-pill")!.hidden).toBe(true);
+    expect(pill.hidden).toBe(true);
   });
 
-  it("the cell pill discloses unpaid frontier row premiums", () => {
-    app.state.nous = 1e6;
-    app.armCellPurchase();
-    const base = cellCost(app.state.cellsBought);
-    const premium = Math.max(...app.frontierCells().map((pos) => cellPurchasePrice(app.state, pos) - base));
-    expect(premium).toBeGreaterThan(0);
-    expect(document.getElementById("cell-arm-pill")!.textContent).toContain(`+ up to ${formatInt(premium)} ν row premium`);
-    app.state.gatedRows = [-1, 0, 1, 2];
-    app.render();
-    expect(document.getElementById("cell-arm-pill")!.textContent).not.toContain("row premium");
+  it("engraves and speaks the exact outer-band Add price on the unchanged full-cell target", () => {
+    app.state.cells.push(...Array.from({ length: 7 }, (_, i) => hex(0, i + 2)));
+    app.state.nous = 1_474_560;
+    document.querySelector<HTMLButtonElement>('#board-tools [data-op="cell"]')!.click();
+    const outer = cell(0, 9);
+    expect(outer.querySelector(".cell-price")?.textContent).toBe("1,474,560 ν");
+    expect(outer.getAttribute("aria-label")).toContain("for 1,474,560 nous");
+    expect(outer.getAttribute("aria-disabled")).toBe("false");
+    expect(outer.querySelector("polygon")!.getAttribute("points")).toBe(cell(0, 8).querySelector("polygon")!.getAttribute("points"));
+    outer.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(app.state.nous).toBe(0);
+    expect(app.state.cells).toContainEqual(hex(0, 9));
   });
 
   it("face upgrades cannot spend nous while cell purchase is armed", () => {
@@ -1124,6 +1112,40 @@ describe("the always-live board (§5)", () => {
     expect(app.state.nous).toBe(bank);
     app.cancelCellPurchase();
     expect(document.querySelector(".face-buy")).not.toBeNull();
+  });
+
+  it("Upgrade All stands down while Add is armed and returns after cancel and after a purchase (#541 F1/F4)", () => {
+    const s = app.state;
+    s.nous = 1e6;
+    app.render();
+    const cluster = document.getElementById("upgrade-all")!;
+    const staleChip = cluster.querySelector<HTMLButtonElement>('[data-sweep="1"]')!;
+    expect(cluster.hidden).toBe(false);
+    const level = s.modules[0]!.level;
+    // Armed: the cluster is hidden, and even a click queued on the chip
+    // it showed before arming spends nothing.
+    document.querySelector<HTMLButtonElement>('#board-tools [data-op="cell"]')!.click();
+    expect(app.ui.buyingCell).toBe(true);
+    expect(cluster.hidden).toBe(true);
+    staleChip.click();
+    expect(s.nous).toBe(1e6);
+    expect(s.modules[0]!.level).toBe(level);
+    // Cancel returns it unchanged and live.
+    document.getElementById("cell-arm-pill")!.click();
+    expect(app.ui.buyingCell).toBe(false);
+    expect(cluster.hidden).toBe(false);
+    expect(cluster.textContent).toContain("UPGRADE ALL");
+    // A purchase: the arm persists across buys, so the cluster stays down
+    // until Add is backed out; then it returns, quoting the new bank.
+    document.querySelector<HTMLButtonElement>('#board-tools [data-op="cell"]')!.click();
+    cell(1, -1).dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(s.cells).toContainEqual(hex(1, -1));
+    expect(s.nous).toBe(1e6 - BALANCE.cellFirstCost);
+    expect(cluster.hidden).toBe(true);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(cluster.hidden).toBe(false);
+    cluster.querySelector<HTMLButtonElement>('[data-sweep="1"]')!.click();
+    expect(s.modules[0]!.level).toBe(level + 1);
   });
 
   it("add-cell mode is the one mode that dims the board (#201)", () => {

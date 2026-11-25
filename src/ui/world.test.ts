@@ -5,10 +5,10 @@ import { createAppFixture } from "./testing/app-fixture";
 import { give } from "../engine/fixtures";
 import { hex } from "../engine/hex";
 import { BALANCE } from "../engine/constants";
-import { endSession, prestige, startSession } from "../engine/actions";
+import { endSession, placeWorldOccupant, prestige, startSession } from "../engine/actions";
 import { bankableClaimOf } from "../engine/accumulator";
-import { attackPowerOf, columnLiftsOf, enemyPenaltyOf } from "../engine/world";
-import { createInitialState } from "../engine/state";
+import { columnLiftsOf, enemyPenaltyOf, syncWorldDiscoveries } from "../engine/world";
+import { createInitialState, grantCombatStarter } from "../engine/state";
 import type { GameState } from "../engine/types";
 
 // The World layer's UI (issue #426): the board's second face at the
@@ -46,8 +46,8 @@ function seedEra(): void {
   s.eraEarned = BALANCE.world.entryNous * 1.5;
   s.world.unlocked = true;
   s.world.weapons.push(
-    { id: "wp1", type: "chargeBlade", pos: hex(1, 0), store: 0, cooldown: 0, targetPriority: [] },
-    { id: "wp2", type: "chargeBlade", pos: null, store: 0, cooldown: 0, targetPriority: [] },
+    { id: "wp1", type: "chargeBlade", pos: hex(1, 0), store: 0, cooldown: 0, bearer: null },
+    { id: "wp2", type: "chargeBlade", pos: null, store: 0, cooldown: 0, bearer: null },
   );
   s.world.columns.push(
     { id: "col1", pos: hex(0, 1) },
@@ -112,7 +112,7 @@ describe("the enemy plates (issue #426, priority 2)", () => {
   it("reserved before discovery: the hatch plate carries no identity", () => {
     seedEra();
     app.setBoardLayer("world");
-    const reserved = face("world-w0")!;
+    const reserved = face("world-shale")!;
     expect(reserved.textContent).toContain("RESERVED");
     expect(reserved.querySelector(".world-hatch")).not.toBeNull();
     // Identity concealed: no HP figure, no penalty figure.
@@ -122,34 +122,34 @@ describe("the enemy plates (issue #426, priority 2)", () => {
 
   it("discovery replaces the reserved plate with the encounter's face and its penalty", () => {
     seedEra();
-    app.state.world.enemies["w0"] = { discovered: true, hp: BALANCE.world.enemyBaseHp };
+    app.state.world.enemies.shale = { discovered: true, hp: 48 };
     app.render();
     app.setBoardLayer("world");
-    const discovered = face("world-w0")!;
-    expect(discovered.textContent).toContain("ENEMY");
-    expect(discovered.textContent).toContain(`HP ${BALANCE.world.enemyBaseHp}/${BALANCE.world.enemyBaseHp}`);
+    const discovered = face("world-shale")!;
+    expect(discovered.textContent).toContain("Shale");
+    expect(discovered.textContent).toContain("48/48 HP");
     // The plate reads the shared live figure, not a def field (issue #489).
-    expect(discovered.textContent).toContain(`−${Math.round(enemyPenaltyOf(app.state, "w0") * 100)}% ν`);
+    expect(discovered.textContent).toContain(`−${Math.round(enemyPenaltyOf(app.state, "shale") * 100)}% ν`);
   });
 
-  it("the plate's penalty figure deepens with the era's band (issue #489)", () => {
+  it("keeps the named current wall's fixed pressure after crossing later thresholds", () => {
     seedEra();
-    app.state.world.enemies["w0"] = { discovered: true, hp: BALANCE.world.enemyBaseHp };
-    app.state.eraEarned = BALANCE.world.entryNous * 100; // two bands past w0's reveal
-    app.render();
+    app.state.eraEarned = BALANCE.world.entryNous * 1000;
+    syncWorldDiscoveries(app.state);
     app.setBoardLayer("world");
-    expect(enemyPenaltyOf(app.state, "w0")).toBe(BALANCE.world.enemyDepthPenalties[2]);
-    expect(face("world-w0")!.textContent).toContain("−50% ν");
+    expect(face("world-shale").textContent).toContain("−20% ν");
+    expect(face("world-basalt").textContent).toContain("RESERVED");
   });
 
-  it("defeat turns the face to its cleared state, era bonus engraved, encounter retained", () => {
+  it("engraves the lifetime clear without an era bonus", () => {
     seedEra();
-    app.state.world.enemies["w0"] = { discovered: true, hp: 0 };
+    app.state.world.enemies.shale = { discovered: true, hp: 0 };
+    app.state.cells.push(hex(-1, 0));
     app.render();
     app.setBoardLayer("world");
-    const cleared = face("world-w0")!;
+    const cleared = face("world-open--1,0")!;
     expect(cleared.textContent).toContain("CLEARED");
-    expect(cleared.textContent).toContain(`+${Math.round(BALANCE.world.enemyBonus * 100)}% ν`);
+    expect(cleared.textContent).not.toContain("% ν");
     // The state grammar without color: engraved plate, not the firm one.
     expect(cleared.querySelector(".world-plate.engraved")).not.toBeNull();
     expect(cleared.querySelector(".world-hatch")).toBeNull();
@@ -157,45 +157,88 @@ describe("the enemy plates (issue #426, priority 2)", () => {
 
   it("the four states never blur: reserved, discovered, cleared, and open wear distinct plates", () => {
     seedEra();
-    app.state.world.enemies["w0"] = { discovered: true, hp: 0 };
-    app.state.world.enemies["w1"] = { discovered: true, hp: 3 };
+    app.state.world.enemies.shale = { discovered: true, hp: 0 };
+    app.state.world.enemies.basalt = { discovered: true, hp: 3 };
+    app.state.cells.push(hex(-1, 0));
     app.render();
     app.setBoardLayer("world");
-    expect(face("world-w0")!.querySelector(".world-plate.engraved")).not.toBeNull();
-    expect(face("world-w1")!.querySelector(".world-plate.firm")).not.toBeNull();
-    expect(face("world-w2")!.querySelector(".world-plate.reserved")).not.toBeNull();
+    expect(face("world-open--1,0")!.querySelector(".world-plate.engraved")).not.toBeNull();
+    expect(face("world-basalt")!.querySelector(".world-plate.firm")).not.toBeNull();
+    expect(face("world-flint")!.querySelector(".world-plate.reserved")).not.toBeNull();
     expect(openFace(0, 0).closest("g")!.querySelector(".world-plate.open")).not.toBeNull();
   });
 });
 
-describe("World hex identity (issue #529)", () => {
-  it("carries a six-sided steel silhouette from board to inventory, drag artwork and detail without changing cell hits", async () => {
+describe("World hex identity (issue #546)", () => {
+  it("uses the Modules outline on the same board coordinates without changing the full-cell targets", () => {
     seedEra();
-    app.setBoardLayer("world");
-    const { worldTileSvg } = await import("./world");
-    // Silhouette is the explicit presentation contract, not the paths of
-    // glyphs, bars, or other incidental SVG internals.
-    const sixSides = (outline: Element | null) => {
-      expect(outline?.tagName.toLowerCase()).toBe("polygon");
-      expect(outline?.getAttribute("points")?.trim().split(/\s+/)).toHaveLength(6);
-    };
-    sixSides(face("world-occ-1,0").querySelector(".world-plate"));
-    const hits = [...grid().querySelectorAll("[data-world-cell]")].map(el => [el.getAttribute("data-world-cell"), el.getAttribute("points")]);
+    app.state.world.enemies.shale = { discovered: true, hp: 48 };
+    app.state.cells.push(hex(-1, 0));
+    const coord = '[data-cell="1,0"]';
+    const module = grid().querySelector(coord)!;
+    const points = module.querySelector(".hex")!.getAttribute("points");
+    const center = module.getAttribute("transform")!.match(/-?[\d.]+/g)!.map(value => Number(value).toFixed(2));
     const before = JSON.stringify(app.state);
-    const tray = document.getElementById("world-tray")!;
-    sixSides(tray.querySelector('[data-world-tray="wp2"] .world-tile-plate'));
-    // The real pointer ghost consumes this same public face builder.
-    const ghost = document.createElement("div");
-    ghost.innerHTML = worldTileSvg("column");
-    sixSides(ghost.querySelector(".world-tile-plate"));
-    tray.querySelector<HTMLButtonElement>('[data-world-tray="wp2"]')!.click();
-    sixSides(tray.querySelector(".inventory-detail-face .world-tile-plate"));
-    app.openDetail(hex(1, 0), "world");
-    sixSides(document.querySelector(".world-stack .world-plate"));
-    expect(document.querySelector(".world-stack")?.textContent).toContain("UNFED");
-    expect(document.querySelector(".world-stack")?.textContent).not.toMatch(/Lv\.|Tier/);
+
+    app.setBoardLayer("world");
+    const hit = openFace(1, 0);
+    expect(hit.getAttribute("points")).toBe(points);
+    expect(hit.getAttribute("tabindex")).toBe("0");
+    expect(hit.getAttribute("role")).toBe("button");
+    expect(hit.getAttribute("aria-label")).toContain("Charge Blade · ⌁0/30 · Unbound · G4");
+    expect(hit.closest("g")!.getAttribute("transform")).toBe(`translate(${center.join(",")})`);
+    // Occupied, open, enemy, cleared and reserved routes share the visible perimeter.
+    const plates = grid().querySelectorAll(".world-plate");
+    expect(plates.length).toBeGreaterThan(2);
+    for (const plate of plates) expect(plate.getAttribute("points")).toBe(points);
     expect(JSON.stringify(app.state)).toBe(before);
-    expect([...grid().querySelectorAll("[data-world-cell]")].map(el => [el.getAttribute("data-world-cell"), el.getAttribute("points")])).toEqual(hits);
+  });
+  it("matches the Modules inventory row and inspection outlines and carries the same cut in a real drag preview", () => {
+    seedEra();
+    const stored = give(app.state, "additive", null);
+    app.render();
+    const moduleRow = document.querySelector<HTMLButtonElement>(`[data-inv="${stored.id}"]`)!;
+    const shape = (outline: Element) => [outline.closest("svg")!.getAttribute("viewBox"), outline.getAttribute("points")];
+    const rowShape = shape(moduleRow.querySelector(".tile-hex")!);
+    moduleRow.click();
+    const inspectionShape = shape(document.querySelector(".inventory-detail-face .hex")!);
+
+    app.setBoardLayer("world");
+    const worldRow = () => document.querySelector<HTMLButtonElement>('[data-world-tray="wp2"]')!;
+    const row = worldRow();
+    expect(shape(row.querySelector(".world-tile-plate")!)).toEqual(rowShape);
+    expect(row.textContent).not.toMatch(/Lv\.|Tier/);
+    expect(row.querySelector(".rarity-mark")).toBeNull();
+    row.click();
+    const inspection = document.querySelector(".inventory-detail-face .world-tile-plate")!;
+    expect(shape(inspection)).toEqual(inspectionShape);
+    document.querySelector<HTMLButtonElement>("[data-world-back]")!.click();
+
+    const pointer = (target: EventTarget, type: string, x: number) => {
+      target.dispatchEvent(new PointerEvent(type, { button: 0, bubbles: true, clientX: x, clientY: 100, pointerId: 1 }));
+    };
+    pointer(worldRow(), "pointerdown", 100);
+    pointer(document, "pointermove", 140);
+    expect(shape(document.querySelector(".world-ghost .world-tile-plate")!)).toEqual(rowShape);
+    pointer(document, "pointercancel", 140);
+    expect(document.querySelector(".world-ghost")).toBeNull();
+    expect(app.state.world.weapons.find(w => w.id === "wp2")!.pos).toBeNull();
+  });
+
+  it("keeps the same cut on the enlarged Hex detail faces and the shared selector miniatures", () => {
+    seedEra();
+    const perimeter = (where: string) => document.querySelector(where)!.getAttribute("points");
+    expect(perimeter('#layer-legend [data-legend-layer="world"] polygon')).toBe(perimeter('#layer-legend [data-legend-layer="modules"] polygon'));
+    app.openDetail(hex(1, 0), "modules");
+    const moduleOutline = perimeter('[data-detail-face="modules"] .hex');
+    expect(perimeter('.detail-layer-preview[data-legend-layer="modules"] .hex')).toBe(moduleOutline);
+    expect(perimeter('.detail-layer-preview[data-legend-layer="world"] .world-plate')).toBe(moduleOutline);
+
+    document.querySelector<HTMLButtonElement>('.detail-layer-preview[data-legend-layer="world"]')!.click();
+    expect(perimeter('[data-detail-face="world"] .world-plate')).toBe(moduleOutline);
+    const world = document.querySelector('[data-detail-face="world"]')!;
+    expect(world.textContent).toContain("Unbound");
+    expect(world.textContent).not.toMatch(/Lv\.|Tier/);
   });
 });
 
@@ -203,15 +246,17 @@ describe("the occupant plates (issue #426, priority 3)", () => {
   it("a starved weapon's face reads UNFED — the state on the plate, never a tooltip apology", () => {
     seedEra();
     app.setBoardLayer("world");
+    grantCombatStarter(app.state);
+    expect(placeWorldOccupant(app.state, app.state.world.creatures[0]!.id, hex(0, 0)).ok).toBe(true);
+    app.render();
     const blade = grid().querySelector('[data-key="world-occ-1,0"]')!;
     expect(blade.textContent).toContain("BLADE");
     expect(blade.textContent).toContain(`⌁0/${BALANCE.world.storageCap}`);
-    expect(blade.textContent).toContain("UNFED");
-    expect(blade.textContent).toContain(`ATK ${attackPowerOf(app.state, "chargeBlade")}`);
+    expect(blade.textContent).toContain("Unfed");
     app.openDetail(hex(1, 0), "world");
     const chassis = document.querySelector(".world-stack")!;
-    expect(chassis.textContent).toContain("UNFED");
-    expect(chassis.textContent).toContain(`ATK ${attackPowerOf(app.state, "chargeBlade")}`);
+    expect(chassis.textContent).toContain("Unfed");
+    expect(chassis.textContent).toContain(`⌁0/${BALANCE.world.storageCap}`);
   });
 
   it("a fed weapon's face reads the charge figure and its attack power", () => {
@@ -246,7 +291,7 @@ describe("the occupant plates (issue #426, priority 3)", () => {
     app.setBoardLayer("world");
     // seedEra's Column sits at (0,1): an owned cell with no module.
     const column = grid().querySelector('[data-key="world-occ-0,1"]')!;
-    expect(column.textContent).toContain("inert · no host");
+    expect(column.textContent).toContain("No host");
   });
 });
 
@@ -269,7 +314,7 @@ describe("placement and relocation (issue #426, priority 4)", () => {
     expect(openFace(0, 0).getAttribute("tabindex")).toBe("0");
     openFace(0, 0).dispatchEvent(new Event(event, { bubbles: true }));
     const readout = () => document.getElementById("chord-readout")!.textContent!;
-    expect(readout()).toContain("this BLADE: unfed → unfed");
+    expect(readout()).toContain("Charge Blade: ⌁0/s → ⌁0/s");
     expect(app.state.world.weapons[1]!.pos).toBeNull();
     app.render();
     expect(openFace(0, 0).getAttribute("tabindex")).toBe("0");
@@ -282,21 +327,22 @@ describe("placement and relocation (issue #426, priority 4)", () => {
   it("hover keeps stored charge and encounter effects on their faces", () => {
     seedEra();
     app.state.world.weapons[0]!.store = 12;
-    app.state.world.enemies.w0 = { discovered: true, hp: 5 };
+    app.state.world.enemies.shale = { discovered: true, hp: 5 };
     app.setBoardLayer("world");
     const readout = () => document.getElementById("chord-readout")!.textContent!;
     openFace(1, 0).dispatchEvent(new Event("pointerover", { bubbles: true }));
     expect(readout()).not.toContain("⌁12/");
-    expect(readout()).toContain("no target in reach");
+    expect(readout()).toContain("needs an adjacent Sentinel");
     openFace(-1, 0).dispatchEvent(new Event("pointerover", { bubbles: true }));
     expect(readout()).not.toContain("% ν");
-    app.state.world.enemies.w0.hp = 0;
+    app.state.cells.push(hex(-1, 0));
+    app.state.world.enemies.shale.hp = 0;
     app.render();
     openFace(-1, 0).dispatchEvent(new Event("pointerover", { bubbles: true }));
     expect(readout()).not.toContain("% ν");
   });
 
-  it("an occupied cell refuses; enemy cells refuse, cleared ones included", () => {
+  it("rejects occupied and reserved cells, then lets a cleared owned cell take a piece", () => {
     seedEra();
     app.setBoardLayer("world");
     app.worldArmTray("wp2");
@@ -306,12 +352,13 @@ describe("placement and relocation (issue #426, priority 4)", () => {
     // Reserved enemy position.
     grid().querySelector('[data-world-cell="-1,0"]')!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(app.state.world.weapons.find((w) => w.id === "wp2")!.pos).toBeNull();
-    // Cleared keeps its block — the encounter and its bonus remain.
-    app.state.world.enemies["w0"] = { discovered: true, hp: 0 };
+    // Clearing lifts the reservation, not ownership.
+    app.state.world.enemies.shale = { discovered: true, hp: 0 };
+    app.state.cells.push(hex(-1, 0));
     app.render();
     app.worldArmTray("wp2");
     grid().querySelector('[data-world-cell="-1,0"]')!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    expect(app.state.world.weapons.find((w) => w.id === "wp2")!.pos).toBeNull();
+    expect(app.state.world.weapons.find((w) => w.id === "wp2")!.pos).toEqual(hex(-1, 0));
   });
 
   it("relocation is free: arm a placed weapon and click another open face", () => {
@@ -346,7 +393,7 @@ describe("placement and relocation (issue #426, priority 4)", () => {
     document.getElementById("chord-readout")!.hidden = false;
     app.setWorldDropHover("wp2", hex(0, 0));
     const readout = document.getElementById("chord-readout")!.textContent!;
-    expect(readout).toContain("BLADE");
+    expect(readout).toContain("Charge Blade");
     expect(readout).toContain("→");
     void host;
   });
@@ -377,7 +424,7 @@ describe("the World tray (issue #426, priority 7)", () => {
     const tray = document.getElementById("world-tray")!;
     tray.querySelector<HTMLButtonElement>('[data-world-tray="wp2"]')!.click();
     expect(tray.querySelector(".inventory-inspection")).not.toBeNull();
-    expect(tray.textContent).toContain("Target priority");
+    expect(tray.textContent).toContain("needs an adjacent Sentinel");
     tray.querySelector<HTMLButtonElement>("[data-world-place]")!.click();
     expect(app.ui.worldArmed).toBe("wp2");
     expect(tray.querySelector(".inventory-inspection")).toBeNull();

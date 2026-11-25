@@ -137,6 +137,7 @@ export interface ModuleInstance {
   // emission rate while flow is live. Charge state — reset at prestige.
   // Lenient-defaulted to 0 at load.
   reserve: number;
+  reserveCarry?: number;
   // The Bend's player-picked shift (ADR-0048): semitones added to its
   // cell's pitch. The selectable set grows with rarity only (±1 at launch,
   // ±2 joining at rare); null on every other type. Lenient-defaulted at
@@ -170,13 +171,14 @@ export interface Candidate {
 // dispatches acquisition without adding them to the module roster.
 export interface WorldCandidate {
   id: string;
-  type: "column" | "chargeBlade";
+  // Blades remain selectable only in previously banked offers.
+  type: "column" | "conduit" | "chargeBlade";
 }
 
 export type DraftCandidate = Candidate | WorldCandidate;
 
 export function isModuleCandidate(candidate: DraftCandidate): candidate is Candidate {
-  return candidate.type !== "column" && candidate.type !== "chargeBlade";
+  return candidate.type !== "column" && candidate.type !== "conduit" && candidate.type !== "chargeBlade";
 }
 
 export interface RollOffer<C = DraftCandidate> {
@@ -208,7 +210,8 @@ export interface MutatorInstance {
 // weapon the first World-eligible claim grants. The union is the whole
 // schema a later type joins: a new key in the per-type records (Hone
 // ranks, storage, attack), no reshaping of saves.
-export type WeaponType = "chargeBlade";
+export type { WeaponType } from "./weapons";
+import type { WeaponType } from "./weapons";
 
 // A Charge Column (issue #425, ADR-0074): the World layer's lift occupant.
 // It sits over an owned module cell, copies the charge received at that
@@ -220,48 +223,67 @@ export interface WorldColumn {
   pos: Hex | null;
 }
 
-// A weapon copy (issue #425, ADR-0074): stores charge up to its type's
-// capped quantity (persists between sessions, resets on prestige), attacks
-// adjacent discovered undefeated enemies on the capped cadence, spending
-// the fixed cost per attack. `targetPriority` is the between-sessions
-// control: the ordered preference among authored enemy keys, resolved
-// against the authored roster order when unconfigured or exhausted.
-// `cooldown` is combat state — seconds accumulated toward the next attack;
-// lenient-defaulted to 0 at load.
-export interface WeaponCopy {
-  id: string;
-  type: WeaponType;
-  pos: Hex | null;
-  store: number;
-  cooldown: number;
-  targetPriority: string[];
+// One physical gear copy can serve one deployed adjacent creature. The
+// assignment is reconciled only during preparation; an absent bearer never
+// turns a contested copy into someone else's gear in flow.
+export interface WorldGear extends WorldColumn {
+  bearer: string | null;
+  chosenBearer?: string;
 }
 
-// One authored enemy's live World state (issue #425), keyed by the
-// authored roster key: discovered flips the moment era-earned crosses the
-// threshold (the penalty activates), `hp` carries damage between sessions
-// and restores at fixed stats on prestige. Defeat reads `hp <= 0` — the
-// era bonus replaces the penalty, never stored twice.
+export interface WeaponCopy extends WorldGear {
+  type: WeaponType;
+  store: number;
+  storeCarry?: number;
+  cooldown: number;
+  cooldownCarry?: number;
+}
+
+export interface WorldSpell extends WorldGear {
+  store: number;
+  storeCarry?: number;
+}
+
+export interface WorldConduit extends WorldColumn {
+  direction: number;
+}
+
+// Zero HP is a lifetime victory. `discovered` means the wall is current
+// in this era (or was cleared); a living inactive wall still heals.
 export interface WorldEnemyState {
   discovered: boolean;
   hp: number;
+  hpCarry?: number;
 }
 
-// The World layer's save surface (issue #425, ADR-0074): the claimed
-// frontier (the entitlement already banked against, advanced only on
-// prestige), the once-ever starter weapon flag, the placed and tray
-// occupants (Columns and weapons), the per-type Hone ranks, and the
-// enemies' live state. World purchases persist through prestige; enemy
-// encounters, damage, and stored World charge reset with the era.
+export interface WorldCombatCreature extends WorldColumn {
+  hp: number;
+  hpCarry?: number;
+  recovering: boolean;
+  cooldown: number;
+  cooldownCarry?: number;
+}
+
 export interface WorldState {
   unlocked: boolean;
   starterColumnGranted: boolean;
   frontier: number;
   starterWeaponGranted: boolean;
+  starterCombatGranted: boolean;
   columns: WorldColumn[];
   weapons: WeaponCopy[];
-  hone: Record<WeaponType, number>;
+  creatures: WorldCombatCreature[];
+  armor: WorldGear[];
+  spells: WorldSpell[];
+  conduits: WorldConduit[];
+  hone: { chargeBlade: number };
   enemies: Record<string, WorldEnemyState>;
+  enemyCooldown: number;
+  enemyCooldownCarry?: number;
+  elapsed: number;
+  // Only the isolated development scenario installs the compressed two-wall
+  // timetable. The live loader never installs it from an export.
+  proof?: true;
 }
 
 export interface MutatorCandidate {
@@ -295,7 +317,7 @@ export interface Meter {
 // player or the habit across classes. `engineer` is the launch class; the
 // id union and the per-pair record are the whole schema a second class
 // joins — a new key under `Habit.classes`, no reshaping of saves.
-export type ClassId = "engineer";
+export type ClassId = "engineer" | "blacksmith";
 
 // One habit–class pair's progression. Experience accrues only from credited
 // flow time with this pair selected (live advance and honesty-credited
@@ -314,9 +336,10 @@ export interface ClassPairState {
   // Allocated ranks by node id. Ordinary points: respec and presets
   // rewrite them freely, never experience or level.
   spent: Record<string, number>;
-  // The pair's practice-roll meter: progress in credited seconds, earned
-  // = module rolls minted. Freezes while another pair is selected.
-  rollMeter: Meter;
+  // The pair's one reward meter: credited seconds and lifetime fills.
+  // Engineer fills mint module rolls; Blacksmith fills bank weapon choices.
+  rollMeter: Meter & { progressCarry?: number };
+  weaponClaims?: number;
 }
 
 // The starter shelf (ADR-0013, amended by ADR-0022): one-time catalog
@@ -359,6 +382,12 @@ export interface SessionAccounting {
   // classified in one pass when presence returns (the reconciliation floor
   // and the target split both read the whole absence, never a chunk).
   pendingAwaySeconds: number;
+  // Offset where the current absence lost World eligibility (sleep or
+  // resume from a save). The whole stretch still uses one honesty split.
+  pendingOfflineFrom?: number;
+  // Observed freeze/resume intervals, in order, within this absence.
+  // Unlike inferred sleep, a measured suspension has a known active tail.
+  pendingSuspensions?: { from: number; until: number }[];
   // Settled reconciliations, in order. Target hits, the honesty summary,
   // and miss rows derive from these — never stored.
   events: HonestyEvent[];
@@ -535,7 +564,7 @@ export interface Habit {
   // allocations, and partial roll progress all freeze in place. Only the
   // selected pair accrues. Lenient-defaulted to a fresh engineer pair at
   // load; unknown keys drop.
-  classes: Record<ClassId, ClassPairState>;
+  classes: { engineer: ClassPairState; blacksmith?: ClassPairState };
 }
 
 export interface PracticeEntry {
@@ -700,22 +729,8 @@ export interface GameState {
   notificationAsked: boolean;
   modules: ModuleInstance[];
   cells: Hex[];
-  // Total cells ever bought (§3): the geometric cell-price scaler counts
-  // purchases, never the current board size reshaping may rearrange. Row
-  // gates never advance it — gate nous is a premium on top, not a purchase
-  // the scaler counts (ADR-0022).
+  // Lifetime purchase count for feats and records, never used to price a cell.
   cellsBought: number;
-  // Octave rows whose one-time gate premium is already paid (ADR-0022): row
-  // indices relative to the start register. An explicit array, not a
-  // max-distance scalar, so purchase order never matters; lenient-defaults
-  // to [] at load.
-  gatedRows: number[];
-  // Octave rows the Row unlock has opened (ADR-0040 as amended by
-  // ADR-0044, issue #197): the one Arete row per side beyond the launch
-  // band. The purchase stands in the row gate too — the row also joins
-  // gatedRows — so cells inside buy with nous as usual. Persists through
-  // prestige; lenient-defaults to [] at load.
-  unlockedRows: number[];
   // Historical schema compatibility only (ADR-0087/#530): cleared on
   // load after version-gated historical refunds; never live purchase gates.
   catalogEntryOwned: boolean;

@@ -53,7 +53,7 @@ function seedOrdinaryAndBoot(t: number): number {
 }
 
 describe("the suite's catalog", () => {
-  it("declares the openings, the progression presets, and the Focus setup with their situations and origins", () => {
+  it("declares the openings, progression presets, Focus and combat proof with their situations and origins", () => {
     app = boot(undefined, true);
     expect(app.devScenarios().map((scenario) => scenario.id)).toEqual([
       "fresh-start",
@@ -61,6 +61,7 @@ describe("the suite's catalog", () => {
       "after-first-bank",
       "world-enemy",
       "focus",
+      "world-combat",
     ]);
     const fresh = app.devScenarios()[0]!;
     expect(fresh.name).toBe("Fresh start");
@@ -225,8 +226,8 @@ describe("the launch command", () => {
     const living = Object.values(app.state.world.enemies).filter((enemy) => enemy.discovered && enemy.hp > 0);
     expect(living.length).toBeGreaterThanOrEqual(1);
     expect(app.state.world.weapons.some((weapon) => weapon.pos === null)).toBe(true);
-    expect(app.state.arete).toBe(0);
-    expect(app.state.unlockedRows).toHaveLength(2);
+    expect(app.state.arete).toBeLessThanOrEqual(AFTER_FIRST_BANK_CLAIM);
+    expect(app.state).not.toHaveProperty("unlockedRows");
     expect(app.devScenarioNote).toContain("World enemy ✓");
     expect(app.devScenarioNote).toContain("placement decision unplayed");
     expect(app.devScenarioNote).toContain("recipe checkpoint · isolated save");
@@ -327,7 +328,7 @@ describe("the launch command", () => {
     app.devLaunchScenario("speedrun", t);
 
     expect(status()).toBe(
-      'Dev: no scenario "speedrun" — the suite offers fresh-start, approaching-prestige, after-first-bank, world-enemy, focus.',
+      'Dev: no scenario "speedrun" — the suite offers fresh-start, approaching-prestige, after-first-bank, world-enemy, focus, world-combat.',
     );
     // The refused candidate never installed: the Focus setup stays the
     // active scenario, its note and its assertion intact.
@@ -489,6 +490,7 @@ describe("the dev panel's suite entry", () => {
       "after-first-bank",
       "world-enemy",
       "focus",
+      "world-combat",
     ]);
     expect(select.options[0]!.hasAttribute("title")).toBe(false);
     expect(select.options[0]!.textContent).toBe("Fresh start");

@@ -1,11 +1,13 @@
 import { normalizeEncyclopedia } from "./encyclopedia";
-import { createInitialState, createWorldColumn, createWeapon, freshEnemyStates, normalizeChordDiscovery, normalizeModules, normalizeWorld, openingGrant } from "./state";
+import { createInitialState, createWorldColumn, createWeapon, freshEnemyStates, grantCombatStarter, normalizeChordDiscovery, normalizeModules, normalizeWorld, openingGrant } from "./state";
 import { classDefOf, freshClassPair, normalizeHabitClasses } from "./classes";
 import { activeGoals, normalizeGoals } from "./goals";
 import { DEFAULT_HABIT_COLOR, normalizeHabitColor } from "./habits";
 import { longGoalCost, mutatorSlotCost } from "./economy";
 import { generateOffer, type Rng } from "./rolls";
-import { BALANCE, SAVE_VERSION } from "./constants";
+import { BALANCE, SAVE_VERSION, WORLD_ENEMIES } from "./constants";
+import { syncWorldDiscoveries } from "./world";
+import { resetSum } from "./numeric";
 import type { BreatherState, GameState, Goal, Meter, SpecialDraftKind } from "./types";
 
 export interface SaveFile {
@@ -29,6 +31,8 @@ export interface LoadResult {
   // this load performed the v12 → v13 conversion — the one-time fact the
   // save/import flow explains. A v13 save reloads without it.
   migration?: MigrationReport;
+  footprintMigration?: { areteRefunded: number };
+  combatMigration?: { oldClears: number; discovered: boolean };
   // The explicit lost-money recovery (issue #494): present exactly when
   // this load repaired unreadable monetary state. The choice was the
   // player's at the save/import destination; this report names what was
@@ -147,7 +151,7 @@ function lostMonetaryFigures(
       if (module) module.invested = 0;
     });
     check(module?.reserve, `modules[${index}].reserve`, false, () => {
-      if (module) module.reserve = 0;
+      if (module) resetSum(module, "reserve", 0);
     });
   });
   if (isRecord(raw.world)) {
@@ -157,7 +161,7 @@ function lostMonetaryFigures(
     if (Array.isArray(raw.world.weapons)) {
       raw.world.weapons.forEach((weapon, index) => {
         check(weapon?.store, `world.weapons[${index}].store`, true, () => {
-          if (weapon) weapon.store = 0;
+          if (weapon) resetSum(weapon, "store", 0);
         });
       });
     }
@@ -255,15 +259,12 @@ function readSave(text: string, rng: Rng, recovery: boolean): LoadResult {
   if (recovery && isRecord(raw.session) && !isRecord(raw.session.accounting)) {
     return { error: "The session's practice accounting is incomplete; recovery cannot reconstruct it. The original save is unchanged." };
   }
-  // Lost money refuses before normalization, older refunds, or lenient
-  // defaults can hide the loss — at the pre-v13 boundary the gate
-  // converts. The refusal names the paths and carries them structurally;
-  // the explicit recovery choice (issue #494) owns what happens next.
-  // The recovery door itself reads any supported version's bytes — a v13
-  // source has no boundary conversion, and its repair rides the recovery
-  // alone. Detection and repair are one walk: with the merged state
-  // passed, the lost figures repair as they are found.
-  const lost = parsed.version < 13 || recovery
+  // Inspect before a calibrated reset or a Rack Extender refund can
+  // hide lost figures. An ordinary load otherwise keeps the established
+  // lenient handling. Explicit recovery reads any supported version and
+  // repairs the named losses in this same walk, before the refund.
+  const areteRefunded = parsed.version < 14 ? rackExtenderRefund(raw.unlockedRows) : 0;
+  const lost = parsed.version < 13 || parsed.version === 14 || recovery || areteRefunded > 0
     ? lostMonetaryFigures(raw, recovery ? merged : undefined)
     : [];
   if (lost.length && !recovery) {
@@ -273,19 +274,7 @@ function readSave(text: string, rng: Rng, recovery: boolean): LoadResult {
       lost,
     };
   }
-  // The octave-row gate ledger (ADR-0022): lenient default — a save written
-  // before it exists owes no gates it can't know about. The check reads the
-  // raw save, not the merge: a fresh state's granted opening rows must not
-  // masquerade as a ledger the save carried.
-  if (!Array.isArray(raw.gatedRows)) {
-    merged.gatedRows = [];
-  }
-  // The Row unlock's ledger and the Mutator tree's sheet purchases
-  // (issue #197) lenient-default the same way: absent means never unlocked,
-  // never bought — which is also exactly what a pre-Catalog save owes.
-  if (!Array.isArray(raw.unlockedRows)) {
-    merged.unlockedRows = [];
-  }
+  // The retired Mutator entry's flags still feed the historical v10 refund.
   if (typeof raw.catalogEntryOwned !== "boolean") {
     merged.catalogEntryOwned = false;
   }
@@ -437,6 +426,22 @@ function readSave(text: string, rng: Rng, recovery: boolean): LoadResult {
   // drop the field rather than resume a state shape this build no longer
   // reads.
   delete (merged as unknown as Record<string, unknown>).activatedApps;
+  // A damaged optional suspension ledger cannot grant World time. The
+  // legacy honesty ledger (including the full pending absence) still rides.
+  const accounting = merged.session?.accounting;
+  if (accounting?.pendingSuspensions !== undefined) {
+    let cursor = 0;
+    const valid = Array.isArray(accounting.pendingSuspensions) && accounting.pendingSuspensions.every(span => {
+      if (!span || !Number.isFinite(span.from) || !Number.isFinite(span.until) ||
+        span.from < cursor || span.until <= span.from || span.until > accounting.pendingAwaySeconds) return false;
+      cursor = span.until;
+      return true;
+    });
+    if (!valid) {
+      delete accounting.pendingSuspensions;
+      accounting.pendingOfflineFrom = 0;
+    }
+  }
   // The session's per-source rolls ledger (ADR-0041) lenient-defaults the
   // same way: a save written mid-flow before it exists resumes with zeroed
   // counts, never a crash.
@@ -503,7 +508,7 @@ function readSave(text: string, rng: Rng, recovery: boolean): LoadResult {
   // explicit recovery applies the calibrated era reset here — the same
   // pass the boundary runs, once, never repeated (the figures it wrote
   // are finite). For pre-v13 sources the conversion above already did it.
-  if (recovery && lost.length > 0 && !migration) migrateV12ToV13(merged, parsed.version);
+  if (recovery && lost.length > 0 && !migration) migrateV12ToV13(merged, parsed.version, parsed.version >= 15);
   const recovered = recovery && lost.length > 0 ? { fromVersion: parsed.version, lost } : undefined;
   // The goals' live-share surface (ADR-0047, wave 5) lenient-defaults the
   // same way: a goal saved before the generators wave carries no live
@@ -542,6 +547,11 @@ function readSave(text: string, rng: Rng, recovery: boolean): LoadResult {
     world.unlocked = world.frontier > 0 || world.starterWeaponGranted ||
       world.columns.length > 0 || world.weapons.length > 0 || world.hone.chargeBlade > 0;
   }
+  if (!world.unlocked) {
+    for (const habit of merged.habits) {
+      if (habit.classId === "blacksmith") habit.classId = "engineer";
+    }
+  }
   if (world.unlocked) {
     if (!world.starterColumnGranted) {
       world.columns.push(createWorldColumn(merged));
@@ -553,6 +563,21 @@ function readSave(text: string, rng: Rng, recovery: boolean): LoadResult {
       world.starterWeaponGranted = true;
     }
   }
+  // v15 never credits old passive Blade hits as a lifetime combat win.
+  // Coordinates, stored Blade charge, and unrelated economy are retained.
+  let combatMigration: LoadResult["combatMigration"];
+  if (parsed.version < 15) {
+    const enemies = isRecord(raw.world) && isRecord(raw.world.enemies) ? raw.world.enemies : {};
+    const oldClears = WORLD_ENEMIES.filter(({ key }) => {
+      const entry = enemies[key];
+      return isRecord(entry) && entry.hp === 0;
+    }).length;
+    merged.world.enemies = freshEnemyStates();
+    for (const blade of world.weapons) resetSum(blade, "cooldown", 0);
+    if (world.unlocked) grantCombatStarter(merged);
+    combatMigration = { oldClears, discovered: world.unlocked };
+  }
+  syncWorldDiscoveries(merged);
   // ADR-0087: terminal retirement after the historical migration chain.
   // Historical refunds remain in their original version gate; no new payout
   // or era reset. Ordinary offers are preserved, including retired candidates
@@ -565,8 +590,23 @@ function readSave(text: string, rng: Rng, recovery: boolean): LoadResult {
   merged.rollPoolJoined = false;
   merged.modules = merged.modules.filter(module => module.type !== "mutatorForge");
   normalizeEncyclopedia(merged, raw.encyclopedia, raw.encyclopediaRevision);
-  if (recovered) return { state: merged, recovered };
-  return migration ? { state: merged, migration } : { state: merged };
+  // ADR-0089: keep exactly the owned coordinates; their distance bands are
+  // the ownership record. Old nous premiums mixed grants and payments and
+  // are not refunded. Rack Extenders have an exact, separate Arete ledger.
+  delete (merged as unknown as Record<string, unknown>).gatedRows;
+  delete (merged as unknown as Record<string, unknown>).unlockedRows;
+  const footprintMigration = parsed.version < 14 ? { areteRefunded } : undefined;
+  if (areteRefunded > 0) merged.arete += areteRefunded;
+  return { state: merged, ...(footprintMigration && { footprintMigration }), ...(combatMigration && { combatMigration }),
+    ...(recovered ? { recovered } : migration ? { migration } : {}) };
+}
+
+function rackExtenderRefund(rows: unknown): number {
+  if (!Array.isArray(rows)) return 0;
+  // The retired product sold rows +3 and −2 only, in either order: 1, then 2.
+  // Ignore unknown entries and duplicates; gatedRows is not purchase proof.
+  const owned = Number(rows.includes(3)) + Number(rows.includes(-2));
+  return [0, 1, 3][owned]!;
 }
 
 // ── The v10 → v11 migration (issue #427, ADR-0017's one step) ───────────
@@ -786,13 +826,13 @@ function migrateV11ToV12(merged: GameState): void {
 // Idempotence is structural: the version gate routes a v12 save (or a
 // v10/v11 save through its chain) here alone, and the save this pass
 // writes is v13 — the schema every later load reads untouched.
-function migrateV12ToV13(merged: GameState, fromVersion: number): MigrationReport {
+function migrateV12ToV13(merged: GameState, fromVersion: number, retainVictories = false): MigrationReport {
   let modulesCleared = 0;
   for (const module of merged.modules) {
     if (module.level !== 0 || module.invested) modulesCleared++;
     module.level = 0;
     module.invested = 0;
-    module.reserve = 0;
+    resetSum(module, "reserve", 0);
   }
 
   const eraEarnedCleared = merged.eraEarned;
@@ -808,10 +848,15 @@ function migrateV12ToV13(merged: GameState, fromVersion: number): MigrationRepor
   // The World's era state: enemies restore at their authored stats and
   // stored combat charge empties — the prestige rule's own pass. The
   // purchases above it stand.
-  merged.world.enemies = freshEnemyStates();
+  if (!retainVictories) merged.world.enemies = freshEnemyStates();
+  else {
+    resetSum(merged.world, "enemyCooldown", 0);
+    for (const creature of merged.world.creatures) resetSum(creature, "cooldown", 0);
+    for (const spell of merged.world.spells) resetSum(spell, "store", 0);
+  }
   for (const weapon of merged.world.weapons) {
-    weapon.store = 0;
-    weapon.cooldown = 0;
+    resetSum(weapon, "store", 0);
+    resetSum(weapon, "cooldown", 0);
   }
 
   const frontierCleared = merged.world.frontier;
@@ -839,3 +884,5 @@ export const ORIGINAL_SAVE_KEY = "flowsynth.save.original.v1";
 // Preserve a lineage's earlier backup when v13 retains the exact bytes
 // it is about to convert as the downloadable original.
 export const PRE_V13_ORIGINAL_SAVE_KEY = "flowsynth.save.original.pre-v13";
+export const PRE_V14_ORIGINAL_SAVE_KEY = "flowsynth.save.original.pre-v14";
+export const PRE_V15_ORIGINAL_SAVE_KEY = "flowsynth.save.original.pre-v15";

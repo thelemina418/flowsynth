@@ -1,18 +1,20 @@
-import { BALANCE, BREATHER, CATEGORY_OF, EPS, isOscillatorType, REFLECTION_SLIDER_MIN, REFLECTION_SLIDER_NEUTRAL, REFLECTION_SLIDER_POSITIONS, ROLL_POOL, SHELF_MODULE, SHELF_TYPES, typeRarityOf, WORLD_ENEMIES } from "./constants";
+import { BALANCE, BREATHER, CATEGORY_OF, EPS, isOscillatorType, REFLECTION_SLIDER_MIN, REFLECTION_SLIDER_NEUTRAL, REFLECTION_SLIDER_POSITIONS, ROLL_POOL, SHELF_MODULE, SHELF_TYPES, typeRarityOf } from "./constants";
 import { bankableClaimOf, horizonReached } from "./accumulator";
-import { rowUnlockCost, unlockableRows, unlockedMergeCap, mergeCapIncreaseCost } from "./catalog";
+import { unlockedMergeCap, mergeCapIncreaseCost } from "./catalog";
 import { nextCapacityPrice, nextCeilingPrice, nextDiscountPrice } from "./capacity";
-import { affordableLevels, cellPurchasePrice, chargeDelivered, maxChordFactorOf, deployedAt, findModule, isPriceableLevel, isResponseSupport, levelCost, levelsCost, modulePower, responseSupportPowerOf, rowGateOwed, syncRates, wholeNous } from "./economy";
-import { enemyDefAt, honeCostOf, worldOccupantAt } from "./world";
+import { affordableLevels, chargeDelivered, maxChordFactorOf, deployedAt, findModule, isPriceableLevel, isResponseSupport, levelCost, levelsCost, modulePower, responseSupportPowerOf, syncRates, wholeNous } from "./economy";
+import { honeCostOf, syncWorldDiscoveries, worldCellReserved, worldOccupantAt, worldPieceOf, worldPiecesOf } from "./world";
+import { adjacentBearersOf, reconcileWorldGear, resetDuelClocks } from "./world-combat";
 import { summaryTermsOf } from "./allocation";
 import { arcCardDue } from "./arc";
-import { adjacent, hexKey, isConnected, neighbors, sameHex } from "./hex";
-import { octaveRowOf, positionInRange } from "./lattice";
-import { createModule, createWeapon, createWorldColumn, eraStartGrantOf, freshEnemyStates, openingGrant } from "./state";
+import { DIRECTIONS, hexKey, isConnected, sameHex } from "./hex";
+import { positionInRange } from "./lattice";
+import { cellBand, cellPurchaseQuote } from "./footprint";
+import { createModule, createWeapon, createWorldColumn, createWorldConduit, eraStartGrantOf, grantCombatStarter, openingGrant } from "./state";
 import { logSessionPractice } from "./habits";
 import { plannedTargetHit } from "./records";
 import { rollGoalOccurrences } from "./goals";
-import { NumericFault } from "./numeric";
+import { NumericFault, resetSum } from "./numeric";
 import { creditFocusEarning } from "./reserves";
 import { moduleScrapValue, skipPayoutOf } from "./scrap";
 import { syncAchievements } from "./achievements";
@@ -146,6 +148,7 @@ export function endSession(state: GameState, now: number = 0): ActionResult {
     return fail("The generator charge cannot bank safely, so the session is still open.");
   }
   state.mode = "upgrade";
+  reconcileWorldGear(state);
   // The departed session's final clock (docs/breather-spec.md §1): the
   // temporal base a following breather advances — a breather keeps the
   // Afterglow warm and the Pulsewell cycling from where the session left
@@ -277,6 +280,7 @@ export function endBreather(state: GameState): ActionResult {
   if (record) record.breather = { seconds: breather.elapsed, completed };
   state.mode = "upgrade";
   state.breather = null;
+  reconcileWorldGear(state);
   return ok;
 }
 
@@ -356,29 +360,13 @@ export function buyShelfModule(state: GameState, type: ShelfType): ActionResult 
   return { ok: true, unlocked: checkUnlocks(state) };
 }
 
-// Cells (ADR-0013, amended by ADR-0022): direct nous purchases, bought and
-// placed in upgrade mode. A new cell must extend the connected frontier, so
-// the board grows without ever disconnecting; reshaping stays the
-// count-preserving rule. The first purchase into each new octave row pays a
-// one-time gate premium on top of the cell price — escalating with row
-// distance from the start register, never advancing the purchase scaler,
-// and never owed twice (the gatedRows ledger records every paid row,
-// including the opening's, which the grant paid). Movement between rows is
-// a different action entirely and never meets a gate. The fifths axis is
-// ungated; the row range is finite and symmetric around the start register.
+// The paid frontier extends the shared footprint in upgrade mode (ADR-0089).
 export function buyCell(state: GameState, pos: Hex): ActionResult {
-  if (state.mode !== "upgrade") return fail("Purchases happen between sessions.");
-  if (state.cells.some((c) => sameHex(c, pos))) return fail("That cell is already part of the board.");
-  if (!state.cells.some((c) => adjacent(c, pos))) return fail("New cells must touch the board.");
-  if (!positionInRange(state, pos)) return fail("That cell lies outside the board's lattice.");
-  const row = octaveRowOf(pos);
-  const gateOwed = rowGateOwed(state, row);
-  const price = cellPurchasePrice(state, pos);
-  if (wholeNous(state) < price) return fail("Not enough whole nous.");
-  state.nous -= price;
-  state.cells.push(pos);
+  const quote = cellPurchaseQuote(state, pos);
+  if (quote.reason !== null || quote.price === null) return fail(quote.reason ?? "No cell price.");
+  state.nous -= quote.price;
+  state.cells.push({ ...pos });
   state.cellsBought++;
-  if (gateOwed) state.gatedRows.push(row);
   return { ok: true, unlocked: checkUnlocks(state) };
 }
 
@@ -798,8 +786,7 @@ export function returnModule(state: GameState, id: string): ActionResult {
   return { ok: true, unlocked: checkUnlocks(state) };
 }
 
-// Reshaping moves owned cells anywhere within the finite row band — always
-// free, never gated (ADR-0022: gates tax acquisition only).
+// Free reshaping rearranges the paid cells within their bands (ADR-0089).
 export function reshapeCells(state: GameState, next: Hex[]): ActionResult {
   if (state.mode !== "upgrade") return fail("Reshaping happens between sessions.");
   if (next.length !== state.cells.length) return fail("Reshaping preserves the cell count.");
@@ -810,12 +797,23 @@ export function reshapeCells(state: GameState, next: Hex[]): ActionResult {
       return fail("Every deployed module needs a cell.");
     }
   }
-  if ([...state.world.columns, ...state.world.weapons].some((occupant) => occupant.pos !== null && !keys.has(hexKey(occupant.pos)))) {
+  if (worldPiecesOf(state).some(({ copy }) => copy.pos !== null && !keys.has(hexKey(copy.pos)))) {
     return fail("Every deployed World occupant needs a cell.");
   }
-  if (next.some((cell) => !positionInRange(state, cell))) return fail("The board must stay inside the board's lattice.");
+  if (next.some((cell) => !positionInRange(cell))) return fail("The board must stay inside the board's lattice.");
   if (!isConnected(next)) return fail("The board must stay connected.");
-  state.cells = next;
+  const remaining = new Map<number, number>();
+  for (const cell of state.cells) {
+    const band = cellBand(cell);
+    remaining.set(band, (remaining.get(band) ?? 0) + 1);
+  }
+  for (const cell of next) {
+    const band = cellBand(cell);
+    const count = remaining.get(band) ?? 0;
+    if (count < 1) return fail("Reshaping preserves ownership in each distance band.");
+    remaining.set(band, count - 1);
+  }
+  state.cells = next.map(cell => ({ ...cell }));
   return { ok: true, unlocked: checkUnlocks(state) };
 }
 
@@ -831,6 +829,7 @@ export function chooseRoll(state: GameState, offerId: string, candidateId: strin
   // Dispatch by item kind; only module rewards carry a mint tier. World
   // constructors grant fresh unplaced copies regardless of prior ownership.
   if (candidate.type === "column") state.world.columns.push(createWorldColumn(state));
+  else if (candidate.type === "conduit") state.world.conduits.push(createWorldConduit(state));
   else if (candidate.type === "chargeBlade") state.world.weapons.push(createWeapon(state, "chargeBlade"));
   else if (isModuleCandidate(candidate)) state.modules.push(createModule(state, candidate.type, candidate.tier));
   return { ok: true, unlocked: checkUnlocks(state) };
@@ -934,28 +933,9 @@ export function joinRollPool(_state: GameState): ActionResult {
   return fail("Mutators are retired.");
 }
 
-// The board-side Row unlock (ADR-0044, #174's approved surface): one Arete
-// purchase opens the octave row beyond the launch band — one per side,
-// either order, the ladder escalating 1 then 2 — and the purchase stands in
-// the row gate for the row it opens, so cells inside buy with nous as
-// usual. The board must reach the row it unlocks (frontier-adjacent rows
-// only, matching the banner's construction): a row the board doesn't touch
-// has no banner to click and opens by no other path. Past the ladder's end
-// the board is at its six-row cap: nothing is unlockable, and no price
-// exists to charge.
-export function buyRowUnlock(state: GameState, row: number): ActionResult {
-  if (state.mode !== "upgrade") return fail(ARETE_MODE_LOCK);
-  if (!unlockableRows(state).includes(row)) return fail("That octave row cannot be unlocked.");
-  if (!state.cells.some((cell) => neighbors(cell).some((n) => octaveRowOf(n) === row))) {
-    return fail("The board must reach the octave row it unlocks.");
-  }
-  const price = rowUnlockCost(state);
-  if (price === null) return fail("The board is at its row cap.");
-  if (state.arete < price) return fail("Not enough Arete.");
-  state.arete -= price;
-  state.unlockedRows.push(row);
-  state.gatedRows.push(row);
-  return { ok: true, unlocked: checkUnlocks(state) };
+// Refuse stale command clients explicitly; expansion spends only nous now.
+export function buyRowUnlock(_state: GameState, _row: number): ActionResult {
+  return fail("Rack Extenders are retired. Use Add to buy connected cells with nous.");
 }
 
 // ── Refusing Mutator compatibility API (ADR-0087 retires ADR-0043) ─────
@@ -1085,7 +1065,7 @@ export function buyMergeCapIncrease(state: GameState): ActionResult {
 // starter Charge Blade outright — a granted copy, not a roll, not a
 // purchase; no other claim or prestige ever grants a weapon.
 // The reset boundary: owned modules (types, rarity, secondaries),
-// cells with placement, `cellsBought` and the paid row gates, tray
+// cells with placement and `cellsBought`, tray
 // inventory, banked rolls, Forge progress, and the per-pair practice-roll
 // meters' fill and earned counts (ADR-0041 — progress earned by real life
 // time is never un-earned at the moment prestige pays off), achievements
@@ -1164,6 +1144,7 @@ export function prestige(state: GameState, tuning: PrestigeTuning = {}): ActionR
       state.world.weapons.push(createWeapon(state, "chargeBlade"));
       state.world.starterWeaponGranted = true;
     }
+    grantCombatStarter(state);
   }
   state.prestiges++;
   for (const module of state.modules) {
@@ -1175,7 +1156,7 @@ export function prestige(state: GameState, tuning: PrestigeTuning = {}): ActionR
   // charge-shaped. Class development, practice history, and the discovery
   // ledger persist.
   for (const module of state.modules) {
-    module.reserve = 0;
+    resetSum(module, "reserve", 0);
   }
   // The harmonic-capacity ladder resets with the levels (issue #259):
   // purchased capacity is era progress like everything else the era
@@ -1184,14 +1165,14 @@ export function prestige(state: GameState, tuning: PrestigeTuning = {}): ActionR
   // are permanent Catalog purchases.
   state.capacityBought = 0;
   state.eraEarned = 0;
-  // The World's era-state resets (issue #425, priority 9): enemies restore
-  // at their authored fixed stats — undiscovered, undamaged, era bonuses
-  // gone with the defeat state they derived from — and stored World charge
-  // empties. Purchases and the frontier persist above.
-  state.world.enemies = freshEnemyStates();
+  // Only activation, stored charge and cadence reset. The lifetime
+  // victory, the wounds on either side, and the layout all stand.
+  resetDuelClocks(state);
+  syncWorldDiscoveries(state);
+  for (const spell of state.world.spells) resetSum(spell, "store", 0);
   for (const weapon of state.world.weapons) {
-    weapon.store = 0;
-    weapon.cooldown = 0;
+    resetSum(weapon, "store", 0);
+    resetSum(weapon, "cooldown", 0);
   }
   return { ok: true, unlocked: checkUnlocks(state) };
 }
@@ -1249,6 +1230,7 @@ export function buyChargeColumn(_state: GameState): ActionResult {
 // Like every World purchase: irreversible, no refund action anywhere.
 export function buyHoneRank(state: GameState, type: WeaponType): ActionResult {
   if (state.mode !== "upgrade") return fail(ARETE_MODE_LOCK);
+  if (type !== "chargeBlade") return fail("Hone is a Charge Blade upgrade.");
   const price = honeCostOf(state, type);
   if (price === null) return fail("That weapon type is at its Hone ceiling.");
   if (state.arete < price) return fail("Not enough Arete.");
@@ -1257,24 +1239,21 @@ export function buyHoneRank(state: GameState, type: WeaponType): ActionResult {
   return { ok: true, unlocked: checkUnlocks(state) };
 }
 
-// World placement (issue #425, priority 10): an occupant — Column or
-// weapon — lands on an owned cell's World face. The shared coordinates'
-// rules, the Mutator Grid's precedent: reserved enemy cells block only
-// World placement (and stay blocked after defeat — the encounter and its
-// era bonus remain), one World occupant per cell, and the module layer
-// beneath never reads the occupancy. Relocation is free between sessions;
-// upgrade mode is the only window, like every reconfiguration.
+// An occupant uses an owned World face, independent of the module below.
+// Lifetime victories release reservations; preparation alone moves gear.
 export function placeWorldOccupant(state: GameState, id: string, pos: Hex): ActionResult {
   if (state.mode !== "upgrade") return fail("The grid is locked during flow.");
-  const column = state.world.columns.find((entry) => entry.id === id);
-  const weapon = state.world.weapons.find((entry) => entry.id === id);
-  if (!column && !weapon) return fail("World occupant not found.");
+  const piece = worldPieceOf(state, id);
+  if (!piece) return fail("World occupant not found.");
+  if (piece.kind === "creature" && piece.copy.recovering) return fail("The creature must recover to full HP before deployment.");
   if (!state.cells.some((cell) => sameHex(cell, pos))) return fail("Only an owned cell carries a World face.");
-  if (enemyDefAt(pos)) return fail("That cell is reserved for an enemy.");
+  if (worldCellReserved(state, pos)) return fail("That cell is reserved for an enemy.");
   const occupied = worldOccupantAt(state, pos);
   if (occupied && occupied.id !== id) return fail("That World cell is already occupied.");
-  if (column) column.pos = pos;
-  else weapon!.pos = pos;
+  if (piece.copy.pos && sameHex(piece.copy.pos, pos)) return { ok: true };
+  if (piece.kind === "creature") resetDuelClocks(state);
+  piece.copy.pos = pos;
+  reconcileWorldGear(state);
   return { ok: true, unlocked: checkUnlocks(state) };
 }
 
@@ -1282,24 +1261,29 @@ export function placeWorldOccupant(state: GameState, id: string, pos: Hex): Acti
 // free — placement and relocation never charge.
 export function retrieveWorldOccupant(state: GameState, id: string): ActionResult {
   if (state.mode !== "upgrade") return fail("The grid is locked during flow.");
-  const column = state.world.columns.find((entry) => entry.id === id);
-  const weapon = state.world.weapons.find((entry) => entry.id === id);
-  if (!column && !weapon) return fail("World occupant not found.");
-  if (column) column.pos = null;
-  else weapon!.pos = null;
+  const piece = worldPieceOf(state, id);
+  if (!piece) return fail("World occupant not found.");
+  if (piece.kind === "creature" && piece.copy.pos) resetDuelClocks(state);
+  piece.copy.pos = null;
+  reconcileWorldGear(state);
   return { ok: true, unlocked: checkUnlocks(state) };
 }
 
-// A weapon's between-session target priority (issue #425): the ordered
-// preference among the authored enemies, stored and locked with everything
-// else in flow. Keys resolve against the authored roster — unknown keys
-// drop, duplicates collapse — and an unconfigured or exhausted priority
-// falls back to the authored sequence order.
-export function setWeaponTargetPriority(state: GameState, id: string, keys: string[]): ActionResult {
+export function setWorldConduitDirection(state: GameState, id: string, direction: number): ActionResult {
   if (state.mode !== "upgrade") return fail("The grid is locked during flow.");
-  const weapon = state.world.weapons.find((entry) => entry.id === id);
-  if (!weapon) return fail("Weapon not found.");
-  const known = keys.filter((key, index) => WORLD_ENEMIES.some((def) => def.key === key) && keys.indexOf(key) === index);
-  weapon.targetPriority = known;
-  return { ok: true, unlocked: checkUnlocks(state) };
+  const conduit = state.world.conduits.find((copy) => copy.id === id);
+  if (!conduit?.pos) return fail("Place the conduit before choosing an edge.");
+  if (!Number.isInteger(direction) || direction < 0 || direction >= DIRECTIONS.length) return fail("Choose a neighboring edge.");
+  conduit.direction = direction;
+  return { ok: true };
+}
+
+export function setWorldGearBearer(state: GameState, id: string, bearerId: string): ActionResult {
+  if (state.mode !== "upgrade") return fail("The grid is locked during flow.");
+  const piece = worldPieceOf(state, id);
+  if (!piece || !(piece.kind === "weapon" || piece.kind === "armor" || piece.kind === "spell")) return fail("World gear not found.");
+  if (!adjacentBearersOf(state, piece.copy).some(({ id }) => id === bearerId)) return fail("Choose an adjacent creature.");
+  piece.copy.chosenBearer = bearerId;
+  reconcileWorldGear(state);
+  return { ok: true };
 }

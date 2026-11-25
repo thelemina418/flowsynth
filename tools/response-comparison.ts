@@ -1,11 +1,11 @@
 import { upgradeModuleLevels } from "../src/engine/actions";
 import { allocateRates, investment, levelCost, responseSupportPowerOf, type AllocatedRates } from "../src/engine/economy";
-import { RESPONSE_CURVES, WORLD_ENEMIES } from "../src/engine/constants";
+import { BALANCE, RESPONSE_CURVES } from "../src/engine/constants";
 import { stateOf, type ComparisonBoard } from "../src/engine/capacity-comparisons";
 import { fresh, give } from "../src/engine/fixtures";
 import { hex, sameHex } from "../src/engine/hex";
 import { composePlaythroughRecipe, playthroughSource, runPlaythrough, type PlaythroughEvent, type PlaythroughRecord, type PlaythroughRecipe, type PlaythroughSource } from "../src/engine/playthrough";
-import { worldFactorOf } from "../src/engine/world";
+import { syncWorldDiscoveries, worldFactorOf } from "../src/engine/world";
 import type { GameState, Hex, ModuleType, ResponseCurveId } from "../src/engine/types";
 
 // The response-support candidate comparison (issue #487, parent #484
@@ -138,7 +138,7 @@ export const SUPPLIED_BOARD_DECLARED = {
   chordCatalysts: 2,
   completedBreathers: 17,
   lifetimeBreatherSeconds: 6_241,
-  enemies: "all nine discovered and undefeated",
+  enemies: "live comparison reapplies first-wall pressure only; old recording had nine discovered",
   worldWeaponAndColumns: "unplaced",
   savedDeployedLevels: "1506 — corrupt magnitude, never used; declared finite sweeps stand in",
   monetaryFields: "lost — no monetary figure is reconstructed",
@@ -177,10 +177,8 @@ export function suppliedBoardState(level: number, capacity: number, curve: Respo
   state.capacityDiscounts = SUPPLIED_BOARD_DECLARED.chordCatalysts;
   state.breathersCompleted = SUPPLIED_BOARD_DECLARED.completedBreathers;
   state.breatherSeconds = SUPPLIED_BOARD_DECLARED.lifetimeBreatherSeconds;
-  for (const def of WORLD_ENEMIES) {
-    const live = state.world.enemies[def.key];
-    if (live) live.discovered = true;
-  }
+  state.eraEarned = BALANCE.world.entryNous;
+  syncWorldDiscoveries(state);
   const byCopy = new Map(SUPPLIED_BOARD.map((c, index) => [c.copy, index]));
   for (const { from, to } of SUPPLIED_RECIPIENTS) {
     state.modules[byCopy.get(from)!]!.target = state.modules[byCopy.get(to)!]!.id;
@@ -193,10 +191,8 @@ export function suppliedBoardState(level: number, capacity: number, curve: Respo
 // against.
 export function suppliedBoardUnpressed(level: number, capacity: number, curve: ResponseCurveId): GameState {
   const state = suppliedBoardState(level, capacity, curve);
-  for (const def of WORLD_ENEMIES) {
-    const live = state.world.enemies[def.key];
-    if (live) live.discovered = false;
-  }
+  state.eraEarned = 0;
+  syncWorldDiscoveries(state);
   return state;
 }
 
@@ -765,7 +761,7 @@ function findingsOf(report: ResponseComparisonReport): string[] {
   // The World floor on the supplied board.
   const world = [...report.fixtures, ...report.capacitySweep].find((row) => row.board === "supplied-board-p01-p30")!.worldFactor;
   findings.push(
-    `The supplied board's nine discovered undefeated enemies multiply every supplied row by ${world.toExponential(2)} — ` +
+    `The supplied board's current wall multiplies every supplied row by ${world.toExponential(2)} — ` +
       "the reconstruction's absolute figures are pressured production, not unpressured capacity.",
   );
   // Certification.

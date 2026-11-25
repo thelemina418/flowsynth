@@ -156,6 +156,9 @@ async function main() {
   });
   const m = await compileEngine("tools/century.ts", "century");
   const source = m.playthroughSource();
+  if (source.saveVersion !== m.calibrationBaseline().saveVersion) {
+    throw new Error("The century publication is frozen at the v13 save-translation economy. Use its recorded historical revision; smoke remains available here.");
+  }
   const slicePath = (minutes, policy) => `docs/century-slice-${minutes}-${policy}.json`;
 
   const assertRows = (rows, minutes, policy) => {

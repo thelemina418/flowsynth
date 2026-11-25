@@ -1,4 +1,5 @@
 import { hasActiveWorldEnemy } from "./world";
+import { assertWorldCombatScenario, createWorldCombatScenario } from "./world-combat-scenario";
 import { BALANCE } from "./constants";
 import { assertFocusScenario, createFocusScenarioState, focusScenarioSummary } from "./focus-scenario";
 import {
@@ -165,6 +166,15 @@ export const SCENARIOS: readonly ScenarioDescriptor[] = [
   AFTER_FIRST_BANK,
   WORLD_ENEMY,
   FOCUS,
+  {
+    id: "world-combat",
+    name: "World combat proof",
+    situation: "two ordered walls and one fixed kit (#542)",
+    origin: "constructed fixture",
+    build: createWorldCombatScenario,
+    assert: assertWorldCombatScenario,
+    summary: () => "Shale active · fixed kit in tray",
+  },
 ];
 
 export function scenarioOf(id: string): ScenarioDescriptor | null {
@@ -245,8 +255,7 @@ function assertAfterFirstBank(state: GameState, claimTarget: number): void {
 
 // The living fight's assertion (issue #471): one prestige behind it, a
 // discovered enemy still alive, the starter blade's placement unplayed,
-// and the recipe's remaining legacy entry purchased. ADR-0087 grants the
-// Column free, leaving one of the first claim's two Arete unspent.
+// and the free starter Column already placed on its supply.
 function assertWorldEnemy(state: GameState): void {
   const fail = failFor("World enemy");
   if (state.mode !== "upgrade") fail(`expected upgrade mode — found ${state.mode}.`);
@@ -256,9 +265,7 @@ function assertWorldEnemy(state: GameState): void {
     fail("expected a weapon waiting in the tray — the placement decision is unplayed.");
   }
   if (state.catalogEntryOwned) fail("retired Catalog entry must remain unowned.");
-  if (state.unlockedRows.length !== 2) fail("expected earned spending on two Rack Extenders.");
   if (!state.world.columns.some((column) => column.pos !== null)) {
     fail("expected the free starter Charge Column placed.");
   }
-  if (state.arete !== 0) fail(`expected the three earned Arete spent on Rack Extenders — ${state.arete} Arete remain.`);
 }

@@ -6,7 +6,7 @@ import {
   accrueClassDevelopment,
   allocateClassNode,
   applyClassPreset,
-  CLASSES,
+  availableClasses,
   classDefOf,
   practiceRollThreshold,
   respecClassTree,
@@ -38,7 +38,7 @@ describe("the pair ledger", () => {
     expect(habit.classId).toBe("engineer");
     expect(pair).toMatchObject({ experience: 0, level: 0, points: 0 });
     expect(pair.rollMeter).toEqual({ progress: 0, earned: 0 });
-    expect(CLASSES.map((c) => c.id)).toEqual(["engineer"]);
+    expect(availableClasses(s).map((c) => c.id)).toEqual(["engineer"]);
   });
 
   it("credited flow accrues class experience and crosses authored thresholds into tree points", () => {

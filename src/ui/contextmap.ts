@@ -1,12 +1,12 @@
 import type { App } from "./app";
 import { boardPoint, HEX_RADIUS, hexPoints, HUE_TOKEN_OF } from "./face";
-import { BALANCE } from "../engine/constants";
-import { cellNoteOf, columnInRange, octaveRowOf, rowInRange } from "../engine/lattice";
+import { cellFrontier } from "../engine/footprint";
+import { cellNoteOf } from "../engine/lattice";
 import { chordMarkCovers, type ChordMark } from "./chordlayer";
 import type { GameState, Hex, ModuleInstance } from "../engine/types";
 
 /* ── The context map (ADR-0072) ───────────────────────
-   The details column's head: a miniature of the whole in-range board
+   The details column's head: the owned footprint and its immediate frontier
    answering one question — where does this voice sit in my formation.
    The opened hex wears the state grammar's firm selected marker; its
    active chords draw in their chord hues, adapted for the miniature's
@@ -25,27 +25,8 @@ import type { GameState, Hex, ModuleInstance } from "../engine/types";
 const MAP_WIDTH = 264;
 const MAP_HEIGHT = 172;
 
-// The window's column bounds, mirrored from the lattice's own gate
-// (five columns before the start column, twelve wide).
-const MIN_Q = -5;
-const MAX_Q = -5 + 11;
-
-// Every in-range cell: the launch band's rows plus the Row unlock's rows,
-// across the twelve-column fifths window — the same patch the board
-// draws, enumerated from the lattice's one projection.
-function inRangeCells(state: GameState): Hex[] {
-  const rows = new Set<number>();
-  for (let row = -BALANCE.launchRowsBelow; row <= BALANCE.launchRowsAbove; row++) rows.add(row);
-  for (const row of state.unlockedRows) rows.add(row);
-  const cells: Hex[] = [];
-  for (let q = MIN_Q; q <= MAX_Q; q++) {
-    for (const row of rows) cells.push({ q, r: row - Math.floor((7 * q) / 12) });
-  }
-  return cells.filter((pos) => rowInRange(state, octaveRowOf(pos)) && columnInRange(pos));
-}
-
 export function contextMapSvg(state: GameState, pos: Hex, module: ModuleInstance | undefined, marks: ChordMark[], expanded = false): string {
-  const cells = inRangeCells(state);
+  const cells = [...state.cells, ...cellFrontier(state)];
   if (cells.length === 0) return "";
   const points = cells.map((cell) => boardPoint(cell));
   const minX = Math.min(...points.map((p) => p[0])) - HEX_RADIUS;

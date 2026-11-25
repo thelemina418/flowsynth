@@ -5,7 +5,6 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { createInitialState } from "../src/engine/state";
 import { hex } from "../src/engine/hex";
-import { SAVE_VERSION } from "../src/engine/constants";
 
 const state = createInitialState() as unknown as Record<string, unknown>;
 const habit = (id: string, name: string, seconds: number): Record<string, unknown> => ({
@@ -153,7 +152,7 @@ for (const h of state.habits as Record<string, unknown>[]) {
   delete h.classes;
 }
 
-const file = { app: "flowsynth", version: SAVE_VERSION - 1, savedAt: 1_700_000_900_000, state };
+const file = { app: "flowsynth", version: 10, savedAt: 1_700_000_900_000, state };
 const out = resolve(import.meta.dirname!, "../src/engine/fixtures/saves/v10-migration.json");
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, `${JSON.stringify(file, null, 2)}\n`);

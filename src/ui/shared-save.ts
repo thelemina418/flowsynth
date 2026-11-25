@@ -1,4 +1,4 @@
-import { deserialize, recoverLostSave, serialize, STORAGE_KEY, ORIGINAL_SAVE_KEY, PRE_V13_ORIGINAL_SAVE_KEY, type MigrationReport, type RecoveryReport } from "../engine/save";
+import { deserialize, recoverLostSave, serialize, STORAGE_KEY, ORIGINAL_SAVE_KEY, PRE_V13_ORIGINAL_SAVE_KEY, PRE_V14_ORIGINAL_SAVE_KEY, PRE_V15_ORIGINAL_SAVE_KEY, type MigrationReport, type RecoveryReport } from "../engine/save";
 import type { GameState } from "../engine/types";
 
 export interface LoadedSave {
@@ -8,6 +8,8 @@ export interface LoadedSave {
   // this parse performed the one-time conversion — the fact the flow
   // explains at the save/import destination.
   migration?: MigrationReport;
+  footprintMigration?: { areteRefunded: number };
+  combatMigration?: { oldClears: number; discovered: boolean };
   // The explicit lost-money recovery (issue #494): present exactly when
   // this parse performed the player's chosen recovery — the choice was
   // explained before it applied, so this rides without a second surface.
@@ -69,9 +71,8 @@ export class SharedSave {
         ? { error: result.error ?? "Explicit recovery required.", recoveryRequired: true, lost: result.lost ?? [] }
         : { error: result.error ?? "unknown error" };
     }
-    return result.migration
-      ? { state: result.state, savedAt: savedAtOf(text) ?? this.now(), migration: result.migration }
-      : { state: result.state, savedAt: savedAtOf(text) ?? this.now() };
+    const { state, migration, footprintMigration, combatMigration } = result;
+    return { state, savedAt: savedAtOf(text) ?? this.now(), ...(migration && { migration }), ...(footprintMigration && { footprintMigration }), ...(combatMigration && { combatMigration }) };
   }
 
   // The recovery choice's parse (issue #494): the same bytes through the
@@ -84,6 +85,8 @@ export class SharedSave {
       state: result.state,
       savedAt: savedAtOf(text) ?? this.now(),
       ...(result.recovered ? { recovered: result.recovered } : {}),
+      ...(result.footprintMigration && { footprintMigration: result.footprintMigration }),
+      ...(result.combatMigration && { combatMigration: result.combatMigration }),
     };
   }
 
@@ -100,16 +103,18 @@ export class SharedSave {
         return { ...parsed, raw, lost: parsed.lost ?? [] };
       }
       this.sourceProtected = false;
-      if ("migration" in parsed && parsed.migration) {
+      if ("state" in parsed && (parsed.migration || parsed.footprintMigration || parsed.combatMigration)) {
         try {
-          // This boundary needs today's exact bytes, not a first-seen
-          // snapshot from an earlier release. Archive that older original
-          // before replacing the download slot, then permit adoption.
-          const earlier = this.storage.getItem(ORIGINAL_SAVE_KEY);
-          if (earlier !== null && earlier !== raw) {
-            this.storage.setItem(PRE_V13_ORIGINAL_SAVE_KEY, earlier);
+          if (parsed.migration) {
+            const earlier = this.storage.getItem(ORIGINAL_SAVE_KEY);
+            if (earlier !== null && earlier !== raw) this.storage.setItem(PRE_V13_ORIGINAL_SAVE_KEY, earlier);
+            this.storage.setItem(ORIGINAL_SAVE_KEY, raw);
+          } else {
+            // Keep this source without displacing an earlier boundary's original.
+            const archive = parsed.footprintMigration ? PRE_V14_ORIGINAL_SAVE_KEY : PRE_V15_ORIGINAL_SAVE_KEY;
+            this.storage.setItem(archive, raw);
+            this.retainOnce(raw);
           }
-          this.storage.setItem(ORIGINAL_SAVE_KEY, raw);
         } catch {
           this.sourceProtected = true;
           return { error: "The pre-migration save could not be retained. The stored save is unchanged; retry after making storage available." };
@@ -147,19 +152,40 @@ export class SharedSave {
   // primary intact, and only completed backup writes need undoing.
   // Keep the source timestamp so a reload can still reconcile its gap
   // if the normal post-adoption session save fails.
-  adoptRecovered(raw: string, state: GameState, savedAt: number): boolean {
+  adoptRecovered(raw: string, state: GameState, savedAt: number, source?: { from: "boot" | "import"; version: number | undefined }): boolean {
     const changed: { key: string; previous: string | null }[] = [];
     try {
       const text = serialize(state, savedAt);
       const earlier = this.storage.getItem(ORIGINAL_SAVE_KEY);
-      const archive = this.storage.getItem(PRE_V13_ORIGINAL_SAVE_KEY);
       const replace = (key: string, value: string, previous: string | null): void => {
         if (previous === value) return;
         this.storage.setItem(key, value);
         changed.push({ key, previous });
       };
-      if (earlier !== null && earlier !== raw) replace(PRE_V13_ORIGINAL_SAVE_KEY, earlier, archive);
-      replace(ORIGINAL_SAVE_KEY, raw, earlier);
+      const archive = (key: string, value: string): void => {
+        const previous = this.storage.getItem(key);
+        if (previous !== null && previous !== value) {
+          // Keep older archives too when the current lineage displaces one.
+          let i = 1;
+          for (;;) {
+            const historyKey = `${key}.${i++}`;
+            const saved = this.storage.getItem(historyKey);
+            if (saved === previous) break;
+            if (saved === null) {
+              replace(historyKey, previous, null);
+              break;
+            }
+          }
+        }
+        replace(key, value, previous);
+      };
+      if (source?.version === 14) archive(PRE_V15_ORIGINAL_SAVE_KEY, raw);
+      // A boot migration does not displace its existing lineage's earlier
+      // original. An import starts a new lineage, even if it migrates too.
+      if (source?.version !== 14 || source.from === "import" || earlier === null) {
+        if (earlier !== null && earlier !== raw) archive(PRE_V13_ORIGINAL_SAVE_KEY, earlier);
+        replace(ORIGINAL_SAVE_KEY, raw, earlier);
+      }
       this.storage.setItem(STORAGE_KEY, text);
       this.sourceProtected = false;
       this.knownSavedAt = savedAt;

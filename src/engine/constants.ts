@@ -109,26 +109,10 @@ export interface Balance {
   mergeCapCosts: readonly number[];
   rarityProbability: Record<Rarity, number>;
   shelfPrices: Record<ShelfType, number>;
-  // Cells (ADR-0013): direct nous purchases on a geometric scaler over
-  // total cells bought. Provisional tuning.
+  // Cells: whole-nous prices by distance from the fixed origin (ADR-0089).
   cellFirstCost: number;
-  cellCostGrowthNumerator: bigint;
-  cellCostGrowthDenominator: bigint;
-  // The octave-row gate (ADR-0022): a one-time premium on the first
-  // purchase into each new octave row, escalating with row distance from
-  // the start register. The fifths axis is ungated, gate spend never
-  // advances the cell scaler, and moving owned cells between rows is free.
-  // Provisional tuning.
-  rowGateFirstCost: number;
-  rowGateGrowthNumerator: bigint;
-  rowGateGrowthDenominator: bigint;
-  // The launch band (ADR-0022 as bounded by ADR-0040/0044, issue #197):
-  // the octave rows the launch board opens — this many above and below the
-  // start register, its own rows paid by the opening grant. The Row unlock
-  // sells one further row per side at Arete; the board caps at six octave
-  // rows this phase (count: tuning).
-  launchRowsAbove: number;
-  launchRowsBelow: number;
+  cellSecondBandCost: number;
+  cellOuterBandGrowth: number;
   // The Arete Catalog's Arete prices (ADR-0040 as amended by ADR-0044,
   // issue #197). The Horizon break's price (ADR-0042, issue #200) is
   // retired with the Headroom purchase (issue #425 — the frontier claim
@@ -138,14 +122,9 @@ export interface Balance {
   catalogEntryCost: number;
   rollPoolJoinCost: number;
   horizonBreakCost: number;
-  // The Row unlock's escalating ladder (ADR-0044): the nth unlock costs
-  // rowUnlockCosts[n], either order. Past the ladder's end the board is at
-  // its six-row cap and nothing more unlocks.
-  rowUnlockCosts: readonly number[];
   // How many columns the board spans: the fifths axis walks a twelve-note
   // circle, and the pitch kernel repeats every twelve columns — bounding
-  // them keeps each note appearing exactly once per octave row. The axis
-  // stays ungated; only the cell scaler prices it.
+  // them keeps each note appearing exactly once per octave row.
   fifthsColumns: number;
   // The opening grant (ADR-0022): affords — but no longer exactly equals —
   // the first upgrade of the pre-placed synthesizer. Provisional tuning.
@@ -231,6 +210,7 @@ export interface Balance {
   // the class level cap. Provisional tuning throughout — exact thresholds
   // are hypothesis knobs pending simulation evidence.
   engineerLevelThresholds: readonly number[];
+  blacksmithForgeSeconds: number;
   // The Governor node's bounded cadence discount: each owned rank cuts the
   // flat practice-roll cadence block by this share (the opening fill
   // never moves). Two ranks → the flat block's floor is 84% of authored.
@@ -455,17 +435,11 @@ export const BALANCE: Balance = {
   rarityProbability: { common: 0.99, uncommon: 0.009, rare: 0.001 },
   shelfPrices: { generator: 40, infusor: 40, forge: 80 },
   cellFirstCost: 30,
-  cellCostGrowthNumerator: 5n,
-  cellCostGrowthDenominator: 2n,
-  rowGateFirstCost: 60,
-  rowGateGrowthNumerator: 2n,
-  rowGateGrowthDenominator: 1n,
-  launchRowsAbove: 2,
-  launchRowsBelow: 1,
+  cellSecondBandCost: 90,
+  cellOuterBandGrowth: 4,
   catalogEntryCost: 1,
   rollPoolJoinCost: 5,
   horizonBreakCost: 10,
-  rowUnlockCosts: [1, 2],
   fifthsColumns: 12,
   openingGrant: 12,
   // The claim grant (issue #484's later-era repair): the ν a banked claim
@@ -507,6 +481,7 @@ export const BALANCE: Balance = {
   // Two, six, fourteen, twenty-eight, fifty, eighty credited hours with
   // the pair selected: six levels, six tree points. Provisional tuning.
   engineerLevelThresholds: [2 * 3600, 6 * 3600, 14 * 3600, 28 * 3600, 50 * 3600, 80 * 3600],
+  blacksmithForgeSeconds: 600,
   engineerCadenceDiscountPerRank: 0.08,
   engineerTierChancePerRank: 0.15,
   engineerGuaranteedWeaveNth: 6,
@@ -972,4 +947,4 @@ export const REFLECTION_SLIDER_NEUTRAL = 3;
 // half standing — docs/save-migration.md) each run for their own version
 // alone, and a retired step is gone with its version: nothing below v10
 // loads, so nothing can still need the dead ones.
-export const SAVE_VERSION = 13;
+export const SAVE_VERSION = 15; // Lifetime World combat (ADR-0088).

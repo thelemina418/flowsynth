@@ -1,6 +1,9 @@
 import { BALANCE, EPS } from "./constants";
 import { bankRolls, generateOffer, generateSpecialOffer, type Rng } from "./rolls";
 import { activeHabit, type Habit } from "./habits";
+import { addToSum, NumericFault, requireFinite, resetSum, savedCarry } from "./numeric";
+import { createWeapon } from "./state";
+import { FORGE_WEAPONS, type ForgeWeapon } from "./weapons";
 import type { ClassId, ClassPairState, GameState } from "./types";
 export type { ClassId, ClassPairState };
 
@@ -16,13 +19,9 @@ export type { ClassId, ClassPairState };
 // practice runs production and charge forging and earns nothing
 // class-side.
 //
-// Engineer is the launch class; the registry below is the whole seam a
-// second class joins (a new def here, a new key under each habit's
-// `classes`, no reshaping of saves). Its class ability is the
-// practice-roll meter itself — practice mints modules — present from
-// level one and progressing only through credited time. The tree's
-// figures are hypothesis knobs authored in BALANCE (constants.ts), the
-// one place cadence figures, node effects, and thresholds live.
+// Each class assigns its own reward to the pair's one practice meter.
+// Engineer mints module rolls; Blacksmith banks a weapon choice for
+// later. Neither reward takes session attention.
 
 // One tree node. `maxRank` bounds the ranks; `requiredLevel` is the
 // explicit prerequisite — the class level the pair must hold before the
@@ -83,9 +82,6 @@ const ENGINEER_NODES: readonly ClassNodeDef[] = [
   },
 ];
 
-// The launch registry: Engineer, the one shipped class. Presets are the
-// default allocation out of the box plus the two branches' shapes; all
-// are ordinary allocations.
 export const CLASSES: readonly ClassDef[] = [
   {
     id: "engineer",
@@ -98,6 +94,7 @@ export const CLASSES: readonly ClassDef[] = [
       { id: "engineer-merge", name: "Plying", spent: { reed: 2 } },
     ],
   },
+  { id: "blacksmith", name: "Blacksmith", levelThresholds: [], nodes: [], presets: [] },
 ];
 
 const CLASS_BY_ID: ReadonlyMap<ClassId, ClassDef> = new Map(CLASSES.map((def) => [def.id, def]));
@@ -109,13 +106,22 @@ export function classDefOf(classId: ClassId): ClassDef {
 // The registry's known ids — the lenient default's whitelist.
 export const CLASS_IDS: readonly ClassId[] = CLASSES.map((def) => def.id);
 
-// A fresh pair's shape: level zero, no points, the meter empty. The class
-// ability is present from level one — the meter runs whatever the level.
-export function freshClassPair(): ClassPairState {
-  return { experience: 0, level: 0, points: 0, spent: {}, rollMeter: { progress: 0, earned: 0 } };
+function classAvailable(state: GameState, id: ClassId): boolean {
+  return id !== "blacksmith" || state.world.unlocked;
 }
 
-export function createHabitClasses(): Record<ClassId, ClassPairState> {
+export function availableClasses(state: GameState): readonly ClassDef[] {
+  return CLASSES.filter(({ id }) => classAvailable(state, id));
+}
+
+export function freshClassPair(id: ClassId = "engineer"): ClassPairState {
+  return {
+    experience: 0, level: id === "blacksmith" ? 1 : 0, points: 0, spent: {}, rollMeter: { progress: 0, earned: 0 },
+    ...(id === "blacksmith" && { weaponClaims: 0 }),
+  };
+}
+
+export function createHabitClasses(): Habit["classes"] {
   return { engineer: freshClassPair() };
 }
 
@@ -129,7 +135,7 @@ export function pairDef(habit: Habit): ClassDef {
 // unknown classId only before normalization; readers guard with the same
 // default the normalizer writes.
 export function pairOf(habit: Habit): ClassPairState {
-  return habit.classes[habit.classId] ?? freshClassPair();
+  return habit.classes[habit.classId] ?? freshClassPair(habit.classId);
 }
 
 // The session's active pair: the active habit wearing its selected class.
@@ -203,26 +209,48 @@ function generatePracticeOffer(state: GameState, pair: ClassPairState, def: Clas
   return generateOffer(state, rng, mintTierChance(pair, def));
 }
 
-// The one class-development leg (issue #423): credited flow seconds with
-// a pair selected accrue XP, cross authored thresholds into tree points,
-// and fill the pair's practice-roll meter — crossings bank module rolls
-// into the shared queue. Returns the rolls banked, attributed to the
-// flow source beside the Forge branches'. Every caller is a credited
-// second's leg (advance's live sink, the honesty report's credit);
-// nothing else may call this.
+export function weaponChoicesOf(habit: Habit): number {
+  const pair = habit.classes.blacksmith;
+  return pair?.weaponClaims !== undefined ? pair.rollMeter.earned - pair.weaponClaims : 0;
+}
+
+function creditWeaponForge(pair: ClassPairState, seconds: number): void {
+  const meter = pair.rollMeter;
+  const threshold = BALANCE.blacksmithForgeSeconds;
+  // Divide out whole fills before adding the remainder so a long credit
+  // cannot round away an existing partial meter.
+  const remainder = seconds % threshold;
+  // Above the safe-integer range the input double is an exact (large)
+  // integer, but subtracting its remainder in doubles can round a fill
+  // up or down. Divide as integers, then enforce the saved count's range.
+  let fills = seconds > Number.MAX_SAFE_INTEGER ? Number(BigInt(seconds) / BigInt(threshold))
+    : Math.round((seconds - remainder) / threshold);
+  addToSum(meter, "progress", remainder, "Blacksmith forge progress");
+  if (meter.progress >= threshold) {
+    fills++;
+    addToSum(meter, "progress", -threshold, "Blacksmith forge progress");
+    if (meter.progress < 0) resetSum(meter, "progress", 0);
+  }
+  const earned = meter.earned + fills;
+  if (!Number.isSafeInteger(earned)) throw new NumericFault("Blacksmith weapon choices");
+  meter.earned = earned;
+}
+
+// The credited-time boundary: called only by live advance and resolved
+// honesty credit. Returns module rolls only; Blacksmith never touches the
+// shared roll queue, its RNG, the first-roll rig, or Forge notifications.
 export function accrueClassDevelopment(state: GameState, seconds: number, rng: Rng): number {
-  if (seconds <= EPS) return 0;
+  if (seconds <= 0) return 0;
   const active = activePair(state);
-  if (!active) return 0;
-  const { habit } = active;
+  if (!active || !classAvailable(state, active.classId) || (seconds <= EPS && active.classId !== "blacksmith")) return 0;
+  const { habit, classId } = active;
+  const pair = habit.classes[classId] ??= freshClassPair(classId);
+  pair.experience = requireFinite(pair.experience + seconds, "class experience");
+  if (classId === "blacksmith") {
+    creditWeaponForge(pair, seconds);
+    return 0;
+  }
   const def = pairDef(habit);
-  // The selected pair's ledger entry always exists before the accrual
-  // mutates it — the selection action creates it, and this guard covers a
-  // hand-built state that skipped it.
-  const ledger = habit.classes as Record<string, ClassPairState | undefined>;
-  if (!ledger[habit.classId]) ledger[habit.classId] = freshClassPair();
-  const pair = ledger[habit.classId]!;
-  pair.experience += seconds;
   const thresholds = def.levelThresholds;
   while (pair.level < thresholds.length && pair.experience >= thresholds[pair.level]!) {
     pair.level++;
@@ -259,10 +287,24 @@ export function selectHabitClass(state: GameState, habitId: string, classId: Cla
   const found = classHabitOf(state, habitId);
   if (!("habit" in found)) return found;
   if (!CLASS_IDS.includes(classId)) return { ok: false, reason: "That class does not exist." };
-  if (found.habit.classId === classId) return { ok: true };
+  if (!classAvailable(state, classId)) return { ok: false, reason: "Discover World to select Blacksmith." };
   found.habit.classId = classId;
-  const ledger = found.habit.classes as Record<string, ClassPairState | undefined>;
-  if (!ledger[classId]) ledger[classId] = freshClassPair();
+  found.habit.classes[classId] ??= freshClassPair(classId);
+  return { ok: true };
+}
+
+export function claimForgedWeapon(state: GameState, habitId: string, type: ForgeWeapon): { ok: boolean; reason?: string } {
+  const found = classHabitOf(state, habitId);
+  if (!("habit" in found)) return found;
+  const { habit } = found;
+  if (!state.world.unlocked || state.activeHabitId !== habitId || habit.classId !== "blacksmith") {
+    return { ok: false, reason: "Select the habit and its Blacksmith class to forge a weapon." };
+  }
+  if (!FORGE_WEAPONS.includes(type)) return { ok: false, reason: "Choose a Blacksmith weapon." };
+  if (weaponChoicesOf(habit) < 1) return { ok: false, reason: "No weapon choice is banked." };
+  const pair = pairOf(habit);
+  state.world.weapons.push(createWeapon(state, type));
+  pair.weaponClaims = (pair.weaponClaims ?? 0) + 1;
   return { ok: true };
 }
 
@@ -338,19 +380,39 @@ export function normalizeHabitClasses(habits: Habit[]): void {
   for (const habit of habits) {
     if (!habit || typeof habit !== "object") continue;
     habit.classId = CLASS_IDS.includes(habit.classId as ClassId) ? (habit.classId as ClassId) : "engineer";
-    const carried = habit.classes && typeof habit.classes === "object" ? habit.classes : {};
-    const classes = {} as Record<ClassId, ClassPairState>;
+    const carried: Partial<Habit["classes"]> = habit.classes && typeof habit.classes === "object" ? habit.classes : {};
+    const classes = createHabitClasses();
     for (const id of CLASS_IDS) {
-      const raw = (carried as Record<string, ClassPairState | undefined>)[id];
-      const pair: ClassPairState = raw && typeof raw === "object" ? raw : freshClassPair();
+      const raw = carried[id];
+      if (id === "blacksmith" && !raw && habit.classId !== id) continue;
+      const pair: ClassPairState = raw && typeof raw === "object" ? raw : freshClassPair(id);
       pair.experience = Number.isFinite(pair.experience) && pair.experience > 0 ? pair.experience : 0;
       pair.level = Number.isInteger(pair.level) && pair.level > 0 ? pair.level : 0;
       pair.points = Number.isFinite(pair.points) && pair.points > 0 ? Math.floor(pair.points) : 0;
       const meter = pair.rollMeter && typeof pair.rollMeter === "object" ? pair.rollMeter : freshClassPair().rollMeter;
-      pair.rollMeter = {
-        progress: Number.isFinite(meter.progress) && meter.progress > 0 ? meter.progress : 0,
-        earned: Number.isFinite(meter.earned) && meter.earned > 0 ? Math.floor(meter.earned) : 0,
-      };
+      const progress = Number.isFinite(meter.progress) && meter.progress > 0 ? meter.progress : 0;
+      if (id === "blacksmith") {
+        // A lost claim count cannot turn prior claims back into banked weapons.
+        const claimed = pair.weaponClaims;
+        const validCounts = Number.isSafeInteger(meter.earned) && claimed !== undefined &&
+          Number.isSafeInteger(claimed) && claimed >= 0 && meter.earned >= claimed;
+        const partial = progress < BALANCE.blacksmithForgeSeconds ? progress : 0;
+        const carry = savedCarry(meter.progress, partial, meter.progressCarry);
+        pair.rollMeter = {
+          progress: partial,
+          ...(carry !== undefined && { progressCarry: carry }),
+          earned: validCounts ? meter.earned : 0,
+        };
+        pair.weaponClaims = validCounts ? claimed : 0;
+        pair.level = 1;
+        pair.points = 0;
+      } else {
+        pair.rollMeter = {
+          progress,
+          earned: Number.isFinite(meter.earned) && meter.earned > 0 ? Math.floor(meter.earned) : 0,
+        };
+        delete pair.weaponClaims;
+      }
       const def = classDefOf(id);
       const spent: Record<string, number> = {};
       if (pair.spent && typeof pair.spent === "object") {

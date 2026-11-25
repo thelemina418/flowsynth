@@ -5,7 +5,7 @@ import { SaveRefusedError } from "../engine/save";
 import { historicalBoardHtml } from "./historical-board";
 import { termTipHtml, type CatalogTerm } from "./terms";
 import { tierPowerOf } from "../engine/module-strength";
-import { cellCost, cellPurchasePrice, chargeDelivered, computeRates, displayedRates, emittedStrength, affordableLevels, flowLive, isPriceableLevel, isResponseSupport, levelCost, levelsCost, projectPlacement, voiceCapacityOf, wholeNous, type PlacementProjection } from "../engine/economy";
+import { chargeDelivered, computeRates, displayedRates, emittedStrength, affordableLevels, flowLive, isPriceableLevel, isResponseSupport, levelCost, levelsCost, projectPlacement, voiceCapacityOf, wholeNous, type PlacementProjection } from "../engine/economy";
 import { ALLOCATION_QUALITY_BOUNDS, idleTermsOf, summaryTermsOf } from "../engine/allocation";
 import { ARETE_HORIZON, bankableClaimOf, horizonReached } from "../engine/accumulator";
 import { newChordTerms, wouldFormPreview } from "../engine/chords";
@@ -17,16 +17,17 @@ import { draftTierChanceOf, forgeThreshold, mutatorForgeThreshold, nextDraftUpgr
 import { BALANCE, CATEGORY_OF, isOscillatorType, isVoiceType, NAMED_CHORDS, REFLECTION_SLIDER_MIN, REFLECTION_SLIDER_NEUTRAL, REFLECTION_SLIDER_POSITIONS, SHELF_MODULE } from "../engine/constants";
 import { goalCompletionBase } from "../engine/reserves";
 import { baseTermOf, generatorProfileOf } from "../engine/profiles";
-import { catalogOpen, mergeCapIncreaseCost, rowUnlockCost, unlockedMergeCap, unlockableRows } from "../engine/catalog";
+import { mergeCapIncreaseCost, unlockedMergeCap } from "../engine/catalog";
+import { cellPurchaseQuote } from "../engine/footprint";
 import { capacityCeiling, nextCapacityPrice, nextCeilingPrice, nextDiscountPrice } from "../engine/capacity";
 import { formatClock, formatDuration } from "../engine/clock";
 import { playthroughEventMarker, playthroughInspection, playthroughSource, type PlaythroughTrajectoryPoint } from "../engine/playthrough";
-import { cellNoteOf, noteNameOf, octaveRowOf, positionInRange } from "../engine/lattice";
+import { cellNoteOf, noteNameOf } from "../engine/lattice";
 import { TILE_APPS, type FocusApp } from "../engine/apps";
 import { poolOutstanding } from "../engine/trust";
 import { arcCardDue } from "../engine/arc";
 import { ACHIEVEMENTS, achievementName, type AchievementCategory, type AchievementContext, type AchievementDef } from "../engine/achievements";
-import { isModuleCandidate, type Category, type DeployedModule, type GameState, type Hex, type ModuleInstance, type ModuleType, type NamedChordTerm, type RateSnapshot, type ResponseCurveId, type SpecialDraftKind, type WeaponType } from "../engine/types";
+import { isModuleCandidate, type Category, type DeployedModule, type GameState, type Hex, type ModuleInstance, type ModuleType, type NamedChordTerm, type RateSnapshot, type ResponseCurveId, type SpecialDraftKind, type WorldCandidate } from "../engine/types";
 import { DEV_BOARD_CAPACITIES, type App, type ChordHover, type ModalKind } from "./app";
 import {
   bindFocusSheet,
@@ -55,8 +56,9 @@ import { renderInventoryContent, openInventoryForDrag } from "./inventory";
 import { chargeGlow, chargeLeads } from "./leads";
 import { chordOverlay, chordMarkCovers, chipWidth, CHORD_HUES, type ChordMark } from "./chordlayer";
 import { updateSvg } from "./svg";
-import { APP_LABELS, CATEGORY_WORD, META, RARITY_LABEL, SHELF_DESCRIPTIONS, SPECIAL_DRAFT_NAME, WORLD_META, rarityMark, tierNumeral, tierWord } from "./meta";
-import { honeCostOf } from "../engine/world";
+import { APP_LABELS, CATEGORY_WORD, META, RARITY_LABEL, SHELF_DESCRIPTIONS, SPECIAL_DRAFT_NAME, rarityMark, tierNumeral, tierWord } from "./meta";
+import { attackPowerOf, honeCostOf, honePowerAt, worldPiecesOf } from "../engine/world";
+import { WEAPONS } from "../engine/weapons";
 import { typeRarityOf } from "../engine/constants";
 import { formatBalance, formatInt, formatNumber, formatPracticeMinutes, chordTermLabel, practiceCountdown } from "./format";
 import { enemyPressureHtml, renderBoardLedger, renderGameInfoStrip, rateDetailsHtml, updateRateDetailsLive, deployedRosterKey, unlockedCount, wireSynthPicks, FEATS_SVG, LIBRARY_SVG, ARETE_SVG, CAPACITY_SVG, SCRAP_SVG } from "./ledger";
@@ -68,6 +70,7 @@ import { boardBounds, bindBoardNavigation, lensFrame, renderZoomCluster, syncGlo
 import { beginLayoutPass, containerWidth, endLayoutPass, RATE_DETAILS_BREAKPOINT_PX, isPhoneWidth, PHONE_MAX_PX, viewportWidth, scrollTopOf } from "./container";
 import { liveAttr, liveSet } from "./live";
 import { hexFromAttr } from "./world";
+import { WORLD_DRAFTS } from "./world-combat";
 import {
   bindWorldLayer,
   worldBoardLive,
@@ -91,10 +94,6 @@ import {
 const LATTICE_STEP = Math.sqrt(3) * SPACING;
 const DRAG_THRESHOLD_PX = 6;
 const boundCells = new WeakSet<SVGElement>();
-// The Row unlock banners' one-binding ledger, the boundCells pattern: the
-// svg persists across renders, so a surviving banner node must never
-// re-bind.
-const boundBanners = new WeakSet<SVGElement>();
 
 const point = boardPoint;
 
@@ -927,16 +926,11 @@ function toolActions(): ToolAction[] {
         if (app.ui.buyingCell) app.cancelCellPurchase();
         else app.armCellPurchase();
       },
-      // The resting read quotes the next cell's price against the board's
-      // pace — the figure a player weighs before arming (#272 review, one
-      // detail writer under #354's live pass).
-      title: (app, projected) => {
+      title: (app) => {
         if (app.state.mode !== "upgrade") return "Add — purchases happen between sessions";
         if (app.ui.boardLayer === "world") return "Add — cell purchases live on the Modules face";
         if (app.ui.buyingCell) return "Pick a frontier hex · Esc cancels";
-        const price = cellCost(app.state.cellsBought);
-        const countdown = practiceCountdown(price, wholeNous(app.state), projected.rate);
-        return `Add — ${formatInt(price)} ν${countdown ? ` · ${countdown}` : ""}`;
+        return "Add — cell prices rise with distance from C4";
       },
       disabled: (app) => app.state.mode !== "upgrade",
       active: (app) => app.ui.buyingCell,
@@ -1113,23 +1107,15 @@ function renderTools(app: App, projected: RateSnapshot): void {
       // is the generic pass's write — the title closure owns the read.
       cellButton.classList.toggle("active", ui.buyingCell);
       cellButton.setAttribute("aria-pressed", String(ui.buyingCell));
-      if (ui.buyingCell) {
-        cellButton.setAttribute("aria-disabled", "false");
-      } else {
-        cellButton.setAttribute("aria-disabled", String(wholeNous(state) < cellCost(state.cellsBought)));
-      }
+      // A broke player can still inspect prices and choice of destinations.
+      cellButton.setAttribute("aria-disabled", "false");
     }
   }
 }
 
-/* ── The add-cell pill (#201): one cost spot, one obvious exit ── */
+/* ── Add mode: its exit stays at the board edge ── */
 
-// While a cell purchase is armed, the pill rides the board's top edge as
-// the mode's single cost spot — "Add · <price> ν — Cancel · Esc" —
-// and the pill itself is the cancel: one click backs out, Esc backs it up.
-// The board greys around it (the stylesheet reads body.cell-arming); no
-// other mode ever dims. The price re-quotes as cells land, since the arm
-// persists across buys.
+// The armed-mode cancel stays at the board edge; costs are on destinations.
 const boundArmPills = new WeakSet<HTMLElement>();
 
 function renderCellArmPill(app: App): void {
@@ -1144,11 +1130,7 @@ function renderCellArmPill(app: App): void {
   const arming = app.state.mode === "upgrade" && app.ui.buyingCell;
   host.hidden = !arming;
   if (!arming) return;
-  const basePrice = cellCost(app.state.cellsBought);
-  const premiums = app.frontierCells().map((pos) => cellPurchasePrice(app.state, pos) - basePrice);
-  const maxPremium = Math.max(0, ...premiums);
-  const premiumNote = maxPremium > 0 ? ` (+ up to ${formatInt(maxPremium)} ν row premium)` : "";
-  const markup = `Add · <span class="mono">${formatInt(basePrice)} ν${premiumNote}</span><span class="pill-esc">Cancel · Esc</span>`;
+  const markup = "Cancel Add";
   if (host.dataset.renderKey !== markup) {
     host.dataset.renderKey = markup;
     host.innerHTML = markup;
@@ -1200,21 +1182,13 @@ function renderGrid(app: App, live: RateSnapshot, projected: RateSnapshot, overl
   // hover refresh recomputes it on demand.
   dropProjectionCache.delete(app);
   const upgrade = state.mode === "upgrade";
-  // The frontier stops at the finite octave-row band (ADR-0022): the
-  // fifths axis runs free, the rows do not. The raw frontier also feeds the
-  // Row unlock's shaded rows (issue #197): while add-cell mode stands, the
-  // still-locked rows just past the launch band shade violet behind one
-  // banner each — frontier-adjacent rows only, so at most one above and
-  // one below can ever stand.
-  const rawFrontier = upgrade && ui.buyingCell ? app.frontierCells() : [];
-  const bands = upgrade && ui.buyingCell && catalogOpen(state) ? rowUnlockBands(state, rawFrontier) : [];
-  const frontier = rawFrontier.filter((pos) => positionInRange(state, pos));
+  const frontier = upgrade && ui.buyingCell ? app.frontierCells() : [];
   // The World face's authored positions join the bounds while the layer
   // stands (issue #426): enemies sit on coordinates the owned patch may
   // not cover, and the lens holds the whole face.
   const worldLive = worldBoardLive(app);
-  const worldCoords = worldLive ? worldLensCoordinates() : [];
-  const allCells = [...state.cells, ...frontier, ...worldCoords, ...bands.flatMap((band) => band.hexes)];
+  const worldCoords = worldLive ? worldLensCoordinates(state) : [];
+  const allCells = [...state.cells, ...frontier, ...worldCoords];
   const coords = allCells.map(point);
   // The lens's base (§7): the board's own bounds with breathing room —
   // the top pad carries the chord chips, which float ~1.2 hex radii above
@@ -1258,11 +1232,6 @@ function renderGrid(app: App, live: RateSnapshot, projected: RateSnapshot, overl
       html += `<line data-key="charge-${generator.id}-${receiver.id}" class="${cls}" ${leadSegment(x1, y1, x2, y2)}/>`;
     }
 
-    // The Row unlock's shaded rows (issue #197): background work, behind the
-    // chord marks and the faces — the promise the banner carries is board
-    // geometry, not chord content.
-    html += `<g data-key="row-bands">${rowBandHtml(state, bands, point)}</g>`;
-
     // Named-chord marks (§6, #201): the chord work draws UNDER the modules —
     // visible in the gaps between the faces and past the poking corners,
     // whispering in the gaps; no chord ever crosses a face. The idle
@@ -1298,29 +1267,22 @@ function renderGrid(app: App, live: RateSnapshot, projected: RateSnapshot, overl
         <text y="0" dominant-baseline="central" text-anchor="middle" class="hex-note">${cellNoteOf(pos)}</text></g>`;
     }
 
-    if (frontier.length > 0) {
-      // The octave-row gate rides the quoted price (ADR-0022): a frontier hex
-      // in a row whose one-time gate is unpaid carries the premium — the
-      // same cellPurchasePrice seam the buy action charges.
-      for (const pos of frontier) {
-        const [x, y] = point(pos);
-        const total = cellPurchasePrice(state, pos);
-        const affordable = wholeNous(state) >= total;
-        if (ui.buyingCell) {
-          // The purchase arm (#201): one cost spot — the pill over the
-          // board's top edge carries the single price, so the hexes drop
-          // their stamped figures and keep a firm accent outline. The buy
-          // lands only where clicked (ADR-0013); the accessible name keeps
-          // the hex's own figure.
-          html += `<g class="cell-node" transform="translate(${x},${y})" data-cell="${pos.q},${pos.r}" tabindex="0" role="button" aria-label="Buy cell here for ${formatInt(total)} nous">
-            <polygon class="hex ${affordable ? "buy-here" : "future"}" points="${hexPoints(HEX_RADIUS)}"/>
-          </g>`;
-        } else {
-          html += `<g class="cell-node" transform="translate(${x},${y})" data-cell="${pos.q},${pos.r}" tabindex="0" role="button" aria-label="Expand here">
-            <polygon class="hex future" points="${hexPoints(HEX_RADIUS)}"/>
-          </g>`;
-        }
-      }
+    for (const pos of frontier) {
+      const [x, y] = point(pos);
+      const { price, reason } = cellPurchaseQuote(state, pos);
+      const available = reason === null;
+      const exactPrice = price === null ? null : BigInt(price).toLocaleString("en-US");
+      const label = `Add ${cellNoteOf(pos)}${exactPrice === null ? "" : ` for ${exactPrice} nous`}${reason ? ` · ${reason}` : ""}`;
+      const cost = exactPrice === null ? "No price" : `${exactPrice} ν`;
+      // Fit the engraving, not the target: the whole hex remains clickable.
+      const compact = cost.length > 9 ? " compact" : "";
+      const fit = cost.length > 12 ? ' textLength="96" lengthAdjust="spacingAndGlyphs"' : "";
+      const stateRead = available ? "" : reason === "Not enough whole nous." ? "Short on ν" : "Unavailable";
+      html += `<g class="cell-node cell-offer" transform="translate(${x},${y})" data-cell="${pos.q},${pos.r}" tabindex="0" role="button" aria-disabled="${!available}" aria-label="${escapeHtml(label)}">
+        <polygon class="hex ${available ? "buy-here" : "future"}" points="${hexPoints(HEX_RADIUS)}"/>
+        <text y="${available ? 0 : -5}" class="cell-price${compact}"${fit}>${cost}</text>
+        <text y="14" class="cell-price-state">${stateRead}</text>
+      </g>`;
     }
   }
 
@@ -1360,65 +1322,6 @@ const SPACER_WINDOW_DEFS = `<defs data-key="spacer-window"><clipPath id="spacer-
 // over the faces — the one loud pass a selection earns (ADR-0025). At rest
 // the group is empty: the chords whisper in the gaps, never over a face.
 // The wash rides the stylesheet (the loop polygon's translucent fill).
-// ── Rack Extenders' shaded rows (issue #197, #174's approved surface; the
-// product name, 2026-10-10 steering) ──
-// In add-cell mode, each still-locked octave row just past the launch band
-// renders shaded violet behind a single
-// "Rack Extenders · unlock this octave row · ⟨Arete⟩" banner — the unlock
-// is one unit per row, cost over the whole thing, one
-// click buying outright in upgrade mode. Only frontier-adjacent rows
-// render at all, and the ladder holds exactly one row per side, so at most
-// one banner above and one below can ever stand; past the ladder the board
-// is at its six-row cap and nothing renders. The banner is inert outside
-// upgrade mode by the engine's own gate — and it never renders before the
-// first prestige, because no Arete surface is reachable before it.
-interface RowBand {
-  row: number;
-  cost: number;
-  affordable: boolean;
-  hexes: Hex[];
-}
-
-function rowUnlockBands(state: GameState, rawFrontier: Hex[]): RowBand[] {
-  const cost = rowUnlockCost(state);
-  if (cost === null) return [];
-  const bands: RowBand[] = [];
-  for (const row of unlockableRows(state)) {
-    const hexes = rawFrontier.filter((pos) => octaveRowOf(pos) === row);
-    if (hexes.length === 0) continue;
-    bands.push({ row, cost, affordable: state.arete >= cost, hexes });
-  }
-  return bands;
-}
-
-// One band's markup: the shaded hexes (the frontier cells that touch the
-// row) with the banner label clamped to the owned board's span and
-// anchored away from it — the raw band can span far more columns than the
-// player's board, and the label belongs over the board it extends.
-function rowBandHtml(state: GameState, bands: RowBand[], point: (pos: Hex) => [number, number]): string {
-  if (bands.length === 0) return "";
-  const owned = state.cells.map(point);
-  const minX = Math.min(...owned.map(([x]) => x));
-  const maxX = Math.max(...owned.map(([x]) => x));
-  const boardCy = owned.reduce((a, [, y]) => a + y, 0) / owned.length;
-  return bands
-    .map((band) => {
-      const pts = band.hexes.map(point);
-      const hexes = pts
-        .map(
-          ([x, y]) =>
-            `<polygon class="row-band-hex" points="${hexPoints(HEX_RADIUS)}" transform="translate(${x.toFixed(2)},${y.toFixed(2)})"/>`,
-        )
-        .join("");
-      const cx = Math.min(maxX, Math.max(minX, pts.reduce((a, [x]) => a + x, 0) / pts.length));
-      const cy = pts.reduce((a, [, y]) => a + y, 0) / pts.length;
-      const dir = cy < boardCy ? -1 : 1;
-      const label = `Rack Extenders · unlock this octave row · ${band.cost} Arete`;
-      return `<g class="row-band">${hexes}<g class="row-unlock${band.affordable ? "" : " locked"}" data-unlock-row="${band.row}" role="button" tabindex="0" aria-label="${label}"><text class="row-unlock-label mono" x="${cx.toFixed(2)}" y="${(cy + dir * (HEX_RADIUS + 20)).toFixed(2)}">${label}</text></g></g>`;
-    })
-    .join("");
-}
-
 // One chord mark's markup (§6, the dense-board language #201): a
 // two-voice chord seals its shared edge with bracket twins; a collinear
 // chord draws one continuous twin line first voice to last; a chord the
@@ -2021,13 +1924,17 @@ const SWEEP_STEPS = [1, 5, 10] as const;
 // never disable — partial by design — and their tooltips carry the full-N
 // cost previews; the toast reports what actually landed. When nothing is
 // affordable, every tooltip gains the zero-read suffix (#233, ADR-0045):
-// the shortfall to the cheapest next level on the board.
+// the shortfall to the cheapest next level on the board. Armed Add hides
+// it too, like the face upgrades it would otherwise outlive (#541).
 function renderUpgradeAll(app: App): void {
   const host = byId("upgrade-all");
   if (!host) return;
   const { state } = app;
   const eligible = state.modules.filter(levelable);
-  const active = state.mode === "upgrade" && eligible.length > 0;
+  // Add's frontier owns the board while armed (#541 F1/F4): the cluster
+  // stands down so an outer destination beneath it takes the tap, and it
+  // returns as it was on cancel.
+  const active = state.mode === "upgrade" && !app.ui.buyingCell && eligible.length > 0;
   host.hidden = !active;
   if (!active) return;
   // Rebuild only when the quoted numbers move (#115's economy): the chips
@@ -2333,21 +2240,6 @@ function bindGridEvents(app: App, svg: SVGSVGElement): void {
     });
     bindPointerDrag(app, node, () => deployedAt(app.state, position())?.id ?? null);
   });
-  // The Row unlock's banner (issue #197): one click buys the row outright —
-  // the engine owns the mode gate and the refusal wording, so an inert or
-  // unaffordable banner answers plainly instead of looking dead.
-  svg.querySelectorAll<SVGElement>("[data-unlock-row]").forEach((node) => {
-    if (boundBanners.has(node)) return;
-    boundBanners.add(node);
-    const row = () => Number(node.getAttribute("data-unlock-row"));
-    app.listen(node, "keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        app.buyRowUnlockAction(row());
-      }
-    });
-    app.listen(node, "click", () => app.buyRowUnlockAction(row()));
-  });
   bindSeamHover(app, svg);
 }
 
@@ -2517,7 +2409,8 @@ function renderInventoryTray(app: App): void {
   if (!moduleTray || !worldTray) return;
   const modules = app.ui.boardLayer === "modules";
   moduleTray.classList.toggle("off", app.state.mode !== "upgrade" || !modules);
-  worldTray.hidden = app.state.mode !== "upgrade" || modules;
+  // Phone Inventory owns the tray; the desktop overlay would cover the board.
+  worldTray.hidden = app.state.mode !== "upgrade" || modules || isPhoneWidth();
   const tray = modules ? moduleTray : worldTray;
   tray.closest<HTMLElement>(".tray-column")?.classList.toggle("collapsed", app.ui.inventory.collapsed && !app.ui.inventory.dragOpen);
   if (modules) renderInventoryContent(app, tray, false, (element, id) => bindPointerDrag(app, element, id));
@@ -2681,8 +2574,7 @@ function renderModal(app: App, live: RateSnapshot, projected: RateSnapshot): voi
                       // The tray sheet's face rides the global switch, and
                       // the World face re-reads the tray (issue #426).
                       app.ui.boardLayer,
-                      app.state.world.weapons.map((w) => `${w.id}:${w.pos}:${w.store}:${w.targetPriority}`),
-                      app.state.world.columns.map((c) => `${c.id}:${c.pos}`),
+                      worldPiecesOf(app.state),
                     ]
                   // The combine review's identity: the offered pair (issue
                   // #152). The terms are read fresh on rebuild.
@@ -2941,18 +2833,13 @@ function wireClose(app: App): void {
   app.listen(byId("close-modal"), "click", () => app.closeModal());
 }
 
-// The starter-weapon grant's one presentation (issue #426, priority 5):
-// the first World-eligible claim lands the Charge Blade at the moment it
-// banks, and this modal is where the player meets it — the plate, the
-// name, the one line that says where it waits. Once, ever: the granted
-// flag keeps the engine from minting a second, and the modal only ever
-// opens on the landing that set it.
+// The first positive bank discovers World and grants its unplaced kit.
 function renderGrantModal(app: App, content: HTMLElement): void {
   content.innerHTML = `
     ${modalTop("GRANTED")}
     <h2 id="modal-title">World discovered</h2>
-    <div class="grant-face" aria-hidden="true">${worldTileSvg("weapon")}</div>
-    <p class="lead">One ${termTipHtml("Charge Column")} and one ${termTipHtml("Charge Blade")} wait in the ${termTipHtml("World tray")}.</p>
+    <div class="grant-face" aria-hidden="true">${worldTileSvg("creature")}</div>
+    <p class="lead">Sentinel, Guard Plate, Pulse, ${termTipHtml("Charge Blade")}, ${termTipHtml("Charge Column")} and Conduit wait in the ${termTipHtml("World tray")}.</p>
     <div class="modal-actions">
       <button id="grant-close" class="primary">Continue</button>
     </div>`;
@@ -3490,20 +3377,16 @@ function catalogAreteFaceHtml(app: App): string {
   ${upgrade ? "" : `<p class="modal-note">Arete is spent between sessions — enter upgrade mode to buy.</p>`}`;
 }
 
-// The Hone row (issue #426, priority 6): one entry per weapon type, each
-// rank persistently raising the type's attack power for every copy — the
-// type's power owned, never a per-copy purchase. The authored ladder's end
-// lands the engraved word; weapons appear nowhere as purchases.
-function catalogHoneRowHtml(app: App, type: WeaponType): string {
+// Hone raises every Charge Blade copy's power, never a single copy's.
+function catalogHoneRowHtml(app: App, type: "chargeBlade"): string {
   const { state } = app;
   const rank = state.world.hone[type];
   const price = honeCostOf(state, type);
-  const perRank = BALANCE.world.honeAttackPerRank;
-  const name = WORLD_META[type].name;
+  const name = WEAPONS[type].name;
   const ladderLength = BALANCE.world.honeCosts.length;
   return `<article class="catalog-row">
-    <div><h3 class="t-condensed">${termTipHtml("Hone")} <span class="mono">${rank}/${ladderLength}</span></h3><p class="t-note">+${perRank} attack per rank · every ${termTipHtml(name as CatalogTerm)} · ${termTipHtml("memorized")}</p>${
-      price === null ? "" : `<p class="t-note mono">ATK ${BALANCE.world.attackBase + rank * perRank} → ${BALANCE.world.attackBase + (rank + 1) * perRank}</p>`
+    <div><h3 class="t-condensed">${termTipHtml("Hone")} <span class="mono">${rank}/${ladderLength}</span></h3><p class="t-note">Every ${termTipHtml(name as CatalogTerm)} · ${termTipHtml("memorized")}</p>${
+      `<p class="t-note mono">ATK ${attackPowerOf(state, type)}${price === null ? "" : ` → ${honePowerAt(rank + 1)}`}</p>`
     }</div>
     ${price === null ? catalogOwnedHtml("honed") : areteBuyButtonHtml(app, "buy-world-hone", price)}
   </article>`;
@@ -3629,6 +3512,15 @@ function updateForgeMetersLive(scope: ParentNode, state: GameState, forgeRate: n
   liveAttr(scope, "modal-mutator-track", "aria-valuetext", mutatorLine);
 }
 
+function worldDraftTileHtml(candidate: WorldCandidate, offerId: string): string {
+  const { name, kind, effect } = WORLD_DRAFTS[candidate.type];
+  return `<div class="candidate-tile" data-type="${candidate.type}"><button class="candidate-pick" data-choice="${candidate.id}" data-offer="${offerId}" aria-label="Take ${name}" aria-describedby="forge-effect-${candidate.id}"></button>
+    <span class="module-preview">${worldTileSvg(kind)}</span>
+    <span class="candidate-readout"><span class="candidate-name">${name}</span>
+    <span id="forge-effect-${candidate.id}" class="candidate-effect">${forgeEffectHtml(effect)}</span></span>
+  </div>`;
+}
+
 function renderForgeModal(app: App, content: HTMLElement, projected: RateSnapshot): void {
   const { state, ui } = app;
   const face = "modules" as typeof ui.forgeFace;
@@ -3653,12 +3545,7 @@ function renderForgeModal(app: App, content: HTMLElement, projected: RateSnapsho
         : ""
     }
     <div class="candidates ${face === "mutators" ? "mut-candidates" : ""}">
-      ${face === "modules" && offer ? offer.candidates.filter(candidate => candidate.type !== "mutatorForge").map(candidate => !isModuleCandidate(candidate) ? `
-        <div class="candidate-tile" data-type="${candidate.type}"><button class="candidate-pick" data-choice="${candidate.id}" data-offer="${offer.id}" aria-label="Take ${candidate.type === "column" ? "Column" : "Charge Blade"}" aria-describedby="forge-effect-${candidate.id}"></button>
-          <span class="module-preview">${worldTileSvg(candidate.type === "column" ? "column" : "weapon")}</span>
-          <span class="candidate-readout"><span class="candidate-name">${candidate.type === "column" ? "Column" : "Charge Blade"}</span>
-          <span id="forge-effect-${candidate.id}" class="candidate-effect">${forgeEffectHtml(candidate.type === "column" ? "Supply adjacent World weapons" : "Store charge → strike enemies")}</span></span>
-        </div>` : `
+      ${face === "modules" && offer ? offer.candidates.filter(candidate => candidate.type !== "mutatorForge").map(candidate => !isModuleCandidate(candidate) ? worldDraftTileHtml(candidate, offer.id) : `
         <div class="candidate-tile" data-rarity="${typeRarityOf(candidate.type)}" data-type="${candidate.type}"><button class="candidate-pick" data-choice="${candidate.id}" data-offer="${offer.id}" data-rarity="${typeRarityOf(candidate.type)}" data-type="${candidate.type}" aria-label="Take ${RARITY_LABEL[typeRarityOf(candidate.type)]} ${META[candidate.type].name} · ${tierWord(candidate.tier)}" aria-describedby="forge-effect-${candidate.id}"></button>
           <span class="module-preview">${inventoryTileSvg(candidate)}</span>
           <span class="candidate-readout"><span class="candidate-name">${rarityMark(typeRarityOf(candidate.type))} ${META[candidate.type].name} <span class="mono">${tierNumeral(candidate.tier)}</span></span>
@@ -3793,7 +3680,7 @@ function renderMigrationModal(app: App, content: HTMLElement): void {
     ["Stands", `Practice history, ${termTipHtml("Habit class", "class development")}, ${termTipHtml("goals")}, notes, and feats`],
     ["Rebased", `<strong class="mono">${report.modulesCleared}</strong> module${report.modulesCleared === 1 ? "" : "s"} return${report.modulesCleared === 1 ? "s" : ""} to base — the tiers and placement stay`],
     ["Rebased", `${termTipHtml("nous", "Nous")} opens at the opening grant, in place of <strong class="mono">${formatNumber(report.nousCleared)} ν</strong>`],
-    ["Rebased", `The era's <strong class="mono">${formatNumber(report.eraEarnedCleared)} ν</strong> earned rebased, purchased ${termTipHtml("Harmonic capacity", "capacity")} returns to one voice, ${termTipHtml("charge")} empties, and the ${termTipHtml("Enemy", "enemies")}' era state restores`],
+    ["Rebased", `The era's <strong class="mono">${formatNumber(report.eraEarnedCleared)} ν</strong> earned rebased, purchased ${termTipHtml("Harmonic capacity", "capacity")} returns to one voice, ${termTipHtml("charge")} empties, and World pressure resets for the era`],
     ["Rebased", `The ${termTipHtml("Claimed frontier")} restarts at the calibrated curve — your next claims bank against what you earn from here`],
   ];
   if (report.bucketNousCleared > 0) {
@@ -3838,7 +3725,7 @@ function renderRecoveryModal(app: App, content: HTMLElement): void {
     ["Stands", `Practice history, ${termTipHtml("Habit class", "class development")}, ${termTipHtml("goals")}, notes, and feats`],
     ["Stands", `Your collection and its board — designs, ${termTipHtml("merge tier", "tiers")}, placement, and every earned ${termTipHtml("module rolls", "roll")}`],
     ["Stands", `<span class="recovery-purchases">${termTipHtml("memorized", "Memorized")} purchases — ${termTipHtml("Catalog")} unlocks, the ${termTipHtml("Arete")}-bought World purchases, the ${termTipHtml("Warp Beam")}'s rungs</span>`],
-    ["Rebases", `The economy opens calibrated: levels return to base, ${termTipHtml("nous")} at the opening grant, purchased ${termTipHtml("Harmonic capacity", "capacity")} to one voice, every ${termTipHtml("Enemy", "enemy")}'s era state restores, and the ${termTipHtml("Claimed frontier")} clears — claims bank against what you earn from here`],
+    ["Rebases", `The economy opens calibrated: levels return to base, ${termTipHtml("nous")} at the opening grant, purchased ${termTipHtml("Harmonic capacity", "capacity")} to one voice, World pressure resets for the era, and the ${termTipHtml("Claimed frontier")} clears — claims bank against what you earn from here`],
     ["Original", `Your save stays on this device, byte for byte`],
   ] as const;
   content.innerHTML = `
@@ -3897,7 +3784,7 @@ function renderPrestigeModal(app: App, content: HTMLElement): void {
     <p class="lead">${zero
       ? `This prestige banks no Arete (<strong>0 Arete</strong>)`
       : `Prestige banks <strong class="mono">${claim} Arete</strong>`} and starts the era over: module levels return to base${capacityClause}, and your nous and charge return to the opening.</p>
-    <p class="lead muted">Your board and its placement, the tray, banked Forge rolls and progress, feats, your whole life record, your Arete, your scrap, and lifetime nous all stay — as do your World columns, weapons, and ${termTipHtml("Hone")} ranks.</p>
+    <p class="lead muted">Your board and its placement, the tray, banked Forge rolls and progress, feats, your whole life record, your Arete, your scrap, and lifetime nous all stay — as do your World kit, ${termTipHtml("Hone")} ranks, victories and wounds.</p>
     <div class="modal-actions">
       <button id="prestige-cancel">Not yet</button>
       <button id="prestige-confirm" class="primary">${zero ? "Prestige anyway" : `Prestige and claim ${claim} Arete`}</button>

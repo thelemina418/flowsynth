@@ -4,8 +4,9 @@ import { ARETE_HORIZON, bankableClaimOf, horizonReached } from "../engine/accumu
 import { ACHIEVEMENTS } from "../engine/achievements";
 import { capacityCeiling } from "../engine/capacity";
 import { catalogOpen } from "../engine/catalog";
-import { enemyDefeated, enemyPenaltyOf } from "../engine/world";
-import { isOscillatorType, NAMED_CHORDS, WORLD_ENEMIES } from "../engine/constants";
+import { activeWallOf } from "../engine/world";
+import { isOscillatorType, NAMED_CHORDS } from "../engine/constants";
+import { enemyPenaltyFigure } from "./world-combat";
 import { deployedAt, voiceCapacityOf } from "../engine/economy";
 import { discoveryCount } from "../engine/library";
 import { noteNameOf } from "../engine/lattice";
@@ -17,11 +18,11 @@ import { liveAttr, liveSet } from "./live";
 import { META } from "./meta";
 
 export function enemyPressureHtml(state: GameState): string {
-  const active = WORLD_ENEMIES.filter((def) => state.world.enemies[def.key]?.discovered && !enemyDefeated(state, def.key));
-  const remaining = active.reduce((factor, def) => factor * (1 - enemyPenaltyOf(state, def.key)), 1);
-  return `<h3>Enemy pressure</h3><div class="ledger-detail-row"><span>Combined</span><b class="mono">${((1 - remaining) * 100).toFixed(1)}% production reduction</b></div>` +
-    active.map((def) => `<div class="ledger-detail-row"><span>Enemy ${WORLD_ENEMIES.indexOf(def) + 1}</span><span class="mono">−${(enemyPenaltyOf(state, def.key) * 100).toFixed(1)}% · ×${(1 - enemyPenaltyOf(state, def.key)).toFixed(3)} remaining</span></div>`).join("") +
-    `<small>Remaining-production factors multiply. Pressure deepens with era progress.</small><p>Prestige banking positive Arete unlocks World and the means to confront enemies.</p>`;
+  const wall = activeWallOf(state);
+  const source = wall ? state.world.unlocked ? wall.name : "One enemy" : "No active wall";
+  const amount = wall ? enemyPenaltyFigure(state, wall.key) : "0% ν";
+  return `<h3>Enemy pressure</h3><div class="ledger-detail-row"><span>${source}</span><b class="mono">${amount}</b></div>` +
+    (state.world.unlocked ? "" : "<p>Bank Arete at prestige to discover World and confront the enemy. Charge is unaffected.</p>");
 }
 
 function resetHtml(id: string): string {

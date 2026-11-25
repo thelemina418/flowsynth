@@ -1,0 +1,104 @@
+{
+  "source": "4d81a5908794f426ff797f2f3632b59255b9f936",
+  "url": "http://localhost:5173/",
+  "browser": "149.0.7827.55",
+  "errors": [],
+  "desktop": {
+    "origin": {
+      "note": "Approaching prestige ✓ day 7 of the declared walk · fresh-start-s468-eb1287f3 · an established board with the first prestige door open (#471) · recipe checkpoint · isolated save",
+      "eraEarned": 13931338.698730215,
+      "unlocked": false,
+      "viewport": [
+        1280,
+        800
+      ],
+      "coarse": false
+    },
+    "crossing": {
+      "seconds": 1860,
+      "eraEarned": 20045517.32912147,
+      "enemies": {
+        "shale": {
+          "discovered": true,
+          "hp": 48
+        },
+        "basalt": {
+          "discovered": false,
+          "hp": 35
+        }
+      },
+      "unlocked": false,
+      "mode": "upgrade"
+    },
+    "ledgerPressure": "ENEMY PRESSURE\nOne enemy\n−20% ν\n\nBank Arete at prestige to discover World and confront the enemy. Charge is unaffected.",
+    "mapHidden": true,
+    "overflow": false,
+    "yield": "+2 Arete pending",
+    "grant": "GRANTED\n✕\nWorld discovered\n\nSentinel, Guard Plate, Pulse, \nCharge Blade\n, \nCharge Column\n and Conduit wait in the \nWorld tray\n.\n\nContinue",
+    "grantOverflow": false,
+    "discovered": {
+      "unlocked": true,
+      "arete": 2,
+      "prestiges": 1,
+      "shale": {
+        "discovered": false,
+        "hp": 48
+      },
+      "worldLayer": true
+    },
+    "disclosedAfterConfirm": 0,
+    "disclosedAfterEscape": 0,
+    "worldLabels": [],
+    "overflowAfter": false,
+    "reservedAfterDiscovery": 0
+  },
+  "phone": {
+    "origin": {
+      "note": "Approaching prestige ✓ day 7 of the declared walk · fresh-start-s468-eb1287f3 · an established board with the first prestige door open (#471) · recipe checkpoint · isolated save",
+      "eraEarned": 13931338.698730215,
+      "unlocked": false,
+      "viewport": [
+        390,
+        844
+      ],
+      "coarse": true
+    },
+    "crossing": {
+      "seconds": 1860,
+      "eraEarned": 20045517.32912147,
+      "enemies": {
+        "shale": {
+          "discovered": true,
+          "hp": 48
+        },
+        "basalt": {
+          "discovered": false,
+          "hp": 35
+        }
+      },
+      "unlocked": false,
+      "mode": "upgrade"
+    },
+    "ledgerPressure": "ENEMY PRESSURE\nOne enemy\n−20% ν\n\nBank Arete at prestige to discover World and confront the enemy. Charge is unaffected.",
+    "mapHidden": true,
+    "overflow": false,
+    "yield": "+2 Arete pending",
+    "grant": "GRANTED\n✕\nWorld discovered\n\nSentinel, Guard Plate, Pulse, \nCharge Blade\n, \nCharge Column\n and Conduit wait in the \nWorld tray\n.\n\nContinue",
+    "grantOverflow": false,
+    "discovered": {
+      "unlocked": true,
+      "arete": 2,
+      "prestiges": 1,
+      "shale": {
+        "discovered": false,
+        "hp": 48
+      },
+      "worldLayer": true
+    },
+    "disclosedAfterConfirm": 0,
+    "disclosedAfterEscape": 0,
+    "worldLabels": [],
+    "overflowAfter": false,
+    "reservedAfterDiscovery": 0
+  }
+}

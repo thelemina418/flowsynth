@@ -1,0 +1,51 @@
+{
+  "candidate": "4d81a5908794f426ff797f2f3632b59255b9f936",
+  "note": "Run records for the final #541 recordings. earned-shale.mjs is a new evidence script (no tracked source changed); it replays the ordinary moves of the named progression-presets case on the real pushing checkpoint.",
+  "preflight": "> flowsynth@0.1.0 preflight\n> node tools/runtime-preflight.mjs\n\n\nFlowSynth runtime preflight\n\n  declared   22.23.4 (.node-version)\n  effective  v22.23.4\n  timezone   America/Chicago (UTC-06:00)\n  storage    ok \u2014 happy-dom localStorage roundtrip\n  calendar   the host's local calendar \u2014 goal days and schedule days follow this zone\n\n  ACCEPT \u2014 runtime, calendar zone, and UI storage are ready for checks and evidence.",
+  "runs": [
+    {
+      "recording": "smoke",
+      "meta": null,
+      "output": null,
+      "exit": "0",
+      "log": "World combat smoke: 4d81a5908794f426ff797f2f3632b59255b9f936 \u00b7 6a487713b3225920dcb302253129f19cc22fba7d18d6a5df7bc40a42f3507fad\n/tmp/flowsynth-world-combat-1aI5uJ/walks.json\n\nreal\t0m0.952s\nuser\t0m1.222s\nsys\t0m0.228s",
+      "command": "node tools/run-supported.mjs tools/record-world-combat.mjs smoke"
+    },
+    {
+      "recording": "fixed-kit Shale/Basalt + constructed Corundum",
+      "meta": "sha=4d81a5908794f426ff797f2f3632b59255b9f936\ncommand=node tools/run-supported.mjs tools/record-world-combat.mjs record docs/evidence/issue-541/walks.json\nstarted=2026-11-22T15:03:39-06:00",
+      "output": "walks.json",
+      "exit": "0",
+      "log": "World combat proof: 4d81a5908794f426ff797f2f3632b59255b9f936 \u00b7 6a487713b3225920dcb302253129f19cc22fba7d18d6a5df7bc40a42f3507fad\n/home/lem/.t3/worktrees/flowsynth/541-review-port/docs/evidence/issue-541/walks.json"
+    },
+    {
+      "recording": "Blacksmith equal-start comparison",
+      "meta": "sha=4d81a5908794f426ff797f2f3632b59255b9f936\ncommand=node tools/run-supported.mjs tools/record-world-combat.mjs blacksmith docs/evidence/issue-541/blacksmith-walks.json\nstarted=2026-11-22T15:03:40-06:00",
+      "output": "blacksmith-walks.json",
+      "exit": "0",
+      "log": "World combat proof: 4d81a5908794f426ff797f2f3632b59255b9f936 \u00b7 8e3619eda228e3209c7f3f29ac49d1d1c3884e590eefbac27b4e76bb07390e7a\n/home/lem/.t3/worktrees/flowsynth/541-review-port/docs/evidence/issue-541/blacksmith-walks.json"
+    },
+    {
+      "recording": "earned live approach into real Shale",
+      "meta": "sha=4d81a5908794f426ff797f2f3632b59255b9f936\ncommand=node tools/run-supported.mjs docs/evidence/issue-541/earned-shale.mjs docs/evidence/issue-541/earned-shale.json\nstarted=2026-11-22T15:05:04-06:00",
+      "output": "earned-shale.json",
+      "exit": "0",
+      "log": "Earned Shale: 4d81a5908794f426ff797f2f3632b59255b9f936 \u00b7 87d60f81143d8c15dddfbed475497a35a8ea244eb2ab0f3fd53f5e9894797cbc\n/home/lem/.t3/worktrees/flowsynth/541-review-port/docs/evidence/issue-541/earned-shale.json\n\nreal\t0m18.889s\nuser\t0m5.366s\nsys\t0m14.604s"
+    },
+    {
+      "recording": "#543 comparator --verify-only",
+      "meta": null,
+      "output": null,
+      "exit": "exit=0",
+      "log": "{\n  \"from\": {\n    \"app\": \"flowsynth\",\n    \"worktree\": \"/home/lem/.t3/worktrees/flowsynth/541-baseline-211267b\",\n    \"branch\": null,\n    \"commit\": \"211267b81442954565b53c4f68761df04e74b87f\",\n    \"source\": {\n      \"clean\": true,\n      \"changes\": [],\n      \"evidence\": []\n    }\n  },\n  \"to\": {\n    \"app\": \"flowsynth\",\n    \"worktree\": \"/home/lem/.t3/worktrees/flowsynth/541-review-port\",\n    \"branch\": \"t3/541-review-port\",\n    \"commit\": \"4d81a5908794f426ff797f2f3632b59255b9f936\",\n    \"source\": {\n      \"clean\": true,\n      \"changes\": [],\n      \"evidence\": [\n        {\n          \"path\": \"docs/evidence/issue-541/blacksmith-walks.json\",\n          \"state\": \"??\"\n        },\n        {\n          \"path\": \"docs/evidence/issue-541/walks.json\",\n          \"state\": \"??\"\n        }\n      ]\n    }\n  }\n}",
+      "command": "node tools/run-supported.mjs docs/evidence/issue-543/measure.mjs /home/lem/.t3/worktrees/flowsynth/541-baseline-211267b 4d81a5908794f426ff797f2f3632b59255b9f936 docs/evidence/issue-541/opening-and-world.json --verify-only"
+    },
+    {
+      "recording": "#543 comparator measured",
+      "meta": "sha=4d81a5908794f426ff797f2f3632b59255b9f936\ncommand=node tools/run-supported.mjs docs/evidence/issue-543/measure.mjs /home/lem/.t3/worktrees/flowsynth/541-baseline-211267b 4d81a5908794f426ff797f2f3632b59255b9f936 docs/evidence/issue-541/opening-and-world.json\nstarted=2026-11-22T15:04:22-06:00\nunit=flowsynth-541-comparator-4d81a590-r2\nnote=first launch stopped within a minute because the unit set TZ to empty (UTC); relaunched inheriting the host zone\nfinished=2026-11-22T15:06:31-06:00",
+      "output": "opening-and-world.json",
+      "exit": "0",
+      "log": ""
+    }
+  ]
+}

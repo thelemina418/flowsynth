@@ -69,7 +69,7 @@ describe("persistence", () => {
   it("saves carry the current version", () => {
     const parsed = JSON.parse(serialize(fresh()));
     expect(parsed.version).toBe(SAVE_VERSION);
-    expect(parsed.version).toBe(13);
+    expect(parsed.version).toBe(15);
   });
 
   it("the load boundary strips a run-candidates key — an ordinary save never reads a comparison curve (issue #487)", () => {
@@ -83,19 +83,16 @@ describe("persistence", () => {
     expect(loaded.state!.candidates).toBeUndefined();
   });
 
-  it("saves lenient-default the gate ledger", () => {
-    // Absent, a save written before the ledger existed owes no gates it
-    // can't know about — the fresh state's granted opening rows must not
-    // ride in; corrupt, it falls back to the empty ledger as well.
+  it("drops malformed row ledgers without a payout", () => {
     const file = JSON.parse(serialize(fresh()));
-    delete file.state.gatedRows;
-    const absent = deserialize(JSON.stringify(file));
-    expect(absent.error).toBeUndefined();
-    expect(absent.state!.gatedRows).toEqual([]);
+    file.version = 13;
     file.state.gatedRows = null;
-    const corrupt = deserialize(JSON.stringify(file));
-    expect(corrupt.error).toBeUndefined();
-    expect(corrupt.state!.gatedRows).toEqual([]);
+    file.state.unlockedRows = "3";
+    const loaded = deserialize(JSON.stringify(file));
+    expect(loaded.error).toBeUndefined();
+    expect(loaded.state?.arete).toBe(0);
+    expect(loaded.state).not.toHaveProperty("gatedRows");
+    expect(loaded.state).not.toHaveProperty("unlockedRows");
   });
 
   it("saves lenient-default a module's corrupt position to the tray", () => {
@@ -117,33 +114,27 @@ describe("persistence", () => {
     // A save written before the Arete Catalog existed owes no unlocks it
     // can't know about: absent fields read as never unlocked, never bought.
     const file = JSON.parse(serialize(fresh()));
-    delete file.state.unlockedRows;
     delete file.state.catalogEntryOwned;
     delete file.state.rollPoolJoined;
     const absent = deserialize(JSON.stringify(file));
     expect(absent.error).toBeUndefined();
-    expect(absent.state!.unlockedRows).toEqual([]);
     expect(absent.state!.catalogEntryOwned).toBe(false);
     expect(absent.state!.rollPoolJoined).toBe(false);
-    file.state.unlockedRows = null;
     file.state.catalogEntryOwned = null;
     file.state.rollPoolJoined = null;
     const corrupt = deserialize(JSON.stringify(file));
     expect(corrupt.error).toBeUndefined();
-    expect(corrupt.state!.unlockedRows).toEqual([]);
     expect(corrupt.state!.catalogEntryOwned).toBe(false);
     expect(corrupt.state!.rollPoolJoined).toBe(false);
   });
 
-  it("Catalog unlocks round-trip through the save (issue #197)", () => {
+  it("retired Mutator flags do not return on a current save round trip", () => {
     const s = fresh();
     s.arete = 3;
-    s.unlockedRows = [3, -2];
     s.catalogEntryOwned = true;
     s.rollPoolJoined = true;
     const loaded = deserialize(serialize(s, 5_000));
     expect(loaded.error).toBeUndefined();
-    expect(loaded.state!.unlockedRows).toEqual([3, -2]);
     expect(loaded.state!.catalogEntryOwned).toBe(false);
     expect(loaded.state!.rollPoolJoined).toBe(false);
     expect(loaded.state!.arete).toBe(3);
@@ -316,7 +307,7 @@ describe("the version gate (ADR-0017's pattern)", () => {
     expect(deserialize('{"app":"flowsynth","version":99,"state":{}}').error).toBeDefined();
     expect(deserialize('{"app":"flowsynth","version":9,"state":{"mode":"weird"}}').error).toBeDefined();
     expect(deserialize('{"app":"flowsynth","version":9}').error).toBeDefined();
-    expect(deserialize('{"app":"flowsynth","version":14,"state":{}}').error).toMatch(/newer than this build/i);
+    expect(deserialize(JSON.stringify({ app: "flowsynth", version: SAVE_VERSION + 1, state: {} })).error).toMatch(/newer than this build/i);
   });
 
   it("exported saves load unchanged", () => {
@@ -633,8 +624,8 @@ describe("the v10 → v11 migration (issue #427)", () => {
     expect(state.sessionRecords).toEqual(v10MigrationFixture.state.sessionRecords);
     // The collection and the board.
     expect(state.cellsBought).toBe(2);
-    expect(state.gatedRows).toEqual([0, 1, -1]);
-    expect(state.unlockedRows).toEqual([2]);
+    expect(state).not.toHaveProperty("gatedRows");
+    expect(state).not.toHaveProperty("unlockedRows");
     expect(state.capacityCeilings).toBe(1);
     expect(state.capacityDiscounts).toBe(1);
     expect(state.mergeCapPurchases).toBe(1);
@@ -791,7 +782,7 @@ describe("the v12 → v13 migration (issue #493)", () => {
     s.world.frontier = 1;
     s.world.starterWeaponGranted = true;
     s.world.columns.push({ id: "col1", pos: null });
-    s.world.weapons.push({ id: "w1", type: "chargeBlade", pos: null, store: 25, cooldown: 2, targetPriority: [] });
+    s.world.weapons.push({ id: "w1", type: "chargeBlade", pos: null, store: 25, cooldown: 2, bearer: null });
     s.world.hone.chargeBlade = 2;
     const enemies = freshEnemyStates();
     const first = Object.keys(enemies)[0]!;
@@ -863,8 +854,6 @@ describe("the v12 → v13 migration (issue #493)", () => {
     before.draftTierBonus = 1;
     before.specialDrafts.rare = 1;
     before.mergeCapPurchases = 1;
-    before.unlockedRows.push(3);
-    before.gatedRows.push(2);
     before.capacityCeilings = 1;
     before.capacityDiscounts = 2;
     before.catalogEntryOwned = true;
@@ -903,8 +892,6 @@ describe("the v12 → v13 migration (issue #493)", () => {
     expect(state.draftTierBonus).toBe(1);
     expect(state.specialDrafts).toMatchObject({ rare: 1 });
     expect(state.mergeCapPurchases).toBe(1);
-    expect(state.unlockedRows).toEqual(before.unlockedRows);
-    expect(state.gatedRows).toEqual(before.gatedRows);
     expect(state.capacityCeilings).toBe(1);
     expect(state.capacityDiscounts).toBe(2);
     expect(state.catalogEntryOwned).toBe(false);

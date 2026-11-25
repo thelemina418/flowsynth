@@ -8,6 +8,7 @@ import { serialize, deserialize } from "./save";
 import { hex } from "./hex";
 import { levelCost } from "./economy";
 import { eraStartGrantOf } from "./state";
+import { syncWorldDiscoveries } from "./world";
 import type { GameState } from "./types";
 
 // The prestige reset boundary (ADR-0039, issue #194): what a reset banks,
@@ -102,16 +103,14 @@ describe("the prestige action", () => {
     expect(s.modules.every((m) => m.reserve === 0)).toBe(true);
   });
 
-  it("persists the board: cells, placement, cellsBought, and the paid row gates", () => {
+  it("persists the board: paid coordinates, placement, and cellsBought", () => {
     const s = atHorizon();
     s.cells.push(hex(2, 0), hex(-1, -1));
     s.cellsBought = 5;
-    s.gatedRows = [0, 1, -1, 2];
     prestige(s);
     expect(s.cells.map((c) => `${c.q},${c.r}`)).toContain("2,0");
     expect(s.cells).toHaveLength(5);
     expect(s.cellsBought).toBe(5);
-    expect(s.gatedRows).toEqual([0, 1, -1, 2]);
   });
 
   it("persists banked rolls, Forge progress, and the shelf's purchased flags", () => {
@@ -255,6 +254,7 @@ describe("the prestige action", () => {
   it("an unrepresentable claim grant refuses prestige without changing state or serialized save bytes", () => {
     const s = atHorizon();
     s.eraEarned = BALANCE.world.entryNous;
+    syncWorldDiscoveries(s); // make the constructed threshold a playable checkpoint
     const before = structuredClone(s);
     const savedAt = 1000;
     const saved = serialize(s, savedAt);

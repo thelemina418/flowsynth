@@ -1,0 +1,19 @@
+{
+  "app": "flowsynth",
+  "check": "capture-preflight",
+  "acceptedAt": "2026-11-22T21:03:42.199Z",
+  "url": "http://localhost:5173/",
+  "worktree": "/home/lem/.t3/worktrees/flowsynth/541-capture",
+  "branch": null,
+  "commit": "4d81a5908794f426ff797f2f3632b59255b9f936",
+  "source": {
+    "clean": true,
+    "changes": [],
+    "evidence": [
+      {
+        "path": "docs/evidence/issue-541/browser/dev-launch.txt",
+        "state": "??"
+      }
+    ]
+  }
+}

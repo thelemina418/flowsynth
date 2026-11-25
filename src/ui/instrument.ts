@@ -140,6 +140,23 @@ export function closeTooltips(host: ParentNode): void {
   }
 }
 
+// A disclosure can survive a same-surface redraw, but only a real pin
+// counts as the first touch. Focus and hover share visibility, not the pin.
+export function isTooltipPinned(trigger: Element): boolean {
+  return trigger.closest(".inst-tip")?.classList.contains("show") ?? false;
+}
+
+function setTooltipPin(tip: HTMLElement, pin: boolean): void {
+  tip.classList.toggle("show", pin);
+  sync(tip);
+}
+
+export function restoreTooltipPin(trigger: HTMLElement): void {
+  if (!trigger.matches(".inst-tip-trigger")) return;
+  const tip = trigger.closest<HTMLElement>(".inst-tip");
+  if (tip) setTooltipPin(tip, true);
+}
+
 // The tooltip layer's wiring for one surface. Attach once to the surface's
 // stable root — a rebuild replaces the root, so the listeners go with it,
 // and the attach sweep reaps what the replaced surface left behind.
@@ -212,8 +229,7 @@ export function wireTooltips(host: ParentNode, signal?: AbortSignal): () => void
       const pin = !tip.classList.contains("show");
       // One pinned tooltip at a time: pinning elsewhere puts the last one away.
       closeTooltips(host);
-      tip.classList.toggle("show", pin);
-      sync(tip);
+      setTooltipPin(tip, pin);
       // The trigger's tap is the tooltip's, never the row's or the
       // surface's beneath it.
       event.stopPropagation();

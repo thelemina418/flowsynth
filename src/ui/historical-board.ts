@@ -1,20 +1,27 @@
 import { WORLD_ENEMIES, typeRarityOf } from "../engine/constants";
 import { sameHex } from "../engine/hex";
 import { cellNoteOf } from "../engine/lattice";
+import { worldEnemiesOf, worldPiecesOf } from "../engine/world";
 import type { Hex } from "../engine/types";
 import type { PlaythroughInspection } from "../engine/playthrough";
 import { boardPoint, HEX_RADIUS, hexPoints, moduleFace } from "./face";
 import { escapeHtml } from "./focus";
 import { formatNumber } from "./format";
-import { META, WORLD_META } from "./meta";
+import { META } from "./meta";
+import { WEAPONS } from "../engine/weapons";
 import { mutatorTileInner } from "./mutators";
 import { termTipHtml } from "./terms";
+import { worldPieceName, worldPieceRead } from "./world-combat";
 
 // A pure drawing of the selected record's frozen state. No App, live-board
 // handlers, or placement controls: all three layers share the same projection.
 export function historicalBoardHtml(inspection: PlaythroughInspection): string {
   const { state } = inspection;
-  const positions = [...state.cells, ...WORLD_ENEMIES.map((enemy) => enemy.pos)];
+  // Do not reinterpret imported, pre-v15 snapshots as lifetime victories.
+  const currentWorld = Array.isArray(state.world.creatures) && !Object.hasOwn(state.world.enemies, "w0");
+  const enemies = currentWorld ? worldEnemiesOf(state) : WORLD_ENEMIES;
+  const pieces = currentWorld ? worldPiecesOf(state) : [];
+  const positions = [...state.cells, ...enemies.map((enemy) => enemy.pos)];
   const cell = (pos: { q: number; r: number }, label: string, inner: string, kind: string): string => {
     const [x, y] = boardPoint(pos);
     return `<g data-history-${kind}="${pos.q},${pos.r}" transform="translate(${x},${y})"><title>${escapeHtml(`${cellNoteOf(pos)} · ${label}`)}</title>${inner}</g>`;
@@ -33,12 +40,13 @@ export function historicalBoardHtml(inspection: PlaythroughInspection): string {
     return cell(pos, mutator ? `${mutator.rarity} ${mutator.family} mutator` : slot ? "empty mutator slot" : "locked mutator slot", mutator ? `${mutatorTileInner(mutator)}<text class="dev-history-note" text-anchor="middle" y="-44">${escapeHtml(cellNoteOf(pos))}</text>` : empty(`${cellNoteOf(pos)} · ${slot ? "OPEN" : "LOCKED"}`), "mutator");
   }).join("");
   const world = positions.filter((pos, index) => positions.findIndex(other => sameHex(pos, other)) === index).map(pos => {
-    const enemy = WORLD_ENEMIES.find(item => sameHex(item.pos, pos));
+    const enemy = enemies.find(item => sameHex(item.pos, pos));
     const live = enemy ? state.world.enemies[enemy.key] : undefined;
+    const piece = pieces.find(({ copy }) => copy.pos && sameHex(copy.pos, pos));
     const weapon = state.world.weapons.find(item => item.pos && sameHex(item.pos, pos));
     const column = state.world.columns.find(item => item.pos && sameHex(item.pos, pos));
-    const name = enemy ? (live?.discovered ? (live.hp <= 0 ? "CLEARED" : "ENEMY") : "RESERVED") : weapon ? WORLD_META[weapon.type].short : column ? "COLUMN" : "OPEN";
-    const value = live?.discovered ? `HP ${formatNumber(live.hp)}` : weapon ? `⌁ ${formatNumber(weapon.store)}` : "";
+    const name = piece ? worldPieceName(piece) : enemy ? (live?.discovered ? (live.hp <= 0 ? "CLEARED" : "name" in enemy ? enemy.name : "ENEMY") : "RESERVED") : weapon ? WEAPONS[weapon.type].plate : column ? "COLUMN" : "OPEN";
+    const value = piece ? worldPieceRead(state, piece).read : live?.discovered ? `HP ${formatNumber(live.hp)}` : weapon ? `⌁ ${formatNumber(weapon.store)}` : "";
     return cell(pos, `${name} ${value}`, `<rect class="dev-history-plate" x="-45" y="-45" width="90" height="90"/><text class="dev-history-note" text-anchor="middle" y="-20">${name}</text><text class="dev-history-note" text-anchor="middle" y="4">${escapeHtml(value)}</text><text class="dev-history-note" text-anchor="middle" y="30">${escapeHtml(cellNoteOf(pos))}</text>`, "world");
   }).join("");
   const layer = (name: string, drawing: string, cells: readonly Hex[], tray: string[], label = name): string => {
@@ -51,6 +59,7 @@ export function historicalBoardHtml(inspection: PlaythroughInspection): string {
   };
   const mutatorTray = state.mutators.filter(item => item.pos === null).map(item => `${item.rarity} ${item.family}`);
   const moduleTray = state.modules.filter(item => item.pos === null).map(item => `${META[item.type].name} Lv. ${item.level}`);
-  const worldTray = [...state.world.columns.filter(item => item.pos === null).map(() => "Column"), ...state.world.weapons.filter(item => item.pos === null).map(item => WORLD_META[item.type].name)];
+  const worldTray = currentWorld ? pieces.filter(({ copy }) => copy.pos === null).map(worldPieceName)
+    : [...state.world.columns.filter(item => item.pos === null).map(() => "Column"), ...state.world.weapons.filter(item => item.pos === null).map(item => WEAPONS[item.type].name)];
   return `<div class="dev-history-board">${layer("Mutators", mutators, state.cells, mutatorTray)}${layer("Modules", modules, state.cells, moduleTray)}${layer("World", world, positions, worldTray, termTipHtml("World layer", "World"))}</div>`;
 }

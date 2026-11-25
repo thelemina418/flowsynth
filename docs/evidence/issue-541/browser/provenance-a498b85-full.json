@@ -1,0 +1,543 @@
+{
+  "app": "flowsynth",
+  "check": "capture-preflight",
+  "acceptedAt": "2026-11-22T21:45:04.835Z",
+  "url": "http://localhost:5173/",
+  "worktree": "/home/lem/.t3/worktrees/flowsynth/541-capture",
+  "branch": null,
+  "commit": "a498b85ca9676ffd25cf58da8078d9dc3f848d76",
+  "source": {
+    "clean": true,
+    "changes": [],
+    "evidence": [
+      {
+        "path": "docs/evidence/issue-541/browser/README.md",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-a498b85/browser-checks.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-a498b85/capture.mjs",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-a498b85/desktop-add-keyboard.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-a498b85/phone-add-price-states.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-a498b85/phone-world-add-entry.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer-a498b85/browser.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer-a498b85/capture.mjs",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer-a498b85/desktop-cancelled-upgrade-all-back.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer-a498b85/desktop-outer-bought.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer-a498b85/desktop-outer-exact-gray.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer-a498b85/desktop-outer-exact.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer-a498b85/desktop-outer-short.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer-a498b85/desktop-world-same-cell.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer-a498b85/phone-cancelled-upgrade-all-back.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer-a498b85/phone-outer-bought.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer-a498b85/phone-outer-exact-gray.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer-a498b85/phone-outer-exact.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer-a498b85/phone-outer-short.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer-a498b85/phone-world-same-cell.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer/browser.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer/capture.mjs",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer/desktop-outer-bought.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer/desktop-outer-exact-gray.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer/desktop-outer-exact.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer/desktop-outer-short.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer/desktop-world-same-cell.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer/phone-outer-bought.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer/phone-outer-exact-gray.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer/phone-outer-exact.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer/phone-outer-short.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add-outer/phone-world-same-cell.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add/browser-checks.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add/capture.mjs",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add/desktop-add-keyboard.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add/phone-add-price-states.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/add/phone-world-add-entry.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/blacksmith/browser.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/blacksmith/capture.mjs",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/blacksmith/desktop-choice.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/blacksmith/desktop-class-gray.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/blacksmith/desktop-class.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/blacksmith/desktop-credited.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/blacksmith/desktop-disclosure.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/blacksmith/desktop-flow-banked.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/blacksmith/desktop-world-inspect.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/blacksmith/phone-choice.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/blacksmith/phone-class-gray.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/blacksmith/phone-class.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/blacksmith/phone-credited.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/blacksmith/phone-disclosure.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/blacksmith/phone-flow-banked.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/blacksmith/phone-world-inspect.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/dev-launch-a498b85-full.txt",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/dev-launch-a498b85.txt",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/dev-launch.txt",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/discovery/browser.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/discovery/capture.mjs",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/discovery/desktop-discovered-world.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/discovery/desktop-discovery-grant.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/discovery/desktop-ledger-pressure-gray.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/discovery/desktop-ledger-pressure.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/discovery/desktop-prestige-confirm.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/discovery/phone-discovered-world.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/discovery/phone-discovery-grant.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/discovery/phone-ledger-pressure-gray.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/discovery/phone-ledger-pressure.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/discovery/phone-prestige-confirm.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/hexdetail-live/browser.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/hexdetail-live/capture.mjs",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/hexdetail-live/desktop-escape-dismissed.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/hexdetail-live/desktop-focus-disclosure.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/hexdetail-live/desktop-hover-modules-mini.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/hexdetail-live/desktop-reduced-motion.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/hexdetail-live/desktop-selected-mini-facts.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/hexdetail-live/phone-pin-after-live-rebuild.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/hexdetail-live/phone-reduced-motion.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/hexdetail-live/phone-second-tap-selected.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/hexdetail-live/phone-selected-mini-facts.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/hexdetail-live/phone-tap-away-dismissed.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/live/browser.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/live/capture.mjs",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/live/desktop-flow.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/live/desktop-keyboard-disclosure.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/live/desktop-live-clear.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/live/desktop-live-rig.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/live/desktop-origin.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/live/desktop-reduced-motion.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/live/phone-board.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/live/phone-recovery-gray.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/live/phone-recovery.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/live/phone-touch-disclosure.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/migration/browser.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/migration/capture.mjs",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/migration/desktop-migration-notice.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/migration/desktop-migration-world.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/migration/desktop-recovery-offer-gray.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/migration/desktop-recovery-offer.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/migration/desktop-recovery-recovered.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/migration/phone-migration-notice.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/migration/phone-migration-world.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/migration/phone-recovery-offer-gray.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/migration/phone-recovery-offer.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/migration/phone-recovery-recovered.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/proof/browser.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/proof/capture.mjs",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/proof/desktop-flow.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/proof/desktop-launch.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/proof/desktop-lifetime-clear.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/proof/desktop-outlet-keyboard.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/proof/desktop-prepared.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/proof/phone-board.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/proof/phone-pressure-disclosure.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/proof/phone-recovering.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/provenance-a498b85.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/provenance.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/run.sh",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/silhouette/browser-checks.json",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/silhouette/capture.mjs",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/silhouette/desktop-board.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/silhouette/desktop-detail.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/silhouette/desktop-drag.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/silhouette/desktop-fed-flow.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/silhouette/desktop-inspection.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/silhouette/desktop-walk.webm",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/silhouette/monochrome-comparison.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/silhouette/phone-board.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/silhouette/phone-detail.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/silhouette/phone-inactive-pin.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/silhouette/phone-inspection.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/silhouette/phone-inventory.png",
+        "state": "??"
+      },
+      {
+        "path": "docs/evidence/issue-541/browser/silhouette/phone-walk.webm",
+        "state": "??"
+      }
+    ]
+  }
+}

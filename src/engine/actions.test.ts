@@ -13,7 +13,7 @@ import {
   startSession,
   upgradeModule,
 } from "./actions";
-import { cellCost, computeRates, wholeNous } from "./economy";
+import { computeRates, wholeNous } from "./economy";
 import { fresh, give, stubRng } from "./fixtures";
 import { generateModuleOffer as generateOffer } from "./fixtures";
 import { hex, isConnected, sameHex } from "./hex";
@@ -147,7 +147,7 @@ describe("placement and board rules", () => {
     expect(reshapeCells(s, s.cells).ok).toBe(false);
   });
 
-  it("reshapes preserve count, connectivity, deployed positions, and the row band", () => {
+  it("reshapes preserve count, connectivity and deployed positions", () => {
     const s = fresh();
     const next = [hex(0, 0), hex(1, 0), hex(1, -1)];
     expect(reshapeCells(s, next).ok).toBe(true);
@@ -161,24 +161,11 @@ describe("placement and board rules", () => {
 
     expect(reshapeCells(s, [hex(0, 0)]).ok).toBe(false);
     expect(reshapeCells(s, [hex(0, 0), hex(1, 0), hex(3, 0)]).ok).toBe(false);
-    // The board lives inside the finite octave-row band.
-    expect(reshapeCells(s, [hex(0, 0), hex(1, 0), hex(0, 9)]).ok).toBe(false);
+    expect(reshapeCells(s, [hex(0, 0), hex(1, 0), hex(1, 0)]).ok).toBe(false);
   });
 });
 
 describe("cells as direct nous purchases", () => {
-  it("prices cells on a steep geometric scaler over total cells bought", () => {
-    expect(cellCost(0)).toBe(BALANCE.cellFirstCost);
-    expect(cellCost(1)).toBeGreaterThan(cellCost(0));
-    expect(cellCost(2)).toBeGreaterThan(cellCost(1));
-    // Geometric: each price is the previous scaled by the growth ratio.
-    const ratio = cellCost(4) / cellCost(3);
-    expect(ratio).toBeCloseTo(
-      Number(BALANCE.cellCostGrowthNumerator) / Number(BALANCE.cellCostGrowthDenominator),
-      0,
-    );
-  });
-
   it("sells frontier cells for whole nous in upgrade mode only", () => {
     const s = fresh();
     startSession(s, 600);
@@ -186,7 +173,7 @@ describe("cells as direct nous purchases", () => {
     expect(buyCell(s, hex(2, 0)).ok).toBe(false); // flow is read-only
     endSession(s);
 
-    const price0 = cellCost(s.cellsBought);
+    const price0 = 90; // (2,0) is two steps from C4.
     s.nous = price0 - 0.1;
     expect(buyCell(s, hex(2, 0)).ok).toBe(false); // needs whole nous
     s.nous = price0 + 0.9;
@@ -207,28 +194,6 @@ describe("cells as direct nous purchases", () => {
     expect(buyCell(s, hex(4, 0)).ok).toBe(true);
     expect(isConnected(s.cells)).toBe(true);
     expect(s.cellsBought).toBe(3);
-  });
-
-  it("counts every purchase ever made, not the current cell count", () => {
-    const s = fresh();
-    s.nous = 1e6;
-    let spent = 0;
-    // (2,0), (3,0) stay in octave row 1 (already on the board); (1,1) is
-    // row 1 too — no gates muddy the scaler read.
-    for (const pos of [hex(2, 0), hex(3, 0), hex(1, 1)]) {
-      const price = cellCost(s.cellsBought);
-      const before = s.nous;
-      expect(buyCell(s, pos).ok, `${pos.q},${pos.r}`).toBe(true);
-      expect(before - s.nous).toBe(price);
-      spent += price;
-    }
-    expect(s.cells).toHaveLength(6);
-    expect(s.cellsBought).toBe(3);
-    expect(spent).toBe(cellCost(0) + cellCost(1) + cellCost(2));
-    // Reshaping never changes the count, so the scaler never rewinds.
-    const next = [hex(0, 0), hex(1, 0), hex(0, -1), hex(2, 0), hex(3, 0), hex(-1, 1)];
-    expect(reshapeCells(s, next).ok).toBe(true);
-    expect(cellCost(s.cellsBought)).toBe(cellCost(3));
   });
 
   it("the board grows past the opening footprint and modules place on bought cells", () => {

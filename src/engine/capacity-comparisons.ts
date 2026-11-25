@@ -1,23 +1,25 @@
 import {
   allocateRates,
-  cellCost,
   investment,
   maxChordFactorOf,
   mutatorSlotCost,
-  rowGateCost,
   type AllocatedRates,
 } from "./economy";
 import { allocationQualityOf } from "./allocation";
 import { BALANCE, CATEGORY_OF } from "./constants";
 import { octaveRowOf } from "./lattice";
-import { createInitialState, createModule, createMutator, OPENING_GATED_ROWS } from "./state";
+import { createInitialState, createModule, createMutator } from "./state";
+import { V13_OPENING_PAID_ROWS, v13CellCost, v13RowPremium } from "./historical-footprint";
 import { hex } from "./hex";
 import type { GameState, ModuleType, MutatorFamily, Rarity } from "./types";
 
 // The complete-board comparison fixtures (issue #262): equal-acquisition,
 // equal-upgrade boards over the real engine state — the authoritative
 // allocation reads them through allocateRates exactly as live play does —
-// arranged across the design's strategy axes.
+// arranged across the design's strategy axes. Their synthetic acquisition
+// accounting is historical (issue #262); some fixtures aren't purchasable
+// shapes on the live lattice. Do not read this ledger as live Add pricing.
+const COMPARISON_GRANT_OFFSET = 12;
 //
 // The equal-investment contract (issue #262's rerun gate), explicit:
 // `ledgerOf` prices every board across the three currencies the game
@@ -151,11 +153,11 @@ export function ledgerOf(board: ComparisonBoard): SpendLedger {
   // fixture's first twelve cells are the grant every player starts with,
   // and only the cells past it are bought at the scaler — the topology
   // cost a real player's board actually carried.
-  for (let k = BALANCE.openingGrant; k < board.cells.length; k++) cells += cellCost(k);
+  for (let k = COMPARISON_GRANT_OFFSET; k < board.cells.length; k++) cells += v13CellCost(k);
   for (const cell of board.cells) rows.add(octaveRowOf(hex(cell.q, cell.r)));
   let rowGates = 0;
   for (const row of rows) {
-    if (!OPENING_GATED_ROWS.includes(row)) rowGates += rowGateCost(row);
+    if (!V13_OPENING_PAID_ROWS.includes(row)) rowGates += v13RowPremium(row);
   }
   const count = board.mutators?.length ?? 0;
   let mutatorArete = 0;
@@ -179,7 +181,7 @@ export function stateOf(board: ComparisonBoard, capacity: number): GameState {
   const state = createInitialState();
   state.modules = [];
   state.cells = board.cells.map(({ q, r }) => hex(q, r));
-  state.cellsBought = Math.max(0, board.cells.length - BALANCE.openingGrant);
+  state.cellsBought = Math.max(0, board.cells.length - COMPARISON_GRANT_OFFSET);
   state.capacityBought = capacity - 1;
   for (const spec of board.modules) {
     const module = createModule(state, spec.type, spec.tier ?? 0);

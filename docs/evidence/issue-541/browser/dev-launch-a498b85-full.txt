@@ -1,0 +1,16 @@
+
+> flowsynth@0.1.0 dev
+> node tools/run-supported.mjs tools/dev-server.mjs
+
+
+FlowSynth dev server
+
+  worktree  /home/lem/.t3/worktrees/flowsynth/541-capture
+  commit    a498b85ca9676ffd25cf58da8078d9dc3f848d76
+  url       http://localhost:5173/
+  log       /home/lem/.t3/worktrees/flowsynth/541-capture/.dev/server.log
+  source    clean (working tree matches the commit above)
+  preflight node tools/evidence-preflight.mjs --url http://localhost:5173/
+
+  Evidence rules: docs/agents/visual-evidence.md
+

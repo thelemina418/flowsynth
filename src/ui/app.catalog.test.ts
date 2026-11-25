@@ -4,7 +4,6 @@ import { readFileSync } from "node:fs";
 import type { App } from "./app";
 import { BALANCE } from "../engine/constants";
 import { STORAGE_KEY } from "../engine/save";
-import { cellCost } from "../engine/economy";
 import { startSession } from "../engine/actions";
 import { give } from "../engine/fixtures";
 import { hex } from "../engine/hex";
@@ -202,7 +201,7 @@ describe("the catalog door (issue #271)", () => {
     s.arete = 20;
     s.eraEarned = BALANCE.world.entryNous * 1.5;
     s.world.unlocked = true;
-    s.world.weapons.push({ id: "wp1", type: "chargeBlade", pos: null, store: 0, cooldown: 0, targetPriority: [] });
+    s.world.weapons.push({ id: "wp1", type: "chargeBlade", pos: null, store: 0, cooldown: 0, bearer: null });
     app.render();
     // The cell arm dies at the layer change, named by the toast.
     app.armCellPurchase();
@@ -252,7 +251,7 @@ describe("the catalog door (issue #271)", () => {
       s.catalogEntryOwned = true;
       s.eraEarned = BALANCE.world.entryNous * 1.5;
       s.world.unlocked = true;
-      s.world.weapons.push({ id: "wp1", type: "chargeBlade", pos: null, store: 0, cooldown: 0, targetPriority: [] });
+      s.world.weapons.push({ id: "wp1", type: "chargeBlade", pos: null, store: 0, cooldown: 0, bearer: null });
       app.armCellPurchase();
       app.setBoardLayer("world");
       const toast = document.getElementById("mode-toast")!;
@@ -400,9 +399,6 @@ describe("the catalog door (issue #271)", () => {
 });
 
 describe("the Arete Catalog (issue #197)", () => {
-  const UNLOCK_ABOVE = BALANCE.launchRowsAbove + 1;
-  const UNLOCK_BELOW = -BALANCE.launchRowsBelow - 1;
-
   function bankFirstArete(): void {
     // The World entry sits eleven decades above the horizon line, so the
     // door needs a past-entry era for a nonzero claim (issue #425): jump
@@ -448,13 +444,7 @@ describe("the Arete Catalog (issue #197)", () => {
     expect(stripSlot.classList.contains("arete-dim")).toBe(true);
     expect(stripSlot.closest("button")!.getAttribute("aria-label")).toBe("Open ledger");
     expect(stripSlot.querySelector("b")!.textContent).toBe("—");
-    // Even with the board grown to the unlock boundary and add-cell mode
-    // armed, the banner never renders — the lock is the prestige count
-    // (the first Arete reset), and nothing has reset yet.
-    app.state.cells.push(hex(0, 2), hex(0, -1));
-    app.armCellPurchase();
-    app.render();
-    expect(document.querySelector("[data-unlock-row]")).toBeNull();
+
   });
 
   it("banked Arete opens the ledger while Catalog retains purchasing", () => {
@@ -520,50 +510,17 @@ describe("the Arete Catalog (issue #197)", () => {
     expect(document.getElementById("buy-arete-break")).toBeNull();
   });
 
-  it("the banner buys the row in one click; cells inside then buy with nous", () => {
+  it("no Rack Extender is offered in Catalog or Add after prestige", () => {
     bankFirstArete();
-    // Grow to the unlock boundary: rows 2 and −1 owned, so each frontier
-    // touches its side's unlock row.
-    app.state.cells.push(hex(0, 2), hex(0, -1));
+    app.openModal("catalog");
+    document.querySelector<HTMLButtonElement>('[data-catalog-face="arete"]')!.click();
+    expect(document.getElementById("modal-content")!.textContent).not.toContain("Rack Extenders");
+    app.closeModal();
+    app.state.cells.push(hex(0, 2));
     app.armCellPurchase();
-    app.render();
-    const banners = document.querySelectorAll("[data-unlock-row]");
-    expect(banners).toHaveLength(2);
-    expect(banners[0]!.getAttribute("data-unlock-row")).toBe(String(UNLOCK_ABOVE));
-    const label = banners[0]!.textContent!;
-    expect(label).toContain("Rack Extenders");
-    expect(label).toContain("unlock this octave row");
-    expect(label).toContain("1 Arete");
-    // One click, outright: the row opens and its gate stands paid.
-    (banners[0] as SVGElement).dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    expect(app.state.unlockedRows).toEqual([UNLOCK_ABOVE]);
-    expect(app.state.arete).toBe(1);
-    app.render();
-    // The bought row's band is gone; the other side's banner escalates to 2.
-    expect(document.querySelector(`[data-unlock-row="${UNLOCK_ABOVE}"]`)).toBeNull();
-    expect(document.querySelector(`[data-unlock-row="${UNLOCK_BELOW}"]`)!.textContent).toContain("2 Arete");
-    // Cells inside the unlocked row buy with nous as usual — no gate
-    // premium, in range for the frontier.
-    const price = cellCost(app.state.cellsBought);
-    app.state.nous = price;
-    app.render();
-    const frontierInRow = document.querySelector(`[data-cell="0,${UNLOCK_ABOVE}"]`);
-    expect(frontierInRow).not.toBeNull();
-    frontierInRow!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    expect(app.state.cells.some((c) => c.q === 0 && c.r === UNLOCK_ABOVE)).toBe(true);
-    expect(app.state.nous).toBe(0);
-  });
-
-  it("a row beyond the cap never renders a banner and refuses the buy", () => {
-    app.state.arete = 10;
-    app.state.unlockedRows = [UNLOCK_ABOVE, UNLOCK_BELOW];
-    app.state.cells.push(hex(0, 2), hex(0, -1));
-    app.armCellPurchase();
-    app.render();
-    expect(document.querySelectorAll("[data-unlock-row]")).toHaveLength(0);
-    app.buyRowUnlockAction(UNLOCK_ABOVE + 1);
-    expect(app.state.unlockedRows).toEqual([UNLOCK_ABOVE, UNLOCK_BELOW]);
-    expect(app.state.arete).toBe(10);
+    expect(document.querySelector("[data-unlock-row]")).toBeNull();
+    expect(document.querySelector('[data-cell="0,3"] .cell-price')?.textContent).toBe("360 ν");
+    expect(app.state.arete).toBe(2);
   });
 });
 

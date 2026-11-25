@@ -1,0 +1,14 @@
+{
+  "app": "flowsynth",
+  "check": "capture-preflight",
+  "acceptedAt": "2026-11-21T14:16:23.198Z",
+  "url": "http://localhost:5173/",
+  "worktree": "/home/lem/.t3/worktrees/flowsynth/t3-72a37623-5fd9ea9cec8fa4cb",
+  "branch": "t3/fix-543-gameplay-regressions",
+  "commit": "a8bb92ec7f51ffa88268373906a9c6f36d34c03d",
+  "source": {
+    "clean": true,
+    "changes": [],
+    "evidence": []
+  }
+}

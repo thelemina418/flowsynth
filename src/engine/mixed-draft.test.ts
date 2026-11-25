@@ -14,10 +14,10 @@ it("ordinary World replacement uses the exact quarter boundary and equal type sp
     s.world.unlocked = unlocked;
     return generateOffer(s, stubRng([...Array(9).fill(0.5), chance, split])).candidates;
   };
-  expect(draw(false, 0, 0).every(c => c.type !== "column" && c.type !== "chargeBlade")).toBe(true);
-  expect(draw(true, 0.25, 0).every(c => c.type !== "column" && c.type !== "chargeBlade")).toBe(true);
+  expect(draw(false, 0, 0).every(isModuleCandidate)).toBe(true);
+  expect(draw(true, 0.25, 0).every(isModuleCandidate)).toBe(true);
   expect(draw(true, 0.25 - 1e-9, 0.5 - 1e-9).map(c => c.type)).toEqual(["field", "spotlight", "column"]);
-  expect(draw(true, 0, 0.5).map(c => c.type)).toEqual(["field", "spotlight", "chargeBlade"]);
+  expect(draw(true, 0, 0.5).map(c => c.type)).toEqual(["field", "spotlight", "conduit"]);
 });
 
 it.each([0, 0.25 - 1e-9, 0.25, 0.25 + 1e-9, 1 - 1e-9])("ordinary offers retain at least two weighted module candidates at chance %f", (chance) => {
@@ -30,7 +30,7 @@ it.each([0, 0.25 - 1e-9, 0.25, 0.25 + 1e-9, 1 - 1e-9])("ordinary offers retain a
   const modules = mixed.candidates.filter(isModuleCandidate);
   expect(modules).toHaveLength(chance < 0.25 ? 2 : 3);
   expect(modules.map(c => [c.type, c.tier])).toEqual(before.candidates.slice(0, modules.length).map(c => isModuleCandidate(c) ? [c.type, c.tier] : null));
-  if (chance < 0.25) expect(mixed.candidates[2]).toEqual({ id: mixed.candidates[2].id, type: "chargeBlade" });
+  if (chance < 0.25) expect(mixed.candidates[2]).toEqual({ id: mixed.candidates[2].id, type: "conduit" });
 });
 
 it("mixed replacement preserves the opening roll's oscillator guarantee", () => {
@@ -58,9 +58,10 @@ it("World selection grants repeated unplaced copies once and preserves pending o
   }
   expect(s.modules).toEqual(modules);
   expect(s.world.columns).toHaveLength(2);
-  expect(s.world.weapons).toHaveLength(2);
-  expect([...s.world.columns, ...s.world.weapons].every(c => c.pos === null)).toBe(true);
-  expect(new Set([...s.world.columns, ...s.world.weapons].map(c => c.id)).size).toBe(4);
+  expect(s.world.conduits).toHaveLength(2);
+  expect(s.world.weapons).toHaveLength(0);
+  expect([...s.world.columns, ...s.world.conduits].every(c => c.pos === null)).toBe(true);
+  expect(new Set([...s.world.columns, ...s.world.conduits].map(c => c.id)).size).toBe(4);
   const loaded = deserialize(serialize(s, 2_000)).state!;
   expect(loaded.world).toEqual(s.world);
 });

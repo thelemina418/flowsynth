@@ -1,23 +1,22 @@
 import { CATEGORY_OF, EPS } from "./constants";
-import { NumericFault, requireFinite } from "./numeric";
+import { addToSum, NumericFault, requireFinite, resetSum } from "./numeric";
 import { syncAchievements } from "./achievements";
 import { syncChordDiscoveries } from "./library";
-import { chargeDelivered, emittedStrength, maxChordFactorOf, deployed, sessionClockOf, syncRates } from "./economy";
+import { chargeDelivered, generatorStrengthOf, maxChordFactorOf, deployed, sessionClockOf, syncRates, worldChargeReception } from "./economy";
+import { scaleCharge, type ChargeAmount } from "./charge-amount";
 import { lifetimeBreatherSecondsOf, nextRestBoundaryOf, nextTemporalBoundaryOf } from "./profiles";
 import { summaryTermsOf } from "./allocation";
 import { addForgeProgress, addMutatorForgeProgress, type Rng } from "./rolls";
 import { accrueLivePractice } from "./habits";
 import { accrueGoalProgress, accrueGoalFuel, secondsUntilGoalCompletion } from "./goals";
 import { accrueClassDevelopment } from "./classes";
-import { advanceWorldCharge, advanceWorldCombat, syncWorldDiscoveries, worldBoundarySeconds } from "./world";
+import { advanceWorldCharge, advanceWorldCombat, connectedWorldChargeHosts, discoverySecondsOf, syncWorldDiscoveries, worldBoundarySeconds } from "./world";
 import type { AdvanceResult, GameState, ModuleInstance, RateSnapshot } from "./types";
 
-// Where a span's produced nous lands and whether it credits practice
-// (focus-tool spec §1–3). "live" is present or trusted time: banks, credits,
-// accrues. "provisional" is away time the honesty report still owns: its
-// nous lands in the provisional bucket and its minutes in the pool — it
-// produces, but credits nothing until the report settles it.
-export type AdvanceSink = "live" | "provisional";
+// Both trusted sinks bank and credit practice. Offline accounting keeps
+// those promises without moving the World clock. Provisional time produces
+// into the bucket and pool but does not credit practice or fight.
+export type AdvanceSink = "live" | "offline" | "provisional";
 
 // The one production-credit seam (ADR-0039): produced nous lands on the
 // balance, the lifetime truth, and the era's measure together — prestige
@@ -46,18 +45,15 @@ export function sumResults(a: AdvanceResult, b: AdvanceResult): AdvanceResult {
   };
 }
 
-// Shared board boundaries; only flow adds practice-driven goal boundaries.
-function boardBoundaries(state: GameState) {
-  const liveGenerators: { module: ModuleInstance; strength: number }[] = [];
+type Emitter = { module: ModuleInstance; strength: number; exhaustion: number; suppliesWorld: boolean };
+
+function reserveOf(module: ModuleInstance): ChargeAmount {
+  return [module.reserve, module.reserveCarry ?? 0];
+}
+
+// Shared temporal profile boundaries; only flow adds goal boundaries.
+function boardTimeBoundary(state: GameState): number {
   let earliest = Infinity;
-  for (const module of deployed(state)) {
-    if (CATEGORY_OF[module.type] !== "generator") continue;
-    if (module.reserve > EPS) {
-      const strength = requireFinite(emittedStrength(state, module, true), "a generator's emission strength");
-      liveGenerators.push({ module, strength });
-      earliest = Math.min(earliest, module.reserve / strength);
-    }
-  }
   const clock = sessionClockOf(state);
   for (const module of deployed(state)) {
     const boundary = nextTemporalBoundaryOf(module.type, clock) - clock;
@@ -67,7 +63,7 @@ function boardBoundaries(state: GameState) {
       earliest = Math.min(earliest, nextRestBoundaryOf(module.type, rest) - rest);
     }
   }
-  return { liveGenerators, earliest };
+  return earliest;
 }
 
 function advanceForge(state: GameState, snapshot: RateSnapshot, spanSeconds: number, rng: Rng, spanResult: AdvanceResult): void {
@@ -84,10 +80,62 @@ function advanceForge(state: GameState, snapshot: RateSnapshot, spanSeconds: num
   }
 }
 
-function drainReserves(liveGenerators: { module: ModuleInstance; strength: number }[], spanSeconds: number): void {
-  for (const { module, strength } of liveGenerators) {
-    module.reserve = Math.max(0, requireFinite(module.reserve - strength * spanSeconds, "a generator's reserve"));
+function debit(emitter: Emitter, seconds: number, exhausts: boolean): ChargeAmount {
+  const { module, strength } = emitter;
+  const [available, low] = reserveOf(module);
+  const [used, carry] = exhausts ? [available, low] : emitter.suppliesWorld
+    ? scaleCharge([strength, 0], seconds)
+    : [requireFinite(strength * seconds, "a generator's reserve"), 0];
+  if (used > available || (used === available && carry >= low)) {
+    resetSum(module, "reserve", 0);
+    return [available, low];
   }
+  addToSum(module, "reserve", -used, "a generator's reserve", -carry);
+  return [used, carry];
+}
+
+function worldChargeSpan(state: GameState, snapshot: RateSnapshot) {
+  const candidates = deployed(state).flatMap(module => {
+    if (CATEGORY_OF[module.type] !== "generator" || module.reserve <= 0) return [];
+    const strength = generatorStrengthOf(state, module);
+    return strength <= 0 ? [] : [{ module, strength }];
+  });
+  const hosts = candidates.length ? connectedWorldChargeHosts(state) : new Set<string>();
+  const reception = (emitters: typeof candidates) => worldChargeReception(state, new Map(emitters.map(({ module, strength }) => [module.id, strength])));
+  const providers = hosts.size ? reception(candidates).sources(hosts) : new Set<string>();
+  let depletion = Infinity;
+  const live: Emitter[] = [];
+  for (const { module, strength } of candidates) {
+    const suppliesWorld = providers.has(module.id);
+    if (!suppliesWorld && module.reserve <= EPS) continue;
+    requireFinite(strength, "a generator's emission strength");
+    const duration = module.reserve / strength;
+    const exhaustion = Math.max(Number.MIN_VALUE, duration + (Number.isFinite(duration) ? (module.reserveCarry ?? 0) / strength : 0));
+    live.push({ module, strength, exhaustion, suppliesWorld });
+    depletion = Math.min(depletion, exhaustion);
+  }
+  // Only a real World provider can deliver a sub-EPS tail. The production,
+  // Forge and empowerment snapshot keeps the Modules activation threshold.
+  const receive = hosts.size ? reception(live) : undefined;
+  const charge = receive && live.some(({ module }) => module.reserve <= EPS)
+    ? { chargeStrength: receive.rates(hosts) } : snapshot;
+  return {
+    depletion, charge,
+    transfer(seconds: number) {
+      const settle = (span: number, last: boolean, activeHosts: ReadonlySet<string>) => {
+        const output = new Map<string, ChargeAmount>();
+        for (const emitter of live) {
+          // Expenditure is independent of the number of receivers. A
+          // generator still drains with no route or every store full.
+          const amount = debit(emitter, span, last && emitter.exhaustion <= seconds);
+          if (activeHosts.size) output.set(emitter.module.id, amount);
+        }
+        return activeHosts.size && receive ? receive.amounts(activeHosts, output) : output;
+      };
+      if (hosts.size) advanceWorldCharge(state, charge, seconds, settle);
+      else settle(seconds, true, hosts);
+    },
+  };
 }
 
 function discoverBoard(state: GameState, snapshot: RateSnapshot): void {
@@ -146,20 +194,24 @@ function walkFlow(
     // leads the boundary read because the World legs need its rate: the
     // discovery crossing is measured in produced nous.
     const snapshot = syncRates(state, true);
-    let { liveGenerators, earliest } = boardBoundaries(state);
+    const supply = worldChargeSpan(state, snapshot);
+    const { depletion } = supply;
+    let earliest = boardTimeBoundary(state);
     // A live goal completion banks reserve mid-span, so it is another rate
     // boundary even when every generator starts empty.
-    if (sink === "live") earliest = Math.min(earliest, secondsUntilGoalCompletion(state, state.activeHabitId));
-    // The World boundaries (issue #425, priorities 3 and 5): the era's
-    // first threshold crossing — the reveal — and the next armed weapon's
-    // attack tick are rate-relevant boundaries exactly like reserve
-    // depletion and temporal marks. Both are trusted-time legs: provisional
-    // spans hold fire, and their production never touches eraEarned, so
-    // neither boundary can move under them.
-    if (sink === "live") {
-      earliest = Math.min(earliest, worldBoundarySeconds(state, snapshot.rate));
+    if (sink !== "provisional") earliest = Math.min(earliest, secondsUntilGoalCompletion(state, state.activeHabitId));
+    // Offline production may still activate a wall and change the rate;
+    // only online trusted time has attack and recovery boundaries.
+    const worldBoundary = sink === "live" ? worldBoundarySeconds(state, snapshot.rate, supply.charge)
+      : sink === "offline" ? discoverySecondsOf(state, snapshot.rate) : Infinity;
+    // Do not merge a depletion or combat boundary into a nearby end of
+    // span: even that sliver can decide whether a payment is funded.
+    const spanSeconds = Math.min(earliest + EPS < seconds ? earliest : seconds, depletion, worldBoundary);
+    if (spanSeconds === 0) {
+      advanceWorldCombat(state, 0); // A carried action was already ready.
+      syncWorldDiscoveries(state);
+      continue;
     }
-    const spanSeconds = earliest !== Infinity && earliest + EPS < seconds ? earliest : seconds;
 
     // The board is locked during flow, so the rate is constant across the
     // step; production is exactly what the board's modules make (§2.1).
@@ -175,7 +227,7 @@ function walkFlow(
     // the state and is written back here.
     const gained = requireFinite(snapshot.rate * spanSeconds, "the produced ν/s");
     // Supply earned during this span is available at its ending attack tick.
-    advanceWorldCharge(state, snapshot, spanSeconds);
+    supply.transfer(spanSeconds);
     if (sink === "provisional") {
       // Provisional nous never touches the balance: it waits in the bucket
       // for the honesty report to bank or drop it in one move (§2), and the
@@ -191,15 +243,8 @@ function walkFlow(
     // The summary's headline and rate (§5.7) accrue with the session itself,
     // so pauses never count into either; provisional production stays out
     // until its bucket banks.
-    if (sink === "live") session.earned = requireFinite(session.earned + gained, "the session's earned ν");
-    // Each generator's reserve is a store of charge quantity of its own
-    // (issue #371): a deployed generator — any named design —
-    // spends reserve at its emission rate per flow second, elapsing even
-    // with no eligible neighbors (delivery reaches whoever is adjacent at
-    // full strength; expenditure never depends on the neighbor count).
-    // Undeployed, it produces no output and its reserve holds.
-    drainReserves(liveGenerators, spanSeconds);
-    if (sink === "live") {
+    if (sink !== "provisional") session.earned = requireFinite(session.earned + gained, "the session's earned ν");
+    if (sink !== "provisional") {
       // Practice credits only from present and trusted time — nothing ever
       // accrues from away before its reconciliation (§3), so the provisional
       // minutes above leave habit, goals, and C untouched.
@@ -220,13 +265,10 @@ function walkFlow(
       // nothing class-side.
       spanResult.rollsFlow += accrueClassDevelopment(state, spanSeconds, rng);
       spanResult.rollsBanked += spanResult.rollsFlow;
-      // The World's combat leg (issue #425, priorities 4–5): the ticks the
-      // span crossed resolve at its edge — the boundary above cut the span
-      // at the next firing tick, so a kill lands exactly where the
-      // remainder's production factor changes. Provisional spans never
-      // reach this: rejected practice retains no damage, victories, or
-      // bonuses, with no retraction machinery and no pending combat ledger.
-      advanceWorldCombat(state, spanSeconds);
+      // Fight at the span edge, before reevaluating the wall, so a kill
+      // changes production only for the remainder. Neither reconciled
+      // offline time nor provisional time resolves damage or recovery.
+      if (sink === "live") advanceWorldCombat(state, spanSeconds);
       syncWorldDiscoveries(state);
     }
     // The session-tick check (ADR-0015): charge exists only live in flow, so
@@ -250,7 +292,7 @@ function walkFlow(
 // session's, kept warm). The wall gap clamps at the remaining allowance —
 // the phase cannot overshoot its mint — and the caller ends it when the
 // clamp bites (trust.applyBreatherGap flags the completion).
-function walkBreather(state: GameState, seconds: number, rng: Rng): AdvanceResult {
+function walkBreather(state: GameState, seconds: number, rng: Rng, offlineSeconds: number): AdvanceResult {
   let result: AdvanceResult = {
     nousEarned: 0,
     rollsBanked: 0,
@@ -262,36 +304,43 @@ function walkBreather(state: GameState, seconds: number, rng: Rng): AdvanceResul
   const breather = state.breather;
   if (state.mode !== "breather" || !breather || seconds <= 0) return result;
   seconds = Math.min(seconds, Math.max(0, breather.allowanceSeconds - breather.elapsed));
+  offlineSeconds = Math.min(seconds, offlineSeconds);
   while (seconds > 0) {
+    const offline = offlineSeconds > 0;
     const spanResult: AdvanceResult = {
       nousEarned: 0, rollsBanked: 0, rollsFlow: 0,
       rollsForge: 0, rollsMutator: 0, goalsCompleted: 0,
     };
     // The same boundary walk as flow, goals aside — a breather advances no
     // goal: reserve depletion, temporal marks, and lifetime rest marks are the mid-step
-    // rate changes the phase can meet — and the World's own (issue #425):
-    // the breather is trusted time, so enemy reveals and weapon ticks
-    // split its spans exactly as flow's do, and its combat fights beside
-    // its production with no class accrual, exactly as practice legs are
-    // absent here.
+    // rate changes the phase can meet. As in flow, offline banking still
+    // splits at discovery but does not resolve World attacks or recovery.
     const snapshot = syncRates(state, true);
-    const { liveGenerators, earliest } = boardBoundaries(state);
-    const boundary = Math.min(earliest, worldBoundarySeconds(state, snapshot.rate));
-    const spanSeconds = boundary !== Infinity && boundary + EPS < seconds ? boundary : seconds;
+    const supply = worldChargeSpan(state, snapshot);
+    const { depletion } = supply;
+    const earliest = boardTimeBoundary(state);
+    const boundary = offline ? discoverySecondsOf(state, snapshot.rate) : worldBoundarySeconds(state, snapshot.rate, supply.charge);
+    const available = offline ? offlineSeconds : seconds;
+    const spanSeconds = Math.min(earliest + EPS < available ? earliest : available, depletion, boundary);
+    if (spanSeconds === 0) {
+      advanceWorldCombat(state, 0);
+      syncWorldDiscoveries(state);
+      continue;
+    }
     const gained = requireFinite(snapshot.rate * spanSeconds, "the breather's produced ν/s");
     // Supply earned during this span is available at its ending attack tick.
-    advanceWorldCharge(state, snapshot, spanSeconds);
+    supply.transfer(spanSeconds);
     // Pre-trusted time banks straight onto the balance — the counter-image
     // of the provisional sink (docs/breather-spec.md §4).
     earnNous(state, gained);
     spanResult.nousEarned += gained;
     advanceForge(state, snapshot, spanSeconds, rng, spanResult);
     breather.elapsed = requireFinite(breather.elapsed + spanSeconds, "the breather's clock");
-    drainReserves(liveGenerators, spanSeconds);
     // No creditedSeconds, no habit, no goal, no flow meter: a breather
     // credits nothing (spec §6 — the honesty system governs practice
     // claims, and a breather claims nothing).
-    advanceWorldCombat(state, spanSeconds);
+    if (offline) offlineSeconds -= spanSeconds;
+    else advanceWorldCombat(state, spanSeconds);
     syncWorldDiscoveries(state);
     discoverBoard(state, snapshot);
     result = sumResults(result, spanResult);
@@ -304,8 +353,8 @@ function walkBreather(state: GameState, seconds: number, rng: Rng): AdvanceResul
 // pre-trusted phase cannot bank an unrepresentable figure either — the
 // failed span restores the phase it started with, and the refusal rides
 // the result.
-export function advanceBreather(state: GameState, seconds: number, rng: Rng = Math.random): AdvanceResult {
-  return walkRefusingFault(state, structuredClone(state), () => walkBreather(state, seconds, rng));
+export function advanceBreather(state: GameState, seconds: number, rng: Rng = Math.random, offlineSeconds = 0): AdvanceResult {
+  return walkRefusingFault(state, structuredClone(state), () => walkBreather(state, seconds, rng, offlineSeconds));
 }
 
 // The refusal plumbing both walks share: the walk runs against the live

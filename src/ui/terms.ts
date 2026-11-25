@@ -3,7 +3,7 @@
 // the glossary meaning — description prose never grows around it. The
 // meanings here are the glossary's own, distilled to the one-line ceiling.
 // The union keeps the map closed: only glossary terms may render hoverable.
-export type CatalogTerm = "Scrap" | "Prestige" | "Breather" | "Oscillator" | "Generator" | "Booster" | "Silent voice" | "Spacer" | "Forge" | "Charge conduit" | "RITUAL" | "merge tier" | "Harmonic capacity" | "memorized" | "Arete" | "Poly Expander" | "Expansion Bays" | "Chord Catalysts" | "Warp Beam" | "nous" | "charge" | "pitch" | "chords" | "module rolls" | "mutator rolls" | "goals" | "Habit class" | "Engineer" | "Next module roll" | "tree point" | "Respec" | "Preset" | "Governor" | "Reed" | "Punch card" | "World layer" | "Charge Blade" | "Charge Column" | "Enemy" | "Penalty" | "Era bonus" | "Reserved cell" | "Cleared" | "Unfed" | "Target priority" | "Hone" | "World tray" | "Claimed frontier" | "Pending claim" | "Catalog";
+export type CatalogTerm = "Scrap" | "Prestige" | "Breather" | "Oscillator" | "Generator" | "Booster" | "Silent voice" | "Spacer" | "Forge" | "Charge conduit" | "RITUAL" | "merge tier" | "Harmonic capacity" | "memorized" | "Arete" | "Poly Expander" | "Expansion Bays" | "Chord Catalysts" | "Warp Beam" | "nous" | "charge" | "pitch" | "chords" | "module rolls" | "mutator rolls" | "goals" | "Habit class" | "Engineer" | "Next module roll" | "tree point" | "Respec" | "Preset" | "Governor" | "Reed" | "Punch card" | "World layer" | "Charge Blade" | "Charge Column" | "Enemy" | "Penalty" | "Reserved cell" | "Cleared" | "Unfed" | "Hone" | "World tray" | "Claimed frontier" | "Pending claim" | "Catalog";
 const CATALOG_TERMS: Record<CatalogTerm, string> = {
   Scrap: "Recovered collection value spent in the Scrap catalog",
   Prestige: "Ends the era and banks its pending Arete claim",
@@ -42,14 +42,12 @@ const CATALOG_TERMS: Record<CatalogTerm, string> = {
   "Punch card": "Guarantees rare drafts on the pair’s own mint cadence",
   "World layer": "Enemies give the board’s power a purpose",
   "Charge Blade": "Granted weapon with stored charge and capped cadence",
-  "Charge Column": "Lifts its module cell’s received charge to adjacent weapons",
-  Enemy: "Authored adversary revealing at its threshold",
-  Penalty: "A discovered enemy’s production cut, deepening with the era",
-  "Era bonus": "The production bonus replacing a defeated enemy’s penalty",
-  "Reserved cell": "An enemy position set aside, identity concealed",
-  Cleared: "A defeated enemy’s face, restored at prestige",
-  Unfed: "A weapon without supply, read on its own face",
-  "Target priority": "A weapon’s between-sessions ordered preference",
+  "Charge Column": "Lifts received charge into the World layer",
+  Enemy: "The next wall comes forward after the previous clear and this era’s threshold",
+  Penalty: "The current wall’s cut to nous production only",
+  "Reserved cell": "A World position set aside until its wall is cleared",
+  Cleared: "A lifetime victory that opens the World cell for normal use",
+  Unfed: "Gear without incoming charge, read on its own face",
   Hone: "Arete’s persistent attack-power ranks for a weapon type",
   "World tray": "Where unplaced World occupants wait",
   "Claimed frontier": "The entitlement already claimed through prestige",

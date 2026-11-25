@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import type { App } from "./app";
-import { ORIGINAL_SAVE_KEY, PRE_V13_ORIGINAL_SAVE_KEY, STORAGE_KEY, serialize } from "../engine/save";
+import { ORIGINAL_SAVE_KEY, PRE_V13_ORIGINAL_SAVE_KEY, PRE_V15_ORIGINAL_SAVE_KEY, STORAGE_KEY, serialize } from "../engine/save";
 import { bankableClaimOf } from "../engine/accumulator";
 import { createInitialState } from "../engine/state";
 import { BALANCE } from "../engine/constants";
@@ -112,7 +112,7 @@ describe("the lost-money recovery's flow (issue #494)", () => {
     // recovered v13 file in the slot.
     expect(files.get(ORIGINAL_SAVE_KEY)).toBe(source);
     const stored = JSON.parse(files.get(STORAGE_KEY)!);
-    expect(stored.version).toBe(13);
+    expect(stored.version).toBe(15);
     expect(stored.state.nous).toBe(BALANCE.openingGrant);
     // A reload of the recovered save stands silent: no re-recovery, no
     // duplicated explanation, no duplicated entitlement.
@@ -210,8 +210,51 @@ describe("the lost-money recovery's flow (issue #494)", () => {
     expect(app.ui.modal).toBeNull();
     expect(files.get(ORIGINAL_SAVE_KEY)).toBe(source);
     expect(files.get(PRE_V13_ORIGINAL_SAVE_KEY)).toBe(earlier);
-    expect(JSON.parse(files.get(STORAGE_KEY)!).version).toBe(13);
+    expect(JSON.parse(files.get(STORAGE_KEY)!).version).toBe(15);
     expect(app.state.nous).toBe(BALANCE.openingGrant);
+  });
+
+  it.each([PRE_V13_ORIGINAL_SAVE_KEY, PRE_V15_ORIGINAL_SAVE_KEY, ORIGINAL_SAVE_KEY, STORAGE_KEY])("v14 import recovery preserves prior originals and retries safely after denial at %s", (deniedKey) => {
+    const file = JSON.parse(serialize(createInitialState(), 750));
+    file.version = 14;
+    file.state.arete = null;
+    const source = JSON.stringify(file, null, 2);
+    const original = serialize(createInitialState(), 100);
+    const files = new Map([
+      [STORAGE_KEY, serialize(createInitialState(), 500)],
+      [ORIGINAL_SAVE_KEY, original],
+      [PRE_V13_ORIGINAL_SAVE_KEY, "previous lineage archive"],
+      [PRE_V15_ORIGINAL_SAVE_KEY, "previous v14 archive"],
+    ]);
+    let denied = false;
+    const storage: SaveStorage = {
+      ...mapStorage(files),
+      setItem(key, value) {
+        if (key === deniedKey && denied) throw new Error("quota denied");
+        files.set(key, value);
+      },
+    };
+    app = boot(undefined, false, new SharedSave(storage));
+    const beforeFiles = new Map(files);
+    const beforeState = serialize(app.state, 1000);
+    expect(app.importText(source)).toBe(false);
+    expect(app.ui.recovery).toMatchObject({ from: "import", lost: ["arete"] });
+    denied = true;
+    app.applyRecovery();
+    expect(app.ui.recovery?.error).toContain("Nothing was adopted");
+    expect(files).toEqual(beforeFiles);
+    expect(serialize(app.state, 1000)).toBe(beforeState);
+    denied = false;
+    app.applyRecovery();
+    expect(app.ui.recovery).toBeNull();
+    expect(app.retainedOriginal()).toBe(source);
+    expect(files.get(PRE_V13_ORIGINAL_SAVE_KEY)).toBe(original);
+    expect(files.get(PRE_V15_ORIGINAL_SAVE_KEY)).toBe(source);
+    expect([...files.values()]).toEqual(expect.arrayContaining(["previous lineage archive", "previous v14 archive"]));
+    const reloaded = boot(undefined, false, new SharedSave(storage));
+    expect(reloaded.ui.recovery).toBeNull();
+    expect(reloaded.retainedOriginal()).toBe(source);
+    expect(JSON.parse(files.get(STORAGE_KEY)!).version).toBe(15);
   });
 
   it("a failed post-adoption session save leaves committed recovery with its original gap available on reload", () => {
@@ -237,7 +280,7 @@ describe("the lost-money recovery's flow (issue #494)", () => {
     const reconciledPool = app.state.session!.accounting.poolSeconds;
     expect(reconciledPool).toBe(600);
     const committed = JSON.parse(files.get(STORAGE_KEY)!);
-    expect(committed.version).toBe(13);
+    expect(committed.version).toBe(15);
     expect(committed.savedAt).toBe(400_000);
     expect(committed.state.session.accounting.poolSeconds).toBe(0);
     const reloaded = boot(undefined, false, new SharedSave(mapStorage(files)));
@@ -301,7 +344,7 @@ describe("the lost-money recovery's flow (issue #494)", () => {
     expect(app.state.nous).toBe(BALANCE.openingGrant);
     expect(app.state.eraEarned).toBe(0);
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
-    expect(stored.version).toBe(13);
+    expect(stored.version).toBe(15);
   });
 
   it("closing the offer counts as declining", () => {

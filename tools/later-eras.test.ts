@@ -128,15 +128,13 @@ describe("the declared evaluation matrix", () => {
 });
 
 describe("the era view and the route probe on real walks", () => {
-  // A real short prompt walk: the fresh-start prompt policy over six
-  // baseline days makes decisions the view reads, without reaching the
-  // prestige door — its era stays honestly open.
-  const promptWalk = runPlaythrough(composePlaythroughRecipe({ seed: 23, budgetDays: 6 }));
+  // Two full baseline days let the prompt policy make decisions for the
+  // gap read while leaving its first era open.
+  const promptWalk = runPlaythrough(composePlaythroughRecipe({ seed: 23, budgetDays: 2 }));
 
-  // The declared walk the probe reads: the pushing policy on the baseline
-  // shape banks its first claim, demonstrates the combat route (the
-  // starter rig defeating the first enemy), and advances the frontier —
-  // the tested first frontier's own surpassing-resistance evidence.
+  // The baseline pushing walk earns its banks and stages a starter rig.
+  // Unlike the legacy passive-Blade walk, this short fixture need not
+  // win its fight before it reaches the independent recovery stop.
   const pushingWalk = runPlaythrough(composePlaythroughRecipe({
     seed: 23,
     budgetDays: 16,
@@ -206,23 +204,17 @@ describe("the era view and the route probe on real walks", () => {
     }
   });
 
-  it("demonstrates the combat route surpassing the first frontier's resistance", () => {
-    // The recorded defeat is the demonstration: the deployed starter rig
-    // — blade, Column, charge line — killed the first enemy through the
-    // engine's own combat, with no grant and no refund.
-    expect(pushingWalk.worldDefeats).toContain("w0");
+  it("reports actual lifetime defeats rather than treating a recovered frontier as a combat clear", () => {
+    expect(pushingWalk.worldDiscoveries).toContain("shale");
+    expect(pushingWalk.events.some((event) => event.ok && event.label.startsWith("Placed Sentinel"))).toBe(true);
     const row = laterEraRow(23, BASELINE_SESSION_MINUTES, pushingWalk);
     expect(row.noGrant).toBe(true);
-    const defeatViews = row.eras.filter((era) => era.defeats.includes("w0"));
-    expect(defeatViews.length).toBeGreaterThan(0);
-    // The era that killed carried the route's purchases and placements.
-    const route = defeatViews[0]!;
-    expect(route.purchases.some((label) => label.startsWith("World Column"))).toBe(false);
     expect(pushingWalk.state.world.starterColumnGranted).toBe(true);
-    expect(route.placements.length).toBeGreaterThan(0);
-    // The routine nous purchases ride their count; the route is the
-    // Arete-scale line.
-    expect(route.nousPurchases).toBeGreaterThan(0);
+    const cleared = pushingWalk.state.world.enemies.shale?.hp === 0;
+    expect(pushingWalk.worldDefeats.filter((key) => key === "shale")).toHaveLength(cleared ? 1 : 0);
+    expect(row.eras.filter((era) => era.defeats.includes("shale"))).toHaveLength(cleared ? 1 : 0);
+    expect(row.eras.flatMap((era) => era.purchases).some((label) => label.startsWith("World Column"))).toBe(false);
+    expect(row.eras.some((era) => era.nousPurchases > 0 && era.placements.length > 0)).toBe(true);
   });
 
   it("enumerates orders without mistaking seats or another branch for forward progress", () => {

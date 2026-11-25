@@ -5,6 +5,7 @@ import { generateOffer } from "../engine/rolls";
 import { stubRng } from "../engine/fixtures";
 import { createInitialState } from "../engine/state";
 import { deserialize, serialize, STORAGE_KEY } from "../engine/save";
+import { syncWorldDiscoveries, worldPiecesOf } from "../engine/world";
 
 const fixture = createAppFixture();
 beforeEach(() => localStorage.clear());
@@ -18,10 +19,11 @@ it("hides World until a confirmed positive prestige, then retains the usable kit
     document.getElementById("prestige-door")!.click();
     document.getElementById("prestige-confirm")!.click();
   };
-  app.state.world.enemies.w0!.discovered = true;
+  app.state.eraEarned = 20_000_000;
+  syncWorldDiscoveries(app.state);
   app.openLedger("nous");
-  expect(document.getElementById("ledger-pressure")!.textContent).toContain("20.0% production reduction");
-  expect(document.getElementById("ledger-pressure")!.textContent).toContain("positive Arete unlocks World");
+  expect(document.getElementById("ledger-pressure")!.textContent).toContain("−20% ν");
+  expect(document.getElementById("ledger-pressure")!.textContent).toContain("Bank Arete at prestige to discover World");
   expect(worldDoor()).toBeNull();
   app.closeModal();
   app.state.arete = 20; // Catalog spending is not discovery.
@@ -45,7 +47,10 @@ it("hides World until a confirmed positive prestige, then retains the usable kit
   expect(worldDoor()).toBeNull(); // Pending entitlement is not discovery.
   confirmReset();
   expect(app.ui.modal).toBe("grant");
-  expect(document.getElementById("modal-content")!.textContent).toContain("Column");
+  for (const name of ["Sentinel", "Guard Plate", "Pulse", "Charge Blade", "Charge Column", "Conduit"]) {
+    expect(document.getElementById("modal-content")!.textContent).toContain(name);
+  }
+  expect(worldPiecesOf(app.state).every(({ copy }) => copy.pos === null)).toBe(true);
   app.closeModal();
   expect(worldDoor()).not.toBeNull();
   expect(app.state.catalogEntryOwned).toBe(false);
@@ -81,6 +86,7 @@ it("hides World until a confirmed positive prestige, then retains the usable kit
   expect(loaded.world.columns).toEqual(app.state.world.columns);
   expect(loaded.world.weapons).toEqual(app.state.world.weapons);
   expect(loaded.world.hone.chargeBlade).toBe(1);
+  expect(worldPiecesOf(loaded)).toHaveLength(7);
   fixture.release();
   localStorage.setItem(STORAGE_KEY, serialize(loaded, Date.now()));
   const reopened = fixture.boot();
@@ -93,9 +99,10 @@ it("loading an eligible old save discovers World and adds exactly one free Colum
   const old = createInitialState();
   old.world.frontier = 2;
   old.world.starterWeaponGranted = true;
-  old.world.weapons.push({ id: "old-blade", type: "chargeBlade", pos: old.cells[0]!, store: 0, cooldown: 0, targetPriority: [] });
+  old.world.weapons.push({ id: "old-blade", type: "chargeBlade", pos: old.cells[0]!, store: 0, cooldown: 0, bearer: null });
   old.world.columns.push({ id: "old-column", pos: old.cells[1]! });
   const raw = JSON.parse(serialize(old, 5_000));
+  raw.version = 14;
   delete raw.state.world.unlocked;
   delete raw.state.world.starterColumnGranted;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(raw));

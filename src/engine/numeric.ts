@@ -22,3 +22,58 @@ export function requireFinite(value: number, detail: string): number {
   if (!Number.isFinite(value)) throw new NumericFault(detail);
   return value;
 }
+
+// Error-free two-sum for doubles. A meter keeps the rounded total as its
+// public value and carries the low part into the next addition. This keeps
+// fine ticks from accumulating an error proportional to their count, without
+// making a just-short representable value eligible for a payment or a fill.
+function twoSum(a: number, b: number, detail: string): [number, number] {
+  const total = requireFinite(a + b, detail);
+  const right = total - a;
+  return [total, (a - (total - right)) + (b - right)];
+}
+
+export function sumWithCarry(value: number, carry: number | undefined, delta: number, deltaCarry: number, detail: string): [number, number] {
+  const [total, error] = twoSum(value, delta, detail);
+  const [rounded, low] = twoSum(total, (error + (carry ?? 0)) + deltaCarry, detail);
+  return [rounded, requireFinite(low, detail)];
+}
+
+type Sum<K extends string> = Record<K, number> & Partial<Record<`${K}Carry`, number>>;
+
+export function addToSum<K extends string>(owner: Sum<K>, key: K, delta: number, detail: string, deltaCarry = 0): void {
+  const values: Record<K, number> = owner;
+  const carries: Partial<Record<`${K}Carry`, number>> = owner;
+  const carryKey = `${key}Carry` as const;
+  const [total, carry] = sumWithCarry(values[key], carries[carryKey], delta, deltaCarry, detail);
+  values[key] = total;
+  if (carry) carries[carryKey] = carry;
+  else delete carries[carryKey];
+}
+
+export function resetSum<K extends string>(owner: Sum<K>, key: K, total: number): void {
+  const values: Record<K, number> = owner;
+  const carries: Partial<Record<`${K}Carry`, number>> = owner;
+  values[key] = total;
+  delete carries[`${key}Carry` as const];
+}
+
+// Readiness is a strict comparison on the rounded figure. For a future
+// boundary, use the carried low part when calculating the distance to it.
+export function gapTo<K extends string>(owner: Sum<K>, key: K, target: number): number {
+  const carries: Partial<Record<`${K}Carry`, number>> = owner;
+  return owner[key] >= target ? 0 : (target - owner[key]) - (carries[`${key}Carry` as const] ?? 0);
+}
+
+// Old saves have no carry. Only accept a finite low part that belongs to a
+// retained (unclamped) total and cannot alter its rounded public value.
+export function savedCarry(original: unknown, total: number, carry: unknown): number | undefined {
+  if (original === total && typeof carry === "number" && Number.isFinite(carry) && carry !== 0 && total + carry === total) return carry;
+}
+
+export function restoreSumCarry<K extends string>(owner: Sum<K>, key: K, raw: Partial<Record<K | `${K}Carry`, unknown>>): void {
+  const carryKey = `${key}Carry` as const;
+  const carry = savedCarry(raw[key], owner[key], raw[carryKey]);
+  const carries: Partial<Record<`${K}Carry`, number>> = owner;
+  if (carry !== undefined) carries[carryKey] = carry;
+}
