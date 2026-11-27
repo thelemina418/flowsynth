@@ -6,9 +6,15 @@
 // Drawing convention: flat-top, screen y pointing down. A cell's centre is
 // toPixel(cell, size), where size is the hex's circumradius.
 
-export interface Hex {
+export interface Cell {
   readonly q: number;
   readonly r: number;
+}
+
+// A point in the drawing.
+export interface Point {
+  readonly x: number;
+  readonly y: number;
 }
 
 // The lifetime board's radius (progression-map.md: Master and Encore).
@@ -16,94 +22,94 @@ export const LIFETIME_RADIUS = 5;
 
 // `-0 + 0` is 0: rotation and mirroring negate coordinates, and a signed
 // zero would make equal cells compare unequal.
-function hex(q: number, r: number): Hex {
+function at(q: number, r: number): Cell {
   return { q: q + 0, r: r + 0 };
 }
 
 // The six neighbour offsets, clockwise on screen from upper-right: -30°,
 // 30°, 90°, 150°, 210°, 270°. Direction i + 1 is direction i turned 60°
 // clockwise, which is what rotate(_, 1) does.
-export const DIRECTIONS: readonly Hex[] = [hex(1, -1), hex(1, 0), hex(0, 1), hex(-1, 1), hex(-1, 0), hex(0, -1)];
+export const DIRECTIONS: readonly Cell[] = [at(1, -1), at(1, 0), at(0, 1), at(-1, 1), at(-1, 0), at(0, -1)];
 
 // A stable string key for maps and sets.
-export function hexKey(cell: Hex): string {
+export function cellKey(cell: Cell): string {
   return `${cell.q},${cell.r}`;
 }
 
-export function sameHex(a: Hex, b: Hex): boolean {
+export function sameCell(a: Cell, b: Cell): boolean {
   return a.q === b.q && a.r === b.r;
 }
 
-export function add(a: Hex, b: Hex): Hex {
-  return hex(a.q + b.q, a.r + b.r);
+export function addCell(a: Cell, b: Cell): Cell {
+  return at(a.q + b.q, a.r + b.r);
 }
 
-export function distance(a: Hex, b: Hex): number {
+export function distance(a: Cell, b: Cell): number {
   const dq = a.q - b.q;
   const dr = a.r - b.r;
   return (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2;
 }
 
 // A cell's ring is its hex distance from (0,0).
-export function ring(cell: Hex): number {
-  return distance(cell, hex(0, 0));
+export function ring(cell: Cell): number {
+  return distance(cell, at(0, 0));
 }
 
-export function neighbours(cell: Hex): Hex[] {
-  return DIRECTIONS.map((d) => add(cell, d));
+export function neighbours(cell: Cell): Cell[] {
+  return DIRECTIONS.map((d) => addCell(cell, d));
 }
 
 // Rotation about (0,0) by k × 60° clockwise on screen (k may be negative).
 // Patterns are tested relative to an oscillator: rotate the offset, then
 // add it to the oscillator's cell.
-export function rotate(cell: Hex, k: number): Hex {
+export function rotate(cell: Cell, k: number): Cell {
   const turns = ((k % 6) + 6) % 6;
   let { q, r } = cell;
   for (let i = 0; i < turns; i++) [q, r] = [-r, q + r];
-  return hex(q, r);
+  return at(q, r);
 }
 
 // The mirror image about the q axis: the drawing flipped top to bottom.
 // With rotate, it reaches all twelve orientations of a pattern.
-export function mirror(cell: Hex): Hex {
-  return hex(cell.q, -cell.q - cell.r);
+export function mirror(cell: Cell): Cell {
+  return at(cell.q, -cell.q - cell.r);
 }
 
 // The cells at exactly distance n from (0,0), in a fixed clockwise order:
 // start n steps along direction 4 (upper-left), then walk n steps along
 // each direction in turn.
-export function ringCells(n: number): Hex[] {
-  if (n === 0) return [hex(0, 0)];
-  const cells: Hex[] = [];
-  let cell = hex(DIRECTIONS[4]!.q * n, DIRECTIONS[4]!.r * n);
+export function ringCells(n: number): Cell[] {
+  if (n === 0) return [at(0, 0)];
+  const cells: Cell[] = [];
+  let cell = at(DIRECTIONS[4]!.q * n, DIRECTIONS[4]!.r * n);
   for (let side = 0; side < 6; side++) {
     for (let step = 0; step < n; step++) {
       cells.push(cell);
-      cell = add(cell, DIRECTIONS[side]!);
+      cell = addCell(cell, DIRECTIONS[side]!);
     }
   }
   return cells;
 }
 
 // Every cell within the radius, ring by ring outward.
-export function cellsWithin(radius: number): Hex[] {
-  const cells: Hex[] = [];
+export function cellsWithin(radius: number): Cell[] {
+  const cells: Cell[] = [];
   for (let n = 0; n <= radius; n++) cells.push(...ringCells(n));
   return cells;
 }
 
 // The lifetime board: 91 cells.
-export function lifetimeCells(): Hex[] {
+export function lifetimeCells(): Cell[] {
   return cellsWithin(LIFETIME_RADIUS);
 }
 
 // A flat-top cell's centre, for circumradius `size`.
-export function toPixel(cell: Hex, size: number): { x: number; y: number } {
+export function toPixel(cell: Cell, size: number): Point {
   return { x: size * 1.5 * cell.q, y: size * Math.sqrt(3) * (cell.r + cell.q / 2) };
 }
 
 // A flat-top hex's six corners about its centre, starting at 0° (east).
-export function corners(center: { x: number; y: number }, size: number): { x: number; y: number }[] {
+export function corners(center: Point, size: number): Point[] {
   return Array.from({ length: 6 }, (_, i) => {
     const angle = (Math.PI / 3) * i;
     return { x: center.x + size * Math.cos(angle), y: center.y + size * Math.sin(angle) };

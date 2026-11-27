@@ -1,7 +1,7 @@
 import { add, D, mul, pow, sub, type Num } from "./num";
-import { baseRate, categoryOf, patternOf } from "./modules";
+import { baseRate, isOscillator, patternOf } from "./modules";
 import { instancesOf } from "./resonance";
-import type { Board, BoardRates, OscillatorRate, OscillatorType } from "./types";
+import type { Board, BoardRates, OscillatorRate } from "./types";
 
 // The board's rates (spec chunk 02, issue #26; mechanics-sketch.md,
 // Rates). One pure function of the layout. `apply` calls it once after a
@@ -24,10 +24,11 @@ export function computeBoardRates(board: Board): BoardRates {
   const oscillators: OscillatorRate[] = [];
   let total = D(0);
   for (const placement of board.placements) {
-    if (categoryOf(placement.module) !== "oscillator") continue;
-    const strength = patternOf(placement.module)?.strength ?? 0;
+    const module = placement.module;
+    if (!isOscillator(module)) continue;
+    const strength = patternOf(module)?.strength ?? 0;
     const instances = instancesOf(board, placement);
-    const base = D(baseRate(placement.module));
+    const base = D(baseRate(module));
     const resonance = resonanceFactor(strength, instances.length);
     // Identity legs until chunks 03 (charge), 06 (faders) and 05 (pressure).
     const charge = D(1);
@@ -36,7 +37,7 @@ export function computeBoardRates(board: Board): BoardRates {
     const rate = mul(mul(mul(mul(base, resonance), charge), faders), sub(1, pressure));
     oscillators.push({
       cell: { q: placement.cell.q, r: placement.cell.r },
-      module: placement.module as OscillatorType,
+      module,
       base,
       strength: D(strength),
       instances,

@@ -6,7 +6,7 @@ import { writeNote } from "./notes";
 import { moveModule, placeModule, removeModule } from "./placement";
 import { computeBoardRates } from "./rates";
 import { settleHonestyReport } from "./trust";
-import type { Hex } from "./hex";
+import type { Cell } from "./hex";
 import type { GameState, IntentionSchedule, HabitClass, HabitColor, HonestyOutcome, ModuleType } from "./types";
 
 // Every player intent and every boundary event that changes state, as one
@@ -39,9 +39,9 @@ export type Action =
   | { type: "retainIntention"; id: string }
   | { type: "rollIntentions"; now: number }
   // The board, in upgrade mode only (issue #25).
-  | { type: "placeModule"; module: ModuleType; cell: Hex }
-  | { type: "moveModule"; from: Hex; to: Hex }
-  | { type: "removeModule"; cell: Hex };
+  | { type: "placeModule"; module: ModuleType; cell: Cell }
+  | { type: "moveModule"; from: Cell; to: Cell }
+  | { type: "removeModule"; cell: Cell };
 
 export interface ApplyResult {
   ok: boolean;

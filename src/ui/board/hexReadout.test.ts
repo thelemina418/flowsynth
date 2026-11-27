@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { apply } from "../../engine/apply";
 import { giveOscillators } from "../../engine/fixtures";
-import type { Hex } from "../../engine/hex";
+import type { Cell } from "../../engine/hex";
 import { createInitialState } from "../../engine/state";
 import type { GameState, ModuleType } from "../../engine/types";
 import { hexDetail } from "./hexReadout";
@@ -28,8 +28,8 @@ const ACCEPTANCE: [ModuleType, number, number][] = [
   ["triangle", 0, 1],
 ];
 
-const read = (s: GameState, cell: Hex) => hexDetail(s.game.board, s.game.rates, cell);
-const texts = (s: GameState, cell: Hex) => read(s, cell).map((line) => line.text);
+const read = (s: GameState, cell: Cell) => hexDetail(s.game.board, s.game.rates, cell);
+const texts = (s: GameState, cell: Cell) => read(s, cell).map((line) => line.text);
 
 describe("the Hex detail readout", () => {
   it("reads the acceptance layout's Triangle at ×1.75 resonance and 1.75 ν/s", () => {
@@ -60,7 +60,7 @@ describe("the Hex detail readout", () => {
 
   it("keeps every cell kind to five lines with at most one effect line, and no charge leg", () => {
     const s = laid(ACCEPTANCE);
-    const cells: Hex[] = [
+    const cells: Cell[] = [
       { q: 1, r: 0 },
       { q: 0, r: 0 },
       { q: -1, r: 1 },

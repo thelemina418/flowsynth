@@ -1,25 +1,25 @@
 import { describe, expect, it } from "vitest";
 import { applyIn, fresh, giveOscillators, ownCells } from "./fixtures";
-import { cellsWithin, mirror, neighbours, rotate, type Hex } from "./hex";
+import { cellsWithin, mirror, neighbours, rotate, type Cell } from "./hex";
 import type { GameState, ModuleType, OscillatorRate } from "./types";
 
 // Resonance and rates (spec chunk 02, issue #26), through the GameState
 // seam: layouts are built with `apply`, and the BoardRates on the resulting
 // state are what a player (and the Hex detail, and the pace runner) read.
 
-function rateAt(s: GameState, cell: Hex): OscillatorRate {
+function rateAt(s: GameState, cell: Cell): OscillatorRate {
   const rate = s.game.rates.oscillators.find((o) => o.cell.q === cell.q && o.cell.r === cell.r);
   if (!rate) throw new Error(`no oscillator rate at ${cell.q},${cell.r}`);
   return rate;
 }
 
-const O: Hex = { q: 0, r: 0 };
-const at = (h: Hex) => `${h.q},${h.r}`;
+const O: Cell = { q: 0, r: 0 };
+const at = (h: Cell) => `${h.q},${h.r}`;
 const partnersOf = (rate: OscillatorRate) => rate.instances.map((i) => i.partners.map((p) => at(p.cell)).sort().join(" ")).sort();
 
 // Every layout but the acceptance one owns the whole Sketch board (radius
 // 2), standing in for chunk 05's conquest.
-function build(layout: [ModuleType, Hex][], own = cellsWithin(2)): GameState {
+function build(layout: [ModuleType, Cell][], own = cellsWithin(2)): GameState {
   const s = fresh();
   ownCells(s, own);
   giveOscillators(s, { allowance: layout.length, arrive: layout.map(([module]) => module) });
@@ -56,7 +56,7 @@ describe("the acceptance layout", () => {
 describe("a pattern in every orientation", () => {
   // The acceptance Triangle's partners, relative to it, and a Saw's line:
   // each turned through hex.ts's own rotation and mirror.
-  const shapes: { name: string; module: ModuleType; partners: Hex[]; factor: number }[] = [
+  const shapes: { name: string; module: ModuleType; partners: Cell[]; factor: number }[] = [
     { name: "Triangle", module: "triangle", partners: [{ q: -1, r: 0 }, { q: -1, r: 1 }], factor: 1.75 },
     { name: "Saw", module: "saw", partners: [{ q: 1, r: -1 }, { q: 2, r: -2 }], factor: 3 },
   ];
@@ -65,7 +65,7 @@ describe("a pattern in every orientation", () => {
       for (let k = 0; k < 6; k++) {
         it(`${shape.name}, turned ${k * 60}°${mirrored ? " and mirrored" : ""}, resonates ×${shape.factor}`, () => {
           const cells = shape.partners.map((p) => rotate(mirrored ? mirror(p) : p, k));
-          const s = build([[shape.module, O], ...cells.map((c): [ModuleType, Hex] => ["sine", c])]);
+          const s = build([[shape.module, O], ...cells.map((c): [ModuleType, Cell] => ["sine", c])]);
           const rate = rateAt(s, O);
           expect(partnersOf(rate)).toEqual([cells.map(at).sort().join(" ")]);
           expect(rate.resonance.toNumber()).toBe(shape.factor);
@@ -75,8 +75,8 @@ describe("a pattern in every orientation", () => {
   }
 });
 
-const ring1 = (indices: number[]): Hex[] => indices.map((i) => neighbours(O)[i]!);
-const around = (module: ModuleType, indices: number[]): [ModuleType, Hex][] => ring1(indices).map((c) => [module, c]);
+const ring1 = (indices: number[]): Cell[] => indices.map((i) => neighbours(O)[i]!);
+const around = (module: ModuleType, indices: number[]): [ModuleType, Cell][] => ring1(indices).map((c) => [module, c]);
 
 describe("halving returns", () => {
   // Sine R 1.0: 1 + 1, then + 0.5, then + 0.25.

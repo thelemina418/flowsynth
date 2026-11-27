@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { arcRadius, boardCells, cellKind } from "./board";
 import { fresh } from "./fixtures";
-import { hexKey, lifetimeCells, ring } from "./hex";
+import { cellKey, lifetimeCells, ring } from "./hex";
 
 // The board in GameState (spec chunk 02, issue #24): the owned open cells
 // and the current arc. A cell's kind is derived, never stored.
@@ -9,7 +9,7 @@ import { hexKey, lifetimeCells, ring } from "./hex";
 describe("a fresh board", () => {
   it("owns exactly the four opening cells, in Sketch", () => {
     const s = fresh();
-    expect(s.game.board.open.map(hexKey).sort()).toEqual(["0,0", "0,1", "1,-1", "1,0"]);
+    expect(s.game.board.open.map(cellKey).sort()).toEqual(["0,0", "0,1", "1,-1", "1,0"]);
     expect(s.game.board.arc).toBe("sketch");
     expect(arcRadius(s.game.board.arc)).toBe(2);
   });
@@ -35,7 +35,7 @@ describe("a fresh board", () => {
   it("boardCells lists the lifetime board with each cell's kind", () => {
     const cells = boardCells(fresh().game.board);
     expect(cells).toHaveLength(91);
-    expect(cells.find((c) => hexKey(c.cell) === "1,-1")?.kind).toBe("open");
-    expect(cells.find((c) => hexKey(c.cell) === "2,-1")?.kind).toBe("wall");
+    expect(cells.find((c) => cellKey(c.cell) === "1,-1")?.kind).toBe("open");
+    expect(cells.find((c) => cellKey(c.cell) === "2,-1")?.kind).toBe("wall");
   });
 });

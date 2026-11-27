@@ -1,7 +1,7 @@
 import { computed, signal, type ReadonlySignal } from "@preact/signals";
 import { apply, type Action, type ApplyResult } from "../../engine/apply";
 import { boardCells } from "../../engine/board";
-import { hexKey, sameHex, type Hex } from "../../engine/hex";
+import { cellKey, sameCell, type Cell } from "../../engine/hex";
 import { categoryOf } from "../../engine/modules";
 import { moduleAt, placedCount } from "../../engine/placement";
 import type { GameState, ModuleType } from "../../engine/types";
@@ -12,7 +12,7 @@ import type { GameState, ModuleType } from "../../engine/types";
 // `apply` path. A target's validity is that same `apply` run dry, so the
 // outlines can never disagree with what a click would do.
 
-export type Pick = { from: "tray"; module: ModuleType } | { from: "cell"; cell: Hex };
+export type Pick = { from: "tray"; module: ModuleType } | { from: "cell"; cell: Cell };
 
 export type Target = "valid" | "invalid";
 
@@ -34,7 +34,7 @@ export class Placing {
     const state = this.state.value;
     for (const { cell, kind } of boardCells(state.game.board)) {
       if (kind === "dark") continue;
-      targets.set(hexKey(cell), apply(state, actionOnto(pick, cell)).ok ? "valid" : "invalid");
+      targets.set(cellKey(cell), apply(state, actionOnto(pick, cell)).ok ? "valid" : "invalid");
     }
     return targets;
   });
@@ -81,14 +81,14 @@ export class Placing {
   }
 
   // A cell: places or moves the pick there, or picks the module it holds.
-  clickCell(cell: Hex): void {
+  clickCell(cell: Cell): void {
     if (this.locked.value) return;
     const pick = this.pick.value;
     if (!pick) {
       if (moduleAt(this.state.value.game.board, cell)) this.pickCell(cell);
       return;
     }
-    if (pick.from === "cell" && sameHex(pick.cell, cell)) {
+    if (pick.from === "cell" && sameCell(pick.cell, cell)) {
       this.clear();
       return;
     }
@@ -102,7 +102,7 @@ export class Placing {
     this.held.value = { from: "tray", module };
   }
 
-  pickCell(cell: Hex): void {
+  pickCell(cell: Cell): void {
     if (this.locked.value || !moduleAt(this.state.value.game.board, cell)) return;
     this.note.value = null;
     this.held.value = { from: "cell", cell: { q: cell.q, r: cell.r } };
@@ -119,6 +119,6 @@ export class Placing {
   }
 }
 
-function actionOnto(pick: Pick, cell: Hex): Action {
+function actionOnto(pick: Pick, cell: Cell): Action {
   return pick.from === "tray" ? { type: "placeModule", module: pick.module, cell } : { type: "moveModule", from: pick.cell, to: cell };
 }

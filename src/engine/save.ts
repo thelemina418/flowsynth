@@ -4,7 +4,7 @@ import { normalizeHabitColor } from "./habits";
 import { SAVE_VERSION } from "./constants";
 import { D, fromSave, isNum, NumFault, toSave, type Num } from "./num";
 import { ARCS, openingBoard } from "./board";
-import { hexKey, LIFETIME_RADIUS, ring, type Hex } from "./hex";
+import { cellKey, LIFETIME_RADIUS, ring, type Cell } from "./hex";
 import { isModuleType } from "./modules";
 import { computeBoardRates } from "./rates";
 import type { Arc, Board, GameState, Habit, HabitClass, ModuleCategory, ModuleType, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
@@ -354,7 +354,7 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
   return { state, ...(recovered && { recovered }) };
 }
 
-function readCell(value: unknown): Hex | null {
+function readCell(value: unknown): Cell | null {
   if (!isRecord(value) || !Number.isInteger(value.q) || !Number.isInteger(value.r)) return null;
   const cell = { q: value.q as number, r: value.r as number };
   return ring(cell) <= LIFETIME_RADIUS ? cell : null;
@@ -368,11 +368,11 @@ function readBoard(raw: unknown): Board {
   const opening = openingBoard();
   if (!isRecord(raw) || !Array.isArray(raw.open)) return opening;
   const seen = new Set<string>();
-  const open: Hex[] = [];
+  const open: Cell[] = [];
   for (const item of raw.open) {
     const cell = readCell(item);
-    if (cell === null || seen.has(hexKey(cell))) continue;
-    seen.add(hexKey(cell));
+    if (cell === null || seen.has(cellKey(cell))) continue;
+    seen.add(cellKey(cell));
     open.push(cell);
   }
   if (open.length === 0) return opening;
@@ -391,8 +391,8 @@ function readPlacements(raw: unknown, owned: Set<string>): Placement[] {
   for (const item of raw) {
     if (!isRecord(item) || !isModuleType(item.module)) continue;
     const cell = readCell(item.cell);
-    if (cell === null || !owned.has(hexKey(cell)) || taken.has(hexKey(cell))) continue;
-    taken.add(hexKey(cell));
+    if (cell === null || !owned.has(cellKey(cell)) || taken.has(cellKey(cell))) continue;
+    taken.add(cellKey(cell));
     placements.push({ cell, module: item.module });
   }
   return placements;

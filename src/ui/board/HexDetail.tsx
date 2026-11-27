@@ -1,11 +1,11 @@
-import type { Hex } from "../../engine/hex";
+import type { Cell } from "../../engine/hex";
 import type { Board, BoardRates } from "../../engine/types";
 import { hexDetail } from "./hexReadout";
 
 // The Hex detail (issue #27; GLOSSARY): the fixed panel that shows the full
 // readout of a clicked cell. Its place is reserved, so opening it never
 // moves the board; until the first click it holds nothing visible.
-export function HexDetail({ board, rates, cell }: { board: Board; rates: BoardRates; cell: Hex | null }) {
+export function HexDetail({ board, rates, cell }: { board: Board; rates: BoardRates; cell: Cell | null }) {
   const lines = cell ? hexDetail(board, rates, cell) : [];
   return (
     <div class="hex-detail" data-hex-detail="" data-open={cell ? "" : undefined} role="region" aria-label="Hex detail" aria-live="polite">

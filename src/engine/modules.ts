@@ -1,4 +1,4 @@
-import type { ModuleCategory, ModuleType } from "./types";
+import type { ModuleCategory, ModuleType, OscillatorType } from "./types";
 
 // The module catalogue (GLOSSARY: Module, Category): each type's category,
 // its nameplate, and for an oscillator its base rate and resonance pattern
@@ -64,6 +64,10 @@ export function isModuleType(value: unknown): value is ModuleType {
 
 export function categoryOf(module: ModuleType): ModuleCategory {
   return MODULES[module].category;
+}
+
+export function isOscillator(module: ModuleType): module is OscillatorType {
+  return categoryOf(module) === "oscillator";
 }
 
 export function moduleName(module: ModuleType): string {

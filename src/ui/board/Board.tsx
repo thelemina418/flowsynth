@@ -1,6 +1,6 @@
 import type { JSX } from "preact";
 import { boardCells, type CellKind } from "../../engine/board";
-import { corners, hexKey, lifetimeCells, ring, sameHex, toPixel, type Hex } from "../../engine/hex";
+import { corners, cellKey, lifetimeCells, ring, sameCell, toPixel, type Cell, type Point } from "../../engine/hex";
 import { wallAt } from "../../engine/map";
 import { categoryOf, moduleName } from "../../engine/modules";
 import { moduleAt } from "../../engine/placement";
@@ -9,6 +9,7 @@ import { startDrag } from "./drag";
 import { Glyph } from "./glyphs";
 import type { Placing, Target } from "./placing";
 import { Resonances } from "./Resonances";
+import { round } from "./svg";
 
 // The board (spec chunk 02, issue #24): the lifetime board drawn as
 // flat-top hexes in The Rack's style. Open cells are machined plates (a
@@ -31,14 +32,10 @@ const ENGRAVE = SIZE * 0.74;
 const MODULE = SIZE * 0.66;
 const PAD = 4;
 
-function points(center: { x: number; y: number }, size: number): string {
+function points(center: Point, size: number): string {
   return corners(center, size)
     .map((p) => `${round(p.x)},${round(p.y)}`)
     .join(" ");
-}
-
-function round(n: number): number {
-  return Math.round(n * 100) / 100 + 0;
 }
 
 // The viewBox spans the lifetime board, so the board never reflows as
@@ -73,8 +70,8 @@ const CLASS_MARKS: Partial<Record<HabitClass, (x: number, y: number) => JSX.Elem
   ),
 };
 
-interface CellProps {
-  cell: Hex;
+interface BoardCellProps {
+  cell: Cell;
   kind: CellKind;
   module: ModuleType | undefined;
   picked: boolean;
@@ -87,10 +84,10 @@ interface CellProps {
   onPointerDown: ((event: PointerEvent) => void) | undefined;
 }
 
-function Cell({ cell, kind, module, picked, inspected, target, onActivate, onPointerDown }: CellProps) {
+function BoardCell({ cell, kind, module, picked, inspected, target, onActivate, onPointerDown }: BoardCellProps) {
   const center = toPixel(cell, SIZE);
   const common = {
-    "data-cell": hexKey(cell),
+    "data-cell": cellKey(cell),
     "data-kind": kind,
     "data-ring": String(ring(cell)),
     "data-target": target,
@@ -163,8 +160,8 @@ interface BoardProps {
   rates: BoardRates;
   flowing: boolean;
   placing: Placing;
-  inspected: Hex | null;
-  onCell: (cell: Hex) => void;
+  inspected: Cell | null;
+  onCell: (cell: Cell) => void;
   onDrop: (target: Element | null) => void;
 }
 
@@ -177,14 +174,14 @@ export function Board({ board, rates, flowing, placing, inspected, onCell, onDro
       {boardCells(board).map(({ cell, kind }) => {
         const module = kind === "open" ? moduleAt(board, cell)?.module : undefined;
         return (
-          <Cell
-            key={hexKey(cell)}
+          <BoardCell
+            key={cellKey(cell)}
             cell={cell}
             kind={kind}
             module={module}
-            picked={pick?.from === "cell" && sameHex(pick.cell, cell)}
-            inspected={inspected !== null && sameHex(inspected, cell)}
-            target={targets.get(hexKey(cell))}
+            picked={pick?.from === "cell" && sameCell(pick.cell, cell)}
+            inspected={inspected !== null && sameCell(inspected, cell)}
+            target={targets.get(cellKey(cell))}
             onActivate={() => onCell(cell)}
             onPointerDown={!locked && module ? (event) => startDrag(event, { begin: () => placing.pickCell(cell), drop: onDrop }) : undefined}
           />

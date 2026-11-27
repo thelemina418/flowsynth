@@ -1,7 +1,7 @@
 import { advance, type Advanced } from "./advance";
 import { apply, type ApplyResult } from "./apply";
 import { isOpen } from "./board";
-import type { Hex } from "./hex";
+import type { Cell } from "./hex";
 import { isNum } from "./num";
 import { createInitialState } from "./state";
 import type { Presence } from "./trust";
@@ -71,7 +71,7 @@ export function giveOscillators(state: GameState, grant: { allowance?: number; a
 // Owned open cells beyond the opening, as chunk 05's conquest will add
 // them (issue #26). Owning a cell is not a layout change: no module moves,
 // so the rates stay as they are.
-export function ownCells(state: GameState, cells: Hex[]): void {
+export function ownCells(state: GameState, cells: Cell[]): void {
   for (const cell of cells) if (!isOpen(state.game.board, cell)) state.game.board.open.push({ q: cell.q, r: cell.r });
 }
 

@@ -24,21 +24,19 @@ export function startDrag(event: PointerEvent, handlers: DragHandlers): void {
     handlers.begin();
   };
   const up = (e: PointerEvent) => {
-    window.removeEventListener("pointermove", move);
-    window.removeEventListener("pointerup", up);
-    window.removeEventListener("pointercancel", cancel);
+    teardown();
     if (!dragging) return;
     swallowNextClick();
     handlers.drop(document.elementFromPoint(e.clientX, e.clientY));
   };
-  const cancel = () => {
+  const teardown = () => {
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", up);
-    window.removeEventListener("pointercancel", cancel);
+    window.removeEventListener("pointercancel", teardown);
   };
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);
-  window.addEventListener("pointercancel", cancel);
+  window.addEventListener("pointercancel", teardown);
 }
 
 function swallowNextClick(): void {

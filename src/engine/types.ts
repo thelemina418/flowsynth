@@ -1,5 +1,5 @@
 import type { Num } from "./num";
-import type { Hex } from "./hex";
+import type { Cell } from "./hex";
 
 // The single serialisable GameState (spec chunk 01, issue #17). It has two
 // parts: the real-life records, which nothing in the game ever resets, and
@@ -190,7 +190,7 @@ export type ModuleType = OscillatorType;
 
 // One module on one owned open cell (issue #25).
 export interface Placement {
-  cell: Hex;
+  cell: Cell;
   module: ModuleType;
 }
 
@@ -198,7 +198,7 @@ export interface Placement {
 // placements. Cell kinds are derived (engine/board.ts). An open cell holds
 // at most one module; an unplaced module is simply absent.
 export interface Board {
-  open: Hex[];
+  open: Cell[];
   arc: Arc;
   placements: Placement[];
 }
@@ -214,7 +214,7 @@ export interface ResonanceInstance {
 // faders and pressure are identity legs until chunks 03, 05 and 06 fill
 // them in.
 export interface OscillatorRate {
-  cell: Hex;
+  cell: Cell;
   module: OscillatorType;
   base: Num;
   // The pattern's R (0 for a type with no pattern).

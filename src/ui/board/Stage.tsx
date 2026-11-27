@@ -1,6 +1,6 @@
 import type { Signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
-import type { Hex } from "../../engine/hex";
+import type { Cell } from "../../engine/hex";
 import type { Board as BoardState, BoardRates, ModuleType } from "../../engine/types";
 import type { Num } from "../../engine/num";
 import { Board } from "./Board";
@@ -19,7 +19,7 @@ interface StageProps {
   flowing: boolean;
   arrived: ModuleType[];
   placing: Placing;
-  inspected: Signal<Hex | null>;
+  inspected: Signal<Cell | null>;
 }
 
 export function Stage({ nous, board, rates, flowing, arrived, placing, inspected }: StageProps) {
@@ -44,7 +44,7 @@ export function Stage({ nous, board, rates, flowing, arrived, placing, inspected
   }, [placing, inspected]);
 
   // Every click on a cell reads it; in upgrade mode it also picks or places.
-  const onCell = (cell: Hex) => {
+  const onCell = (cell: Cell) => {
     placing.clickCell(cell);
     inspected.value = { q: cell.q, r: cell.r };
   };

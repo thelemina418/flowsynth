@@ -1,4 +1,4 @@
-import { hexKey, type Hex } from "./hex";
+import { cellKey, type Cell } from "./hex";
 import type { HabitClass } from "./types";
 
 // The authored map (issue #24 placeholder; chunk 05 authors the rest).
@@ -16,15 +16,15 @@ export interface AuthoredWall {
 }
 
 const AUTHORED: Record<string, AuthoredWall> = {
-  [hexKey({ q: -1, r: 1 })]: { name: "Shale", opens: null },
-  [hexKey({ q: 2, r: -1 })]: { name: "Flint", opens: "roadie" },
+  [cellKey({ q: -1, r: 1 })]: { name: "Shale", opens: null },
+  [cellKey({ q: 2, r: -1 })]: { name: "Flint", opens: "roadie" },
 };
 
 const PLACEHOLDER: AuthoredWall = { name: null, opens: null };
 
 // The wall authored at a cell. Only meaningful where the board's derived
 // kind is `wall`.
-export function wallAt(cell: Hex): AuthoredWall {
-  const wall = AUTHORED[hexKey(cell)] ?? PLACEHOLDER;
+export function wallAt(cell: Cell): AuthoredWall {
+  const wall = AUTHORED[cellKey(cell)] ?? PLACEHOLDER;
   return { ...wall };
 }

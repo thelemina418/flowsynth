@@ -1,7 +1,7 @@
 import { advance } from "./advance";
 import { apply, type Action, type ApplyResult } from "./apply";
 import { createInitialState } from "./state";
-import { hexKey } from "./hex";
+import { cellKey } from "./hex";
 import { moduleName } from "./modules";
 import { fmt, gt, type Num } from "./num";
 import type { AdvanceMode, AdvanceResult, GameState, HabitClass, Placement } from "./types";
@@ -284,7 +284,7 @@ export function formatPaceReport(report: PaceReport): string {
   const head = ["Milestone", "Reached", "Target"];
   const widths = head.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i]!.length)));
   const line = (cells: string[]) => cells.map((c, i) => c.padEnd(widths[i]!)).join("  ").trimEnd();
-  const layout = report.placements.map((p) => `${moduleName(p.module)} (${hexKey(p.cell)})`).join(", ");
+  const layout = report.placements.map((p) => `${moduleName(p.module)} (${cellKey(p.cell)})`).join(", ");
   const out = [
     `Pace run: ${report.sessions} sessions, ${hours(report.creditedHours)} credited`,
     `Board: ${report.placements.length} oscillators, ${perSecond(report.rate)} ν/s${layout ? ` — ${layout}` : ""}`,

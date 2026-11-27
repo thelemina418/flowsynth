@@ -1,8 +1,9 @@
 import { cellKind } from "../../engine/board";
-import { sameHex, type Hex } from "../../engine/hex";
+import { sameCell, type Cell } from "../../engine/hex";
 import { className } from "../../engine/habits";
 import { wallAt } from "../../engine/map";
-import { categoryName, categoryOf, moduleName, patternOf } from "../../engine/modules";
+import { categoryName, categoryOf, moduleName } from "../../engine/modules";
+import { moduleAt } from "../../engine/placement";
 import { fmt, type Num } from "../../engine/num";
 import type { Board, BoardRates, ModuleType, OscillatorRate, OscillatorType } from "../../engine/types";
 
@@ -29,7 +30,7 @@ const RESONANCE_WORDS: Record<OscillatorType, { verb: string; needs: string } | 
   release: null,
 };
 
-export function hexDetail(board: Board, rates: BoardRates, cell: Hex): DetailLine[] {
+export function hexDetail(board: Board, rates: BoardRates, cell: Cell): DetailLine[] {
   const kind = cellKind(board, cell);
   if (kind === "dark") return [{ text: "Dark cell · beyond this arc" }];
   if (kind === "wall") {
@@ -38,9 +39,9 @@ export function hexDetail(board: Board, rates: BoardRates, cell: Hex): DetailLin
     if (wall.opens === null) return [{ text: `${wall.name} · Wall` }];
     return [{ text: `${wall.name} · Wall · opens ${className(wall.opens)}`, effect: true }];
   }
-  const oscillator = rates.oscillators.find((o) => sameHex(o.cell, cell));
+  const oscillator = rates.oscillators.find((o) => sameCell(o.cell, cell));
   if (!oscillator) {
-    const module = board.placements.find((p) => sameHex(p.cell, cell))?.module;
+    const module = moduleAt(board, cell)?.module;
     return module ? [{ text: nameLine(module) }] : [{ text: "Open cell" }];
   }
   return oscillatorLines(oscillator);
@@ -54,7 +55,7 @@ function oscillatorLines(o: OscillatorRate): DetailLine[] {
   const words = RESONANCE_WORDS[o.module];
   const lines: DetailLine[] = [{ text: nameLine(o.module) }];
   const count = o.instances.length;
-  if (words === null || patternOf(o.module) === null) {
+  if (words === null) {
     lines.push({ text: "No resonance pattern", effect: true });
   } else if (count === 0) {
     lines.push({ text: `Not resonating · ${words.needs}`, effect: true });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DIRECTIONS, distance, hexKey, lifetimeCells, LIFETIME_RADIUS, mirror, neighbours, ring, ringCells, rotate, toPixel } from "./hex";
+import { DIRECTIONS, distance, cellKey, lifetimeCells, LIFETIME_RADIUS, mirror, neighbours, ring, ringCells, rotate, toPixel } from "./hex";
 
 // The board's geometry (spec chunk 02, issue #24): axial (q, r) cells,
 // flat-top drawing.
@@ -24,7 +24,7 @@ describe("hex distance and ring", () => {
     for (const n of [1, 2, 3, 5]) {
       const cells = ringCells(n);
       expect(cells).toHaveLength(6 * n);
-      expect(new Set(cells.map(hexKey)).size).toBe(6 * n);
+      expect(new Set(cells.map(cellKey)).size).toBe(6 * n);
       for (const cell of cells) expect(ring(cell)).toBe(n);
     }
   });
@@ -33,7 +33,7 @@ describe("hex distance and ring", () => {
     expect(LIFETIME_RADIUS).toBe(5);
     const cells = lifetimeCells();
     expect(cells).toHaveLength(91);
-    expect(new Set(cells.map(hexKey)).size).toBe(91);
+    expect(new Set(cells.map(cellKey)).size).toBe(91);
     expect(Math.max(...cells.map(ring))).toBe(5);
   });
 });

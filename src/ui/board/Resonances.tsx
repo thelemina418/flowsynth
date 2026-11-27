@@ -1,4 +1,5 @@
-import { corners, DIRECTIONS, hexKey, toPixel, add, type Hex } from "../../engine/hex";
+import { corners, DIRECTIONS, cellKey, toPixel, addCell, type Cell, type Point } from "../../engine/hex";
+import { round } from "./svg";
 import type { BoardRates } from "../../engine/types";
 
 // The resonance outlines (spec chunk 02, issue #26): for each satisfied
@@ -9,7 +10,7 @@ import type { BoardRates } from "../../engine/types";
 // holds it still under prefers-reduced-motion. No number is drawn.
 
 interface Outline {
-  members: Hex[];
+  members: Cell[];
   key: string;
 }
 
@@ -20,31 +21,26 @@ export function outlinesOf(rates: BoardRates): Outline[] {
   for (const oscillator of rates.oscillators) {
     for (const instance of oscillator.instances) {
       const members = [oscillator.cell, ...instance.partners.map((p) => p.cell)];
-      const key = members.map(hexKey).sort().join(" ");
+      const key = members.map(cellKey).sort().join(" ");
       if (!seen.has(key)) seen.set(key, { members, key });
     }
   }
   return [...seen.values()];
 }
 
-function round(n: number): number {
-  return Math.round(n * 100) / 100 + 0;
-}
-
-type Point = { x: number; y: number };
 const pointKey = (p: Point) => `${round(p.x)},${round(p.y)}`;
 
 // The union's boundary as one closed path per loop. A flat-top hex's edge
 // from corner i to corner i + 1 faces DIRECTIONS[i + 1]; an edge whose
 // neighbour is not a member is on the boundary. Every hex's edges run the
 // same way round, so boundary edges chain head to tail.
-export function outlinePath(members: Hex[], size: number): string {
-  const inside = new Set(members.map(hexKey));
+export function outlinePath(members: Cell[], size: number): string {
+  const inside = new Set(members.map(cellKey));
   const next = new Map<string, Point>();
   for (const cell of members) {
     const points = corners(toPixel(cell, size), size);
     for (let i = 0; i < 6; i++) {
-      if (inside.has(hexKey(add(cell, DIRECTIONS[(i + 1) % 6]!)))) continue;
+      if (inside.has(cellKey(addCell(cell, DIRECTIONS[(i + 1) % 6]!)))) continue;
       next.set(pointKey(points[i]!), points[(i + 1) % 6]!);
     }
   }

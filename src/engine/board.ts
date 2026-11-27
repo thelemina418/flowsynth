@@ -1,4 +1,4 @@
-import { hexKey, lifetimeCells, ring, type Hex } from "./hex";
+import { cellKey, lifetimeCells, ring, type Cell } from "./hex";
 import type { Arc, Board } from "./types";
 
 // The board (spec chunk 02, issue #24): the cells the player owns and the
@@ -19,7 +19,7 @@ export function arcRadius(arc: Arc): number {
 }
 
 // The opening (mechanics-sketch.md, Board): four open cells, in Sketch.
-export const OPENING_CELLS: readonly Hex[] = [
+export const OPENING_CELLS: readonly Cell[] = [
   { q: 0, r: 0 },
   { q: 1, r: 0 },
   { q: 0, r: 1 },
@@ -30,17 +30,17 @@ export function openingBoard(): Board {
   return { open: OPENING_CELLS.map((cell) => ({ q: cell.q, r: cell.r })), arc: "sketch", placements: [] };
 }
 
-export function isOpen(board: Board, cell: Hex): boolean {
-  const key = hexKey(cell);
-  return board.open.some((owned) => hexKey(owned) === key);
+export function isOpen(board: Board, cell: Cell): boolean {
+  const key = cellKey(cell);
+  return board.open.some((owned) => cellKey(owned) === key);
 }
 
-export function cellKind(board: Board, cell: Hex): CellKind {
+export function cellKind(board: Board, cell: Cell): CellKind {
   if (isOpen(board, cell)) return "open";
   return ring(cell) > arcRadius(board.arc) ? "dark" : "wall";
 }
 
 // The lifetime board, ring by ring outward, each cell with its kind.
-export function boardCells(board: Board): { cell: Hex; kind: CellKind }[] {
+export function boardCells(board: Board): { cell: Cell; kind: CellKind }[] {
   return lifetimeCells().map((cell) => ({ cell, kind: cellKind(board, cell) }));
 }

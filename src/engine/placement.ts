@@ -1,5 +1,5 @@
 import { cellKind } from "./board";
-import { hexKey, sameHex, type Hex } from "./hex";
+import { cellKey, sameCell, type Cell } from "./hex";
 import { categoryOf, categoryName, moduleName } from "./modules";
 import type { Board, GameState, ModuleCategory, ModuleType, Placement } from "./types";
 
@@ -19,9 +19,9 @@ function fail(reason: string): PlacementResult {
   return { ok: false, reason };
 }
 
-export function moduleAt(board: Board, cell: Hex): Placement | undefined {
-  const key = hexKey(cell);
-  return board.placements.find((placement) => hexKey(placement.cell) === key);
+export function moduleAt(board: Board, cell: Cell): Placement | undefined {
+  const key = cellKey(cell);
+  return board.placements.find((placement) => cellKey(placement.cell) === key);
 }
 
 export function placedCount(board: Board, category: ModuleCategory): number {
@@ -35,14 +35,14 @@ function locked(state: GameState): PlacementResult | null {
 }
 
 // Only an owned open cell takes a module.
-function unbuildable(board: Board, cell: Hex): PlacementResult | null {
+function unbuildable(board: Board, cell: Cell): PlacementResult | null {
   const kind = cellKind(board, cell);
   if (kind === "wall") return fail("That cell is a wall.");
   if (kind === "dark") return fail("That cell is dark.");
   return null;
 }
 
-export function placeModule(state: GameState, module: ModuleType, cell: Hex): PlacementResult {
+export function placeModule(state: GameState, module: ModuleType, cell: Cell): PlacementResult {
   const refused = locked(state);
   if (refused) return refused;
   const board = state.game.board;
@@ -59,7 +59,7 @@ export function placeModule(state: GameState, module: ModuleType, cell: Hex): Pl
 }
 
 // A move onto an occupied open cell swaps the two modules.
-export function moveModule(state: GameState, from: Hex, to: Hex): PlacementResult {
+export function moveModule(state: GameState, from: Cell, to: Cell): PlacementResult {
   const refused = locked(state);
   if (refused) return refused;
   const board = state.game.board;
@@ -67,14 +67,14 @@ export function moveModule(state: GameState, from: Hex, to: Hex): PlacementResul
   if (!moving) return fail("No module sits on that cell.");
   const blocked = unbuildable(board, to);
   if (blocked) return blocked;
-  if (sameHex(from, to)) return fail("The module is already there.");
+  if (sameCell(from, to)) return fail("The module is already there.");
   const other = moduleAt(board, to);
   if (other) other.cell = { q: from.q, r: from.r };
   moving.cell = { q: to.q, r: to.r };
   return ok;
 }
 
-export function removeModule(state: GameState, cell: Hex): PlacementResult {
+export function removeModule(state: GameState, cell: Cell): PlacementResult {
   const refused = locked(state);
   if (refused) return refused;
   const board = state.game.board;
