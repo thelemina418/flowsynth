@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { apply } from "./apply";
-import { advanceIn, applyIn, fresh, giveHabit, giveProducer, ownCells } from "./fixtures";
+import { advanceIn, applyIn, begin, fresh, giveHabit, giveProducer, ownCells } from "./fixtures";
 import type { Cell } from "./hex";
 import { deserialize, serialize } from "./save";
 import { cloneState } from "./state";
@@ -128,7 +128,7 @@ describe("advance applies nothing to a wall", () => {
     advanceIn(s, HOUR, "upgrade");
     expect(s.game.board).toEqual(board);
     expect(s.game.rates.walls).toEqual(walls);
-    must(s, { type: "startSession", target: null, now: 0 });
+    expect(begin(s, null, 0).ok).toBe(true);
     advanceIn(s, HOUR, "flow");
     expect(s.game.board).toEqual(board);
     expect(s.game.rates.walls).toEqual(walls);

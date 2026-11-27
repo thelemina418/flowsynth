@@ -1,13 +1,16 @@
 import { grantsOf } from "../../engine/levels";
 import { placedCount } from "../../engine/placement";
 import type { Shell } from "./shell";
+import { BeginFlow } from "./BeginFlow";
 import { ClassChoice } from "./ClassChoice";
+import { FlowScreen } from "./FlowScreen";
 import { RecoveryChoice } from "./RecoveryChoice";
 import { downloadSave } from "./download";
 import { Stage } from "../board/Stage";
 
 // The shell's one surface (issue #21): the question owed on first load,
-// and once nothing is owed, the board and its tray (issues #24, #25).
+// and once nothing is owed, the board and its tray (issues #24, #25),
+// `Begin flow` and its panel, and the flow screen (issue #39).
 export function App({ shell }: { shell: Shell }) {
   const screen = shell.screen.value;
   const notice = shell.notice.value;
@@ -53,6 +56,23 @@ export function App({ shell }: { shell: Shell }) {
           inspected={shell.inspected}
         />
       )}
+      {screen.kind === "ready" && (
+        <div class="shell-transport">
+          <button type="button" class="main-switch" onClick={() => shell.openBegin()}>
+            Begin flow
+          </button>
+        </div>
+      )}
+      {screen.kind === "begin" && (
+        <BeginFlow
+          state={state}
+          error={screen.error}
+          onCreate={(name, habitClass) => shell.createHabit(name, habitClass)}
+          onBegin={(habitId, minutes) => shell.beginFlow(habitId, minutes)}
+          onClose={() => shell.closeBegin()}
+        />
+      )}
+      {screen.kind === "flow" && <FlowScreen shell={shell} error={screen.error} />}
     </div>
   );
 }

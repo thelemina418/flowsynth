@@ -19,8 +19,21 @@ function fail(reason: string): ActionResult {
   return { ok: false, reason };
 }
 
-export function startSession(state: GameState, target: number | null, now: number = 0): ActionResult {
+// The planned length a session may take (spec chunk 04, Begin flow), in
+// seconds. A migrated open-ended session still runs and ends under the old
+// rules, but none starts.
+export const SESSION_MIN_SECONDS = 10 * 60;
+export const SESSION_MAX_SECONDS = 180 * 60;
+
+// Begin flow (issue #39): select the habit and start in one action.
+export function startSession(state: GameState, habitId: string, target: number | null, now: number = 0): ActionResult {
   if (state.game.mode !== "upgrade") return fail("A session is already running.");
+  const habit = state.records.habits.find((h) => h.id === habitId);
+  if (!habit || habit.archived || habit.habitClass === null) return fail("Choose a habit first.");
+  if (target === null || !Number.isFinite(target) || target < SESSION_MIN_SECONDS - EPS || target > SESSION_MAX_SECONDS + EPS) {
+    return fail("Choose a length from 10 to 180 minutes.");
+  }
+  state.records.activeHabitId = habit.id;
   state.records.sessionIndex++;
   state.game.mode = "flow";
   state.game.session = {

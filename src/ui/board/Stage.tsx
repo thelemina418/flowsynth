@@ -1,4 +1,5 @@
 import type { Signal } from "@preact/signals";
+import type { ComponentChildren } from "preact";
 import { useEffect } from "preact/hooks";
 import type { Cell } from "../../engine/hex";
 import type { Board as BoardState, BoardRates, CableType, ModuleCategory, ModuleType } from "../../engine/types";
@@ -26,9 +27,13 @@ interface StageProps {
   chips: boolean;
   placing: Placing;
   inspected: Signal<Cell | null>;
+  // The flow screen (issue #39) draws no tray and sets its own readouts,
+  // ν among them, under the board.
+  tray?: boolean;
+  readouts?: ComponentChildren;
 }
 
-export function Stage({ nous, board, rates, flowing, arrived, arrivedCables, unplaced, chips, placing, inspected }: StageProps) {
+export function Stage({ nous, board, rates, flowing, arrived, arrivedCables, unplaced, chips, placing, inspected, tray = true, readouts }: StageProps) {
   useEffect(() => {
     const dismiss = () => {
       placing.clear();
@@ -83,11 +88,12 @@ export function Stage({ nous, board, rates, flowing, arrived, arrivedCables, unp
   const open = inspected.value;
   return (
     <section class="stage">
-      <NousReadout nous={nous} />
-      <div class="stage-board">
+      {readouts === undefined && <NousReadout nous={nous} />}
+      <div class={tray ? "stage-board" : "stage-board stage-board-alone"}>
         <Board board={board} rates={rates} flowing={flowing} placing={placing} inspected={open} onCell={onCell} onPlug={onPlug} onDrop={onDrop} />
-        <Tray arrived={arrived} cables={arrivedCables} unplaced={unplaced} chips={chips} placing={placing} onDrop={onDrop} />
+        {tray && <Tray arrived={arrived} cables={arrivedCables} unplaced={unplaced} chips={chips} placing={placing} onDrop={onDrop} />}
       </div>
+      {readouts}
       <HexDetail board={board} rates={rates} cell={open} />
       {note !== null && (
         <p class="board-note mono" role="status">

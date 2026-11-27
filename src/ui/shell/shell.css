@@ -45,3 +45,170 @@
 }
 
 .shell-error { color: var(--danger); }
+
+/* A refusal is one quiet line under the surface that refused. */
+.shell-refusal {
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/* Upgrade mode's transport (issue #39): `Begin flow` under the board. */
+.shell-transport {
+  width: min(100%, 640px);
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* The Begin flow panel: key, then fields, one row per question. */
+.begin-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.begin-key { align-self: center; }
+
+.begin-fields,
+.begin-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.begin-fields select { flex: 1 1 12ch; min-height: 44px; }
+
+.begin-fields input,
+.notes-panel textarea {
+  background: var(--panel-deep);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 0;
+  padding: 9px 10px;
+  min-height: 44px;
+  font: inherit;
+  min-width: 0;
+}
+
+.begin-fields input[name="habit-name"] { flex: 1 1 100%; }
+.begin-minutes { width: 9ch; }
+
+.begin-choices button[aria-pressed="true"],
+.notes-tabs button[aria-pressed="true"] {
+  border-color: var(--line-strong);
+  background: var(--panel-deep);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.begin-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* The flow screen (issue #39): the board, its readouts under it, and the
+   ported console clock with its transport. Live readouts hold their size
+   (ADR-0031): tabular mono and fixed lanes. */
+.flow-screen {
+  width: min(100%, 640px);
+  display: grid;
+  gap: 12px;
+}
+
+.stage-board-alone { grid-template-columns: minmax(0, 1fr); }
+
+.flow-readouts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  align-items: baseline;
+}
+
+.flow-right {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.flow-class,
+.flow-ready {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.flow-ready { color: var(--muted); }
+
+.flow-console {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+}
+
+.flow-clock {
+  display: grid;
+  justify-items: center;
+  min-width: 9ch;
+}
+
+.session-clock {
+  font-size: 36px;
+  line-height: 1;
+  min-width: 7ch;
+  text-align: center;
+}
+
+.clock-caption {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.flow-console[data-paused] .session-clock { color: var(--muted); }
+
+/* The Notes door's panel: ported from the old console's notes modal. */
+.notes-panel { width: 100%; }
+
+.notes-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notes-tabs { display: flex; gap: 4px; margin-right: auto; }
+
+.notes-capture { display: grid; gap: 8px; }
+.notes-panel textarea { width: 100%; resize: vertical; }
+
+.notes-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.note-list { display: grid; gap: 10px; }
+.note-entry { display: grid; gap: 2px; border-top: 1px solid var(--line-soft); padding-top: 8px; }
+.note-entry p { overflow-wrap: anywhere; }
+
+@media (max-width: 420px) {
+  .flow-class { font-size: 12px; }
+  .flow-right { justify-items: start; margin-left: 0; }
+}
+
+.notes-head .mono { white-space: nowrap; }
+
+@media (max-width: 420px) {
+  .flow-console { gap: 8px; }
+  .flow-console .main-switch { min-width: 0; }
+  .flow-clock { min-width: 0; }
+  .session-clock { font-size: 28px; min-width: 0; }
+}

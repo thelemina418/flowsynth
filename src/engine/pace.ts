@@ -290,8 +290,7 @@ export function runPace(script: PaceScript): PaceReport {
   while (creditedHoursOf(state) < script.creditedHours) {
     if (sessions >= MAX_SESSIONS) throw new Error("pace runner: no credited progress");
     habitsForOpenClasses(turn);
-    must(turn.apply({ type: "selectHabit", id: nextHabitId(state, sessions) }), "selecting the habit");
-    must(turn.apply({ type: "startSession", target: sessionSeconds, now }), "starting a session");
+    must(turn.apply({ type: "startSession", habitId: nextHabitId(state, sessions), target: sessionSeconds, now }), "starting a session");
     const flowed = turn.advance(sessionSeconds, "flow");
     if (flowed.fault) throw new Error(`pace runner: flow faulted on ${flowed.fault}`);
     now += sessionSeconds * 1000;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { apply, type Action } from "./apply";
-import { applyIn, fresh, giveProducer, ownCells } from "./fixtures";
+import { begin, applyIn, fresh, giveProducer, ownCells } from "./fixtures";
 import { cellsWithin, type Cell } from "./hex";
 import { cloneState } from "./state";
 import type { GameState, ModuleType } from "./types";
@@ -89,7 +89,7 @@ describe("the one refusal", () => {
   it("refuses all three outside upgrade mode, in flow and paused", () => {
     const s = patchboard([O]);
     patch(s, O, SE);
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     for (const mode of ["flow", "paused"]) {
       if (mode === "paused") applyIn(s, { type: "pauseSession" });
       expect(s.game.mode).toBe(mode);

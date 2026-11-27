@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyIn, advanceIn, fresh, habitOf } from "./fixtures";
+import { begin, applyIn, advanceIn, fresh, habitOf } from "./fixtures";
 import { NOTE_BETWEEN_SESSIONS } from "./notes";
 import { deserialize, serialize } from "./save";
 
@@ -11,7 +11,7 @@ describe("notes app", () => {
     // instead of a session clock.
     expect(s.records.notes[0]!.atElapsed).toBe(NOTE_BETWEEN_SESSIONS);
     expect(applyIn(s, { type: "writeNote", text: "   ", now: 0 }).ok).toBe(false);
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     expect(applyIn(s, { type: "writeNote", text: "first thought", now: 0 }).ok).toBe(true);
     expect(s.records.notes.filter((n) => n.sessionId === s.records.sessionIndex).length).toBe(1);
     expect(s.records.notes[1]!.atElapsed).toBe(0);
@@ -24,13 +24,13 @@ describe("notes app", () => {
 
   it("notes are notes: capture changes no practice accounting", () => {
     const early = fresh();
-    applyIn(early, { type: "startSession", target: 600, now: 0 });
+    begin(early, 600, 0);
     advanceIn(early, 10, "flow");
     applyIn(early, { type: "writeNote", text: "early", now: 0 });
     advanceIn(early, 590, "flow");
 
     const late = fresh();
-    applyIn(late, { type: "startSession", target: 600, now: 0 });
+    begin(late, 600, 0);
     advanceIn(late, 600, "flow");
 
     expect(early.game.session!.accounting).toEqual(late.game.session!.accounting);
@@ -38,7 +38,7 @@ describe("notes app", () => {
 
   it("keeps notes across save round-trips", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     applyIn(s, { type: "writeNote", text: "persisted thought", now: 0 });
     advanceIn(s, 60, "flow");
     applyIn(s, { type: "endSession", now: 0 });
@@ -51,7 +51,7 @@ describe("notes app", () => {
     const s = fresh();
     const habit = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
     applyIn(s, { type: "selectHabit", id: habit.id });
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     applyIn(s, { type: "writeNote", text: "tagged thought", now: 0 });
     expect(s.records.notes[0]!.habitId).toBe(habit.id);
     applyIn(s, { type: "endSession", now: 0 });
@@ -65,7 +65,7 @@ describe("notes app", () => {
     const s = fresh();
     const habit = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
     applyIn(s, { type: "selectHabit", id: habit.id });
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     s.game.mode = "paused";
     applyIn(s, { type: "writeNote", text: "paused but tagged", now: 0 });
     applyIn(s, { type: "selectHabit", id: null });

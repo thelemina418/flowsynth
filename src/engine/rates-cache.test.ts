@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { applyIn, advanceIn, fresh, giveHabit, giveOscillators } from "./fixtures";
+import { begin, applyIn, advanceIn, fresh, giveHabit, giveOscillators } from "./fixtures";
 import { grantsOf } from "./levels";
 import { computeBoardRates } from "./rates";
 import { deserialize, serialize } from "./save";
@@ -54,7 +54,7 @@ describe("recomputing the board's rates", () => {
   it("recomputes zero times across any number of flow advances", () => {
     const s = acceptanceLayout();
     giveHabit(s, "Piano", "engineer");
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     counted.mockClear();
     for (let i = 0; i < 500; i++) advanceIn(s, 1, "flow");
     advanceIn(s, 600, "flow", "away");
@@ -73,7 +73,7 @@ describe("recomputing the board's rates", () => {
     counted.mockClear();
     applyIn(s, { type: "rotateModule", cell: { q: 0, r: 0 }, turn: "clockwise" });
     giveHabit(s, "Synthesis", "producer");
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     applyIn(s, { type: "rotateModule", cell: { q: 0, r: 1 }, turn: "clockwise" });
     for (let i = 0; i < 100; i++) advanceIn(s, 36, "flow");
     expect(counted).not.toHaveBeenCalled();
@@ -113,7 +113,7 @@ describe("recomputing the board's rates", () => {
     const idle = applyIn(s, { type: "createHabit", name: "Bass" }).id!;
     for (const id of [flowed, other]) {
       applyIn(s, { type: "selectHabit", id });
-      applyIn(s, { type: "startSession", target: null, now: 0 });
+      begin(s, null, 0);
       for (let i = 0; i < 100; i++) advanceIn(s, 36, "flow");
       applyIn(s, { type: "endSession", now: 1 });
     }
@@ -133,7 +133,7 @@ describe("recomputing the board's rates", () => {
     const s = fresh();
     giveHabit(s, "Piano", "engineer");
     applyIn(s, { type: "placeModule", module: "sine", cell: { q: 0, r: 0 } });
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     advanceIn(s, 1_799, "flow");
     expect(grantsOf(s).allowance.oscillator).toBe(2);
     counted.mockClear();

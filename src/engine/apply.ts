@@ -22,7 +22,7 @@ export type Action =
   | { type: "chooseClass"; habitId: string; habitClass: HabitClass }
   | { type: "logPractice"; habitId: string; minutes: number; now: number }
   // The session.
-  | { type: "startSession"; target: number | null; now: number }
+  | { type: "startSession"; habitId: string; target: number | null; now: number }
   | { type: "pauseSession" }
   | { type: "resumeSession" }
   | { type: "endSession"; now: number }
@@ -74,7 +74,7 @@ function run(state: GameState, action: Action): Step {
       return state.records.classCredit.producer === before ? step : relaid(state, step);
     }
     case "logPractice": return addPracticeLog(state, action.habitId, action.minutes, action.now);
-    case "startSession": return startSession(state, action.target, action.now);
+    case "startSession": return startSession(state, action.habitId, action.target, action.now);
     case "pauseSession": return pauseSession(state);
     case "resumeSession": return resumeSession(state);
     case "endSession": return relaid(state, endSession(state, action.now));
