@@ -1,4 +1,4 @@
-import { ARCHIVED_ORIGINAL_SAVE_KEY, deserialize, ORIGINAL_SAVE_KEY, recoverLostSave, serialize, STORAGE_KEY, type RecoveryReport } from "../engine/save";
+import { ARCHIVED_ORIGINAL_SAVE_KEY, deserialize, isPreV16Save, ORIGINAL_SAVE_KEY, PRE_V16_ORIGINAL_SAVE_KEY, recoverLostSave, serialize, STORAGE_KEY, type RecoveryReport } from "../engine/save";
 import { SAVE_VERSION } from "../engine/constants";
 import type { GameState } from "../engine/types";
 
@@ -14,7 +14,8 @@ export interface LoadedSave {
 // from load() — carries the exact stored bytes, so the app can offer the
 // explicit recovery without reading the slot again.
 // A newer build's save is refused and flagged: its bytes are never replaced.
-export type ParsedSave = LoadedSave | { error: string; recoveryRequired?: boolean; lost?: string[]; raw?: string; newerVersion?: boolean };
+// A save older than v15 is refused and flagged with its version (issue #19).
+export type ParsedSave = LoadedSave | { error: string; recoveryRequired?: boolean; lost?: string[]; raw?: string; newerVersion?: boolean; olderVersion?: number };
 export type WriteOutcome = "written" | "failed" | "refused";
 export type SaveStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
@@ -77,7 +78,11 @@ export class SharedSave {
       if (result.recoveryRequired) {
         return { error: result.error ?? "Explicit recovery required.", recoveryRequired: true, lost: result.lost ?? [] };
       }
-      return { error: result.error ?? "unknown error", ...(result.newerVersion ? { newerVersion: true } : {}) };
+      return {
+        error: result.error ?? "unknown error",
+        ...(result.newerVersion ? { newerVersion: true } : {}),
+        ...(result.olderVersion !== undefined ? { olderVersion: result.olderVersion } : {}),
+      };
     }
     return { state: result.state, savedAt: savedAtOf(text) ?? this.now() };
   }
@@ -110,6 +115,7 @@ export class SharedSave {
       this.sourceProtected = false;
       try {
         this.retainOnce(raw);
+        this.retainPreV16(raw);
       } catch {
         // A later write retries before replacing the source.
       }
@@ -125,6 +131,7 @@ export class SharedSave {
   // An import adopts a new lineage only after its source bytes are safe.
   retain(raw: string): boolean {
     try {
+      this.retainPreV16(raw);
       this.storage.setItem(ORIGINAL_SAVE_KEY, raw);
       this.sourceProtected = false;
       return true;
@@ -171,6 +178,7 @@ export class SharedSave {
       // The recovered source starts a new lineage: an earlier original is
       // archived, never discarded.
       if (earlier !== null && earlier !== raw) archive(ARCHIVED_ORIGINAL_SAVE_KEY, earlier);
+      if (isPreV16Save(raw)) archive(PRE_V16_ORIGINAL_SAVE_KEY, raw);
       replace(ORIGINAL_SAVE_KEY, raw, earlier);
       this.storage.setItem(STORAGE_KEY, text);
       this.sourceProtected = false;
@@ -214,6 +222,28 @@ export class SharedSave {
     }
   }
 
+  // A save older than v16 keeps its exact text under the pre-v16 key
+  // before the first v16 write (issue #19). A different pre-v16 original
+  // already there moves to the key's numbered history, never discarded.
+  // Let the caller handle denial; a write must never replace that source.
+  private retainPreV16(raw: string): void {
+    if (!isPreV16Save(raw)) return;
+    const previous = this.storage.getItem(PRE_V16_ORIGINAL_SAVE_KEY);
+    if (previous === raw) return;
+    if (previous !== null) {
+      for (let i = 1; ; i++) {
+        const historyKey = `${PRE_V16_ORIGINAL_SAVE_KEY}.${i}`;
+        const saved = this.storage.getItem(historyKey);
+        if (saved === previous) break;
+        if (saved === null) {
+          this.storage.setItem(historyKey, previous);
+          break;
+        }
+      }
+    }
+    this.storage.setItem(PRE_V16_ORIGINAL_SAVE_KEY, raw);
+  }
+
   incorporate(savedAt: number): void {
     this.knownSavedAt = savedAt;
   }
@@ -236,7 +266,10 @@ export class SharedSave {
       const raw = this.storage.getItem(STORAGE_KEY);
       // A newer build's save is never overwritten, forced or not.
       if (raw !== null && fromNewerBuild(raw)) return "refused";
-      if (raw !== null) this.retainOnce(raw);
+      if (raw !== null) {
+        this.retainOnce(raw);
+        this.retainPreV16(raw);
+      }
       this.storage.setItem(STORAGE_KEY, text);
       this.knownSavedAt = now;
       return "written";

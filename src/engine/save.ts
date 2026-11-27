@@ -11,10 +11,11 @@ import type { GameState, Habit, HabitClass, SessionAccounting, SessionRecord, Se
 // explicit lost-money recovery (ADR-0082) stand: a v16 file whose Decimal
 // figures are unreadable refuses an ordinary load and recovers by choice.
 //
-// A v15 save reads through `readV15` — the seam issue #19's one-time
-// migration replaces. Until then it reads the flat v15 shape (the retired
-// build's, or issue #15's interim) and the nested shape issue #17's interim
-// wrote under version 15.
+// A v15 save reads through `readV15`, the one-time v15 → v16 migration
+// (issue #19): the real-life records come across, every habit awaits its
+// class, and the game starts fresh apart from the Almanac's legacy line.
+// SharedSave keeps the original v15 text under PRE_V16_ORIGINAL_SAVE_KEY.
+// Saves older than v15 are refused (ADR-0017's pattern).
 
 export interface SaveFile {
   app: "flowsynth";
@@ -37,6 +38,9 @@ export interface LoadResult {
   recovered?: RecoveryReport;
   // A save from a newer build: refused, and its bytes are never replaced.
   newerVersion?: boolean;
+  // A save older than v15 (ADR-0017's pattern, issue #19): refused, kept
+  // under the pre-v16 key, and the game starts fresh.
+  olderVersion?: number;
 }
 
 // What the recovery could not read, stated as paths (ADR-0082). No figure
@@ -248,7 +252,8 @@ function readSave(text: string, recovery: boolean): LoadResult {
   }
   if (parsed.version < LEGACY_VERSION) {
     return {
-      error: `Incompatible older version (save v${parsed.version}, this build is v${SAVE_VERSION}) — starting fresh.`,
+      error: `This save is from an older version of Flowsynth (v${parsed.version}) and can't be read here. It's kept as it was, and the game starts fresh.`,
+      olderVersion: parsed.version,
     };
   }
   if (!isRecord(parsed.state)) return { error: "The save data is incomplete." };
@@ -265,9 +270,9 @@ function readSave(text: string, recovery: boolean): LoadResult {
 // The one earlier version this build reads (issue #19 migrates it).
 const LEGACY_VERSION = 15;
 
-// The v15 seam: issue #19 replaces this with the one-time v15 → v16
-// migration. Interim: the nested shape issue #17 wrote under v15 reads as
-// v16 does; a flat v15 save reads its records.
+// The one-time v15 → v16 migration (issue #19). A flat v15 save — the
+// retired build's — migrates; the nested shape issue #17's interim wrote
+// under v15 reads as v16 does.
 function readV15(raw: Record<string, unknown>, recovery: boolean): LoadResult {
   if (isRecord(raw.records) && isRecord(raw.game)) return readNested(raw.records, raw.game, LEGACY_VERSION, recovery);
   return readFlat(raw, LEGACY_VERSION, recovery);
@@ -377,8 +382,7 @@ function needsRecovery(lost: string[]): LoadResult {
 // A flat v15 save: the retired build's, or issue #15's interim. The
 // real-life records come across; every habit awaits its class; the game
 // starts fresh apart from a running session's trust ledger and its
-// provisional nous. The legacy line and the original's retention are
-// issue #19's.
+// provisional nous. The collection becomes the Almanac's legacy line.
 function readFlat(raw: Record<string, unknown>, version: number, recovery: boolean): LoadResult {
   if (typeof raw.mode !== "string" || !["upgrade", "flow", "paused", "breather"].includes(raw.mode)) {
     return { error: "The save data has an unknown session mode." };
@@ -414,13 +418,27 @@ function readFlat(raw: Record<string, unknown>, version: number, recovery: boole
     },
     game: {
       ...fresh.game,
+      legacyLine: legacyLineOf(raw.modules),
       mode: flowing ? (raw.mode as GameState["game"]["mode"]) : "upgrade",
       session: flowing ? readSession(raw.session as Partial<SessionState>) : null,
-      summary: isRecord(raw.summary) ? readSummary(raw.summary as Partial<SessionSummary>) : null,
+      // Only a summary the player has yet to see carries its practice
+      // facts across; a dismissed one is the retired game's leftover.
+      summary: isRecord(raw.summary) && raw.summary.seen !== true ? readSummary(raw.summary as Partial<SessionSummary>) : null,
     },
   };
   const recovered = recovery && lost.length > 0 ? { fromVersion: version, lost } : undefined;
   return { state, ...(recovered && { recovered }) };
+}
+
+// The Almanac's one line from the retired game (issue #19): the v15
+// collection's size, placed and unplaced alike. A retired Mutator Forge is
+// not a collection module (the v15 build itself dropped it at load). A
+// flat save with no collection at all is issue #15's interim shape, never
+// a played v15 game: it gets no line.
+function legacyLineOf(modules: unknown): string | null {
+  if (!Array.isArray(modules)) return null;
+  const n = modules.filter((module) => !(isRecord(module) && module.type === "mutatorForge")).length;
+  return `Legacy era · ${n} ${n === 1 ? "module" : "modules"} · archived`;
 }
 
 export const STORAGE_KEY = "flowsynth.save.v1";
@@ -432,3 +450,19 @@ export const ORIGINAL_SAVE_KEY = "flowsynth.save.original.v1";
 // displaces it. The key keeps its historical spelling so existing backups
 // stay where they are.
 export const ARCHIVED_ORIGINAL_SAVE_KEY = "flowsynth.save.original.pre-v13";
+// The one-time v15 → v16 migration's original (issue #19): the exact text
+// of a save older than v16 — a migrated v15 save, or a refused older one —
+// kept before the first v16 write can replace it. The retired build's
+// pre-v13/v14/v15 keys set the spelling.
+export const PRE_V16_ORIGINAL_SAVE_KEY = "flowsynth.save.original.pre-v16";
+
+// Whether these bytes are a Flowsynth save older than v16: the text the
+// pre-v16 key keeps.
+export function isPreV16Save(text: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return isRecord(parsed) && parsed.app === "flowsynth" && typeof parsed.version === "number" && parsed.version < SAVE_VERSION;
+  } catch {
+    return false;
+  }
+}

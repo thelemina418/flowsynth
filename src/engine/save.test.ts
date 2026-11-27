@@ -120,7 +120,7 @@ describe("persistence", () => {
   });
 });
 
-describe("a v15 save's records (issue #15)", () => {
+describe("a v15 save's records (issues #15, #19)", () => {
   it("loads the real-life records and leaves the retired economy behind", () => {
     const result = deserialize(legacyV15());
     expect(result.error).toBeUndefined();
@@ -141,8 +141,9 @@ describe("a v15 save's records (issue #15)", () => {
     }]);
     expect(state.records).toMatchObject({ sessionIndex: 3, sessionsCompleted: 3, nextId: 7 });
     expect(state.records.classCredit).toEqual({ engineer: 0, producer: 0, mixer: 0, roadie: 0 });
-    // The game starts fresh: the retired economy's nous stays behind.
-    expect(state.game).toEqual(fresh().game);
+    // The game starts fresh: the retired economy's nous stays behind, and
+    // the collection leaves one Almanac line (issue #19).
+    expect(state.game).toEqual({ ...fresh().game, legacyLine: "Legacy era · 1 module · archived" });
     for (const retired of ["nous", "modules", "cells", "world", "forge", "achievements", "arete", "prestiges", "scrap"]) {
       expect(state, retired).not.toHaveProperty(retired);
     }
@@ -176,6 +177,31 @@ describe("a v15 save's records (issue #15)", () => {
     expect(state.game.session).toBeNull();
   });
 
+  it("the legacy line counts the collection placed and unplaced, leaving out a retired Mutator Forge", () => {
+    const state = deserialize(legacyV15({
+      modules: [
+        { id: "m1", type: "additive", pos: { q: 0, r: 0 }, level: 3, invested: 30, reserve: 0 },
+        { id: "m2", type: "infusor", pos: null, level: 0, invested: 0, reserve: 0 },
+        { id: "m3", type: "forge", pos: null, level: 0, invested: 0, reserve: 0 },
+        { id: "m4", type: "mutatorForge", pos: null, level: 0, invested: 0, reserve: 0 },
+      ],
+    })).state!;
+    expect(state.game.legacyLine).toBe("Legacy era · 3 modules · archived");
+  });
+
+  it("a flat save with no collection is the interim shape: no legacy line", () => {
+    const file = JSON.parse(legacyV15());
+    delete file.state.modules;
+    expect(deserialize(JSON.stringify(file)).state!.game.legacyLine).toBeNull();
+  });
+
+  it("a dismissed summary stays behind with the retired game", () => {
+    const state = deserialize(legacyV15({
+      summary: { sessionNumber: 3, seconds: 1_500, plannedTarget: 1_500, honestyEvents: [], reflection: null, seen: true },
+    })).state!;
+    expect(state.game.summary).toBeNull();
+  });
+
   it("an unseen summary keeps its practice facts", () => {
     const state = deserialize(legacyV15({
       summary: { sessionNumber: 3, earned: 150, seconds: 1_500, ratePerMinute: 6, plannedTarget: 1_500, honestyEvents: [],
@@ -191,6 +217,7 @@ describe("the version gate", () => {
       const text = serialize(fresh()).replace(`"version": ${SAVE_VERSION}`, `"version": ${version}`);
       const result = deserialize(text);
       expect(result.error, `v${version}`).toMatch(/older version/i);
+      expect(result.olderVersion, `v${version}`).toBe(version);
       expect(result.state, `v${version}`).toBeUndefined();
     }
   });

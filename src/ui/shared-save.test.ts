@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { SAVE_VERSION } from "../engine/constants";
-import { serialize, STORAGE_KEY, ORIGINAL_SAVE_KEY, ARCHIVED_ORIGINAL_SAVE_KEY } from "../engine/save";
+import { serialize, STORAGE_KEY, ORIGINAL_SAVE_KEY, ARCHIVED_ORIGINAL_SAVE_KEY, PRE_V16_ORIGINAL_SAVE_KEY } from "../engine/save";
 import { createInitialState } from "../engine/state";
 import { SharedSave, memorySaveStorage } from "./shared-save";
 
@@ -456,5 +457,95 @@ describe("the lost-money recovery's adoption (issue #494)", () => {
     expect(storage.getItem(ORIGINAL_SAVE_KEY)).toBe(earlier);
     // The protection stands: no save replaces the source.
     expect(owner.write(createInitialState(), 1000, true)).toBe("refused");
+  });
+});
+
+// The one-time v15 → v16 migration (issue #19): the original bytes of any
+// save older than v16 are kept under the pre-v16 key before the first v16
+// write can replace them. A pre-v15 save is refused plainly and kept the
+// same way (ADR-0017's pattern).
+describe("the pre-v16 original (issue #19)", () => {
+  const V15 = readFileSync(new URL("../engine/fixtures/saves/v15-migration.json", import.meta.url), "utf8");
+  const V14 = JSON.stringify({ app: "flowsynth", version: 14, savedAt: 600, state: { mode: "upgrade" } });
+
+  it("a v15 save migrates on load and its exact text is kept under the pre-v16 key before the first v16 write", () => {
+    const storage = memoryStorage();
+    storage.setItem(ORIGINAL_SAVE_KEY, "an earlier lineage's original");
+    storage.setItem(STORAGE_KEY, V15);
+    const owner = new SharedSave(storage, () => 1000);
+    const loaded = owner.load();
+    if (!loaded || "error" in loaded) throw new Error("expected the v15 save to migrate");
+    expect(loaded.state.game.legacyLine).toBe("Legacy era · 4 modules · archived");
+    owner.incorporate(loaded.savedAt);
+    expect(owner.write(loaded.state, loaded.savedAt + 1000)).toBe("written");
+    expect(storage.getItem(PRE_V16_ORIGINAL_SAVE_KEY)).toBe(V15);
+    expect(JSON.parse(storage.getItem(STORAGE_KEY)!).version).toBe(SAVE_VERSION);
+  });
+
+  it("a v15 save written without a prior load is kept before the write replaces it", () => {
+    const storage = memoryStorage();
+    storage.setItem(STORAGE_KEY, V15);
+    const owner = new SharedSave(storage, () => 1000);
+    expect(owner.write(createInitialState(), 2000, true)).toBe("written");
+    expect(storage.getItem(PRE_V16_ORIGINAL_SAVE_KEY)).toBe(V15);
+  });
+
+  it("a denied pre-v16 retention refuses the v16 write rather than lose the original", () => {
+    const storage = memoryStorage();
+    storage.setItem(STORAGE_KEY, V15);
+    const denying = { ...storage, setItem: (key: string, value: string) => {
+      if (key === PRE_V16_ORIGINAL_SAVE_KEY) throw new Error("quota exceeded");
+      storage.setItem(key, value);
+    } };
+    const owner = new SharedSave(denying, () => 1000);
+    expect(owner.write(createInitialState(), 2000, true)).toBe("failed");
+    expect(storage.getItem(STORAGE_KEY)).toBe(V15);
+  });
+
+  it("an imported v15 save is kept under the pre-v16 key with the lineage's original", () => {
+    const storage = memoryStorage();
+    const owner = new SharedSave(storage, () => 1000);
+    expect(owner.retain(V15)).toBe(true);
+    expect(storage.getItem(PRE_V16_ORIGINAL_SAVE_KEY)).toBe(V15);
+    expect(storage.getItem(ORIGINAL_SAVE_KEY)).toBe(V15);
+  });
+
+  it("a pre-v15 save is refused with a plain message, and its original is kept when fresh play replaces it", () => {
+    const storage = memoryStorage();
+    storage.setItem(ORIGINAL_SAVE_KEY, "an earlier lineage's original");
+    storage.setItem(STORAGE_KEY, V14);
+    const owner = new SharedSave(storage, () => 1000);
+    const loaded = owner.load();
+    expect(loaded).toEqual({
+      error: "This save is from an older version of Flowsynth (v14) and can't be read here. It's kept as it was, and the game starts fresh.",
+      olderVersion: 14,
+    });
+    expect(owner.write(createInitialState(), 2000)).toBe("written");
+    expect(storage.getItem(PRE_V16_ORIGINAL_SAVE_KEY)).toBe(V14);
+  });
+
+  it("a lost-money v15 save adopted through recovery is kept under the pre-v16 key", () => {
+    const lost = JSON.stringify({ app: "flowsynth", version: 15, savedAt: 750, state: {
+      mode: "upgrade", habits: [], practiceLog: [], sessionRecords: [], notes: [], goals: [], modules: [],
+      session: null, summary: null, nextId: 1, nous: null } });
+    const storage = memoryStorage();
+    storage.setItem(STORAGE_KEY, lost);
+    const owner = new SharedSave(storage, () => 1000);
+    expect(owner.load()).toMatchObject({ recoveryRequired: true });
+    const recovered = owner.parseRecovered(lost);
+    if ("error" in recovered) throw new Error("expected recovery");
+    expect(owner.adoptRecovered(lost, recovered.state, recovered.savedAt)).toBe(true);
+    expect(storage.getItem(PRE_V16_ORIGINAL_SAVE_KEY)).toBe(lost);
+  });
+
+  it("a second pre-v16 original never displaces the first: the earlier one moves to the key's history", () => {
+    const storage = memoryStorage();
+    storage.setItem(STORAGE_KEY, V14);
+    const owner = new SharedSave(storage, () => 1000);
+    owner.load();
+    owner.write(createInitialState(), 2000);
+    expect(owner.retain(V15)).toBe(true);
+    expect(storage.getItem(PRE_V16_ORIGINAL_SAVE_KEY)).toBe(V15);
+    expect(storage.getItem(`${PRE_V16_ORIGINAL_SAVE_KEY}.1`)).toBe(V14);
   });
 });
