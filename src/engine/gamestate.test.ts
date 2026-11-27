@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { RECONCILIATION_FLOOR_SECONDS } from "./constants";
-import { applyIn, advanceIn, fresh, giveHabit } from "./fixtures";
+import { begin, applyIn, advanceIn, fresh, giveHabit } from "./fixtures";
 import { D, eq } from "./num";
 import { cloneState } from "./state";
 import type { GameState } from "./types";
@@ -11,7 +11,7 @@ import type { GameState } from "./types";
 function flowing(): GameState {
   const s = fresh();
   giveHabit(s, "Piano", "engineer");
-  applyIn(s, { type: "startSession", target: 1_500, now: 1_000 });
+  begin(s, 1_500, 1_000);
   advanceIn(s, 600, "flow");
   return s;
 }
@@ -67,7 +67,7 @@ describe("flow time", () => {
   it("a habit awaiting its class accrues credited time but no class credit", () => {
     const s = fresh();
     giveHabit(s);
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     advanceIn(s, 300, "flow");
     expect(s.records.habits[0]!.seconds).toBe(300);
     expect(s.records.classCredit).toEqual({ engineer: 0, producer: 0, mixer: 0, roadie: 0 });
@@ -133,7 +133,7 @@ describe("choosing a habit's class", () => {
   function withLog(): { s: GameState; id: string } {
     const s = fresh();
     const { habit } = giveHabit(s);
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     advanceIn(s, 1_200, "flow");
     applyIn(s, { type: "endSession", now: 1_200_000 });
     applyIn(s, { type: "logPractice", habitId: habit.id, minutes: 10, now: 1_300_000 });

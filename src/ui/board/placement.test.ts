@@ -154,15 +154,16 @@ describe("drag", () => {
 });
 
 describe("the layout is locked outside upgrade mode", () => {
-  it("in flow, the tray is muted and a click neither picks nor places", () => {
+  it("in flow, the tray is gone and a click neither picks nor places", () => {
     const { shell } = mount();
     click(entry("Sine"));
     click(cell("0,0"));
     act(() => { shell.state.value = { ...shell.state.value, game: { ...shell.state.value.game, mode: "flow" } }; });
-    expect(tray().every((b) => b.disabled)).toBe(true);
+    // The flow screen draws no tray (issue #39), and nothing can be taken.
+    expect(tray()).toEqual([]);
+    expect(shell.placing.canTake("triangle")).toBe(false);
     click(cell("0,0"));
     expect(host.querySelector("[data-picked]")).toBeNull();
-    click(entry("Triangle"));
     click(cell("1,0"));
     expect(placed(shell)).toEqual(["sine@0,0"]);
     // The cell stays focusable for the Hex detail (issue #27), but is no

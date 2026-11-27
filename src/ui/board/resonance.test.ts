@@ -4,7 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
 import { advance } from "../../engine/advance";
 import { apply } from "../../engine/apply";
-import { giveHabit, giveOscillators } from "../../engine/fixtures";
+import { giveHabit, giveOscillators, started } from "../../engine/fixtures";
 import { createInitialState } from "../../engine/state";
 import type { GameState } from "../../engine/types";
 import { memorySaveStorage } from "../shared-save";
@@ -68,7 +68,7 @@ describe("resonance outlines", () => {
     const shell = mount();
     const laid = acceptanceLayout();
     act(() => {
-      shell.state.value = apply(laid, { type: "startSession", target: null, now: 5_000_000_000_000 }).state;
+      shell.state.value = started(laid, 5_000_000_000_000);
     });
     expect(outlines()).toHaveLength(1);
     expect(outlines()[0]!.hasAttribute("data-pulse")).toBe(true);
@@ -80,7 +80,7 @@ describe("resonance outlines", () => {
 
   it("leave the ν readout rising with flow time", () => {
     const shell = mount();
-    let s = apply(acceptanceLayout(), { type: "startSession", target: null, now: 5_000_000_000_000 }).state;
+    let s = started(acceptanceLayout(), 5_000_000_000_000);
     act(() => {
       shell.state.value = s;
     });

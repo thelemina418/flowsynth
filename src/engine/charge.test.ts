@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceIn, applyIn, fresh, giveHabit, giveProducer, ownCells } from "./fixtures";
+import { begin, advanceIn, applyIn, fresh, giveHabit, giveProducer, ownCells } from "./fixtures";
 import type { Cell, Facing } from "./hex";
 import { deserialize, serialize } from "./save";
 import { cloneState } from "./state";
@@ -31,7 +31,7 @@ function flywheel(s: GameState, cell: Cell = O) {
 }
 
 function start(s: GameState): void {
-  if (!applyIn(s, { type: "startSession", target: null, now: 0 }).ok) throw new Error("fixture session failed");
+  if (!begin(s, null, 0).ok) throw new Error("fixture session failed");
 }
 
 function end(s: GameState): void {

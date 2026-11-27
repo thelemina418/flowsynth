@@ -4,7 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
 import { advance } from "../../engine/advance";
 import { apply } from "../../engine/apply";
-import { giveHabit, giveOscillators } from "../../engine/fixtures";
+import { giveHabit, giveOscillators, started } from "../../engine/fixtures";
 import { createInitialState } from "../../engine/state";
 import type { GameState } from "../../engine/types";
 import { memorySaveStorage } from "../shared-save";
@@ -100,7 +100,7 @@ describe("the Hex detail panel", () => {
   it("in flow, only inspects: a click and a key move nothing", () => {
     const shell = mount();
     act(() => {
-      shell.state.value = apply(acceptanceLayout(), { type: "startSession", target: null, now: 5_000_000_000_000 }).state;
+      shell.state.value = started(acceptanceLayout(), 5_000_000_000_000);
     });
     click(cell("1,0"));
     expect(lines()[3]).toBe("1.75 ν/s");
@@ -113,7 +113,7 @@ describe("the Hex detail panel", () => {
 
   it("follows the state as it changes in flow", () => {
     const shell = mount();
-    let s = apply(acceptanceLayout(), { type: "startSession", target: null, now: 5_000_000_000_000 }).state;
+    let s = started(acceptanceLayout(), 5_000_000_000_000);
     act(() => {
       shell.state.value = s;
     });
@@ -129,7 +129,7 @@ describe("the Hex detail panel", () => {
     // the readout follows the new rates without another click.
     s = apply(s, { type: "endSession", now: 5_000_000_060_000 }).state;
     s = apply(s, { type: "removeModule", cell: { q: 0, r: 1 } }).state;
-    s = apply(s, { type: "startSession", target: null, now: 5_000_000_100_000 }).state;
+    s = started(s, 5_000_000_100_000);
     act(() => {
       shell.state.value = s;
     });

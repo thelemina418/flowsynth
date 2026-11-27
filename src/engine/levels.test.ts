@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { apply, type Action } from "./apply";
-import { advanceIn, applyIn, fresh, giveHabit, ownCells } from "./fixtures";
+import { begin, advanceIn, applyIn, fresh, giveHabit, ownCells } from "./fixtures";
 import { cellsWithin, type Cell } from "./hex";
 import { classLevel, grantsOf } from "./levels";
 import { D } from "./num";
@@ -149,7 +149,7 @@ describe("the allowance in play", () => {
   it("credit crossing a threshold in flow raises the derived allowance in the same advance", () => {
     const s = fresh();
     giveHabit(s, "Piano", "engineer");
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     advanceIn(s, 0.5 * HOUR - 1, "flow");
     expect(grantsOf(s).allowance.oscillator).toBe(2);
     advanceIn(s, 1, "flow");

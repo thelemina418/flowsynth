@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { deserialize, serialize } from "./save";
-import { applyIn, advanceIn, fresh, giveHabit } from "./fixtures";
+import { begin, applyIn, advanceIn, fresh, giveHabit } from "./fixtures";
 import type { GameState } from "./types";
 
 // Save integrity at the numeric limits (issue #486): an update whose
@@ -15,7 +15,7 @@ const EDGE = 1.7e308;
 function flowState(target: number | null = null): GameState {
   const s = fresh();
   giveHabit(s);
-  applyIn(s, { type: "startSession", target: target, now: 0 });
+  begin(s, target, 0);
   return s;
 }
 
@@ -33,7 +33,7 @@ describe("the advance walk refuses what it cannot represent (issue #486)", () =>
     const s = fresh();
     const { habit } = giveHabit(s);
     expect(applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 5, schedule: "once", now: 1 }).ok).toBe(true);
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     s.game.session!.accounting.creditedSeconds = EDGE;
     const before = serialize(s, 1000);
     expect(advanceIn(s, EDGE, "flow").fault).toBe("the credited practice time");

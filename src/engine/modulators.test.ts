@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { apply, type Action } from "./apply";
-import { applyIn, fresh, giveHabit } from "./fixtures";
+import { begin, applyIn, fresh, giveHabit } from "./fixtures";
 import { grantsOf } from "./levels";
 import { cloneState } from "./state";
 import type { GameState } from "./types";
@@ -124,7 +124,7 @@ describe("facing", () => {
     const s = fresh();
     applyIn(s, { type: "placeModule", module: "flywheel", cell: O });
     giveHabit(s, "Piano", "producer");
-    applyIn(s, { type: "startSession", target: null, now: 1_000 });
+    begin(s, null, 1_000);
     expectRefused(s, { type: "rotateModule", cell: O, turn: "clockwise" });
     applyIn(s, { type: "pauseSession" });
     expect(s.game.mode).toBe("paused");

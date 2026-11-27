@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { D, pow } from "./num";
-import { applyIn, advanceIn, fresh, giveHabit, giveOscillators } from "./fixtures";
+import { begin, applyIn, advanceIn, fresh, giveHabit, giveOscillators } from "./fixtures";
 import { grantsOf } from "./levels";
 import { SAVE_VERSION } from "./constants";
 import { deserialize, recoverLostSave, serialize, SaveRefusedError } from "./save";
@@ -15,7 +15,7 @@ function flowing() {
   const s = fresh();
   const { habit } = giveHabit(s, "Piano", "engineer");
   applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 20, schedule: "daily", now: 1 });
-  applyIn(s, { type: "startSession", target: 600, now: 1_000 });
+  begin(s, 600, 1_000);
   advanceIn(s, 123.25, "flow");
   return s;
 }

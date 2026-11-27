@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyIn, advanceIn, fresh, habitOf } from "./fixtures";
+import { begin, applyIn, advanceIn, fresh, habitOf } from "./fixtures";
 import { activeHabit, DEFAULT_HABIT_COLOR, HABIT_COLORS, normalizeHabitColor } from "./habits";
 import { serialize, deserialize } from "./save";
 
@@ -15,7 +15,7 @@ describe("habit management", () => {
     expect(applyIn(s, { type: "archiveHabit", id: made.id! }).ok).toBe(true);
     expect(activeHabit(s)).toBeUndefined();
 
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     expect(applyIn(s, { type: "createHabit", name: "X" }).ok).toBe(false);
     expect(applyIn(s, { type: "renameHabit", id: "h1", name: "Y" }).ok).toBe(false);
     expect(applyIn(s, { type: "archiveHabit", id: "h1" }).ok).toBe(false);
@@ -49,7 +49,7 @@ describe("the habit's palette (issue #445, ADR-0075)", () => {
     expect(applyIn(s, { type: "recolorHabit", id: "nope", color: "amber" }).ok).toBe(false);
     expect(applyIn(s, { type: "recolorHabit", id: habit.id, color: "chartreuse" as never }).ok).toBe(false);
     expect(habit.color).toBe("cyan");
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     expect(applyIn(s, { type: "recolorHabit", id: habit.id, color: "amber" }).ok).toBe(false);
     applyIn(s, { type: "endSession", now: 0 });
     expect(habit.color).toBe("cyan");
@@ -75,14 +75,14 @@ describe("habit development", () => {
     const s = fresh();
     const piano = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
     applyIn(s, { type: "selectHabit", id: piano.id });
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 300, "flow");
     expect(piano.seconds).toBeCloseTo(300, 6);
     applyIn(s, { type: "endSession", now: 1_000 });
 
     const cooking = habitOf(s, applyIn(s, { type: "createHabit", name: "Cooking" }));
     applyIn(s, { type: "selectHabit", id: cooking.id });
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 120, "flow");
     expect(piano.seconds).toBeCloseTo(300, 6);
     expect(cooking.seconds).toBeCloseTo(120, 6);
@@ -92,7 +92,7 @@ describe("habit development", () => {
     const s = fresh();
     const piano = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
     applyIn(s, { type: "selectHabit", id: piano.id });
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 60, "flow");
     s.game.mode = "paused";
     advanceIn(s, 600, "flow");
@@ -119,7 +119,7 @@ describe("habit development", () => {
     applyIn(s, { type: "logPractice", habitId: piano.id, minutes: 10, now: 0 });
     expect(piano.seconds).toBeCloseTo(600, 6);
     applyIn(s, { type: "selectHabit", id: piano.id });
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 100, "flow");
     expect(piano.seconds).toBeCloseTo(700, 6);
   });
@@ -128,7 +128,7 @@ describe("habit development", () => {
     const s = fresh();
     const piano = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
     applyIn(s, { type: "selectHabit", id: piano.id });
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 250, "flow");
     applyIn(s, { type: "endSession", now: 5_000 });
     expect(s.records.practiceLog).toHaveLength(1);
@@ -136,7 +136,7 @@ describe("habit development", () => {
     expect(s.records.practiceLog[0]!.seconds).toBeCloseTo(250, 6);
     expect(s.records.practiceLog[0]!.at).toBe(5_000);
 
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 10, "flow");
     applyIn(s, { type: "endSession", now: 6_000 });
     expect(s.records.practiceLog).toHaveLength(2);
@@ -146,7 +146,7 @@ describe("habit development", () => {
     const s = fresh();
     const piano = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
     applyIn(s, { type: "selectHabit", id: piano.id });
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 300, "flow");
     applyIn(s, { type: "endSession", now: 9_000 });
     applyIn(s, { type: "logPractice", habitId: piano.id, minutes: 5, now: 9_500 });

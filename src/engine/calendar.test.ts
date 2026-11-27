@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyIn, advanceIn, fresh, habitOf, intentionOf } from "./fixtures";
+import { begin, applyIn, advanceIn, fresh, habitOf, intentionOf } from "./fixtures";
 import { occurrenceKeyFor, occurrenceStartFor } from "./intentions";
 import type { IntentionSchedule } from "./types";
 
@@ -85,7 +85,7 @@ describe("the declared calendar basis (issue #505)", () => {
     const s = fresh();
     const habit = withHabit(s);
     const intention = intentionOf(s, applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 60, schedule: "weekly", now: boundary - DAY_MS }));
-    applyIn(s, { type: "startSession", target: null, now: boundary - 600_000 });
+    begin(s, null, boundary - 600_000);
     advanceIn(s, 1200, "flow");
     applyIn(s, { type: "endSession", now: boundary + 600_000 });
     applyIn(s, { type: "editIntention", id: intention.id, minutes: 60, schedule: "daily", now: boundary + 600_000 });

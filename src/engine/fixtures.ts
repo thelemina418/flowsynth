@@ -62,6 +62,35 @@ export function giveHabit(state: GameState, name = "Piano", habitClass?: HabitCl
   return { habit: state.records.habits.find((h) => h.id === created.id)! };
 }
 
+// A started session (issue #39): `startSession` carries a classed habit,
+// so this starts on the given habit, the active one, or the first live
+// one, and makes an Engineer "Piano" when there is none. Two shapes the
+// engine never starts stand for what a migrated save can hold: a null
+// target is an open-ended session, and a habit still awaiting its class
+// runs unclassed (the fixture lends it a class for the start only).
+export function begin(state: GameState, target: number | null = 1500, now = 0, habitId?: string): ApplyResult {
+  const live = (h: Habit) => !h.archived;
+  const habit =
+    state.records.habits.find((h) => h.id === habitId) ??
+    (habitId === undefined ? state.records.habits.find((h) => h.id === state.records.activeHabitId && live(h)) : undefined) ??
+    (habitId === undefined ? state.records.habits.find((h) => live(h) && h.habitClass !== null) : undefined) ??
+    (habitId === undefined && state.game.mode === "upgrade" ? habitOf(state, applyIn(state, { type: "createHabit", name: "Piano", habitClass: "engineer" })) : undefined);
+  const awaiting = habit !== undefined && habit.habitClass === null;
+  if (habit && awaiting) habit.habitClass = "engineer";
+  const result = applyIn(state, { type: "startSession", habitId: habit?.id ?? habitId ?? "none", target: target ?? 1500, now });
+  if (habit && awaiting) state.records.habits.find((h) => h.id === habit.id)!.habitClass = null;
+  if (result.ok && target === null) state.game.session!.target = null;
+  return result;
+}
+
+// The same, for tests that pass states along: starts on `state` and
+// returns it.
+export function started(state: GameState, now = 0, target: number | null = 1500): GameState {
+  const result = begin(state, target, now);
+  if (!result.ok) throw new Error(`fixture session failed: ${result.reason}`);
+  return state;
+}
+
 // Class credit at the lowest level of `habitClass` whose derived grants
 // (engine/levels.ts, issue #38) satisfy `enough`: allowance and types come
 // from levels alone, so a test reaches them by credit.

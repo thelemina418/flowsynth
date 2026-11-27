@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { RECONCILIATION_FLOOR_SECONDS } from "./constants";
-import { applyIn, advanceIn, fresh, plainHabit } from "./fixtures";
+import { begin, applyIn, advanceIn, fresh, plainHabit } from "./fixtures";
 import { recordTargetHit } from "./records";
 import { deserialize, serialize } from "./save";
 import { poolOutstanding } from "./trust";
@@ -23,7 +23,7 @@ function away(state: GameState, seconds: number): void {
 describe("presence: visible credits live in every slice", () => {
   it("planned, under target: presence credits live", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 300, "flow", "visible", 0);
     expect(s.game.session!.accounting.creditedSeconds).toBeCloseTo(300, 6);
     expect(s.game.session!.accounting.poolSeconds).toBe(0);
@@ -31,7 +31,7 @@ describe("presence: visible credits live in every slice", () => {
 
   it("planned, past target: overrun presence still credits live — presence is always trusted", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 600, "flow");
     advanceIn(s, 300, "flow", "visible", 0);
     expect(s.game.session!.accounting.creditedSeconds).toBeCloseTo(900, 6);
@@ -40,7 +40,7 @@ describe("presence: visible credits live in every slice", () => {
 
   it("open-ended: presence credits live", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     advanceIn(s, 120, "flow", "visible", 0);
     expect(s.game.session!.accounting.creditedSeconds).toBeCloseTo(120, 6);
   });
@@ -49,7 +49,7 @@ describe("presence: visible credits live in every slice", () => {
 describe("presence: hidden away through the trust table", () => {
   it("planned, under target: away is trusted — auto-credits, never questioned", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     away(s, 400);
     expect(s.game.session!.accounting.creditedSeconds).toBeCloseTo(400, 6);
     expect(s.game.session!.accounting.poolSeconds).toBe(0);
@@ -58,7 +58,7 @@ describe("presence: hidden away through the trust table", () => {
 
   it("planned, past target: away is provisional — the minutes wait in the pool", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 600, "flow");
     away(s, 300);
     expect(s.game.session!.accounting.poolSeconds).toBeCloseTo(300, 6);
@@ -68,7 +68,7 @@ describe("presence: hidden away through the trust table", () => {
 
   it("a gap spanning the target splits at the return: under-plan auto-credits, past-target goes provisional", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     away(s, 900);
     expect(s.game.session!.accounting.creditedSeconds).toBeCloseTo(600, 6);
     expect(s.game.session!.accounting.poolSeconds).toBeCloseTo(300, 6);
@@ -76,7 +76,7 @@ describe("presence: hidden away through the trust table", () => {
 
   it("open-ended past the floor: all away time is provisional", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     away(s, 1200);
     expect(s.game.session!.accounting.poolSeconds).toBeCloseTo(1200, 6);
     expect(s.game.session!.accounting.creditedSeconds).toBe(0);
@@ -84,7 +84,7 @@ describe("presence: hidden away through the trust table", () => {
 
   it("paused credits nothing — neither present nor away", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     applyIn(s, { type: "pauseSession" });
     const before = s.game.session!.elapsed;
     advanceIn(s, 600, "flow", "visible", 0);
@@ -96,7 +96,7 @@ describe("presence: hidden away through the trust table", () => {
 describe("presence: sub-floor absences auto-credit silently on both modes", () => {
   it("open-ended, below the floor: credits, never joins the pool", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     away(s, RECONCILIATION_FLOOR_SECONDS - 1);
     expect(s.game.session!.accounting.creditedSeconds).toBeCloseTo(RECONCILIATION_FLOOR_SECONDS - 1, 6);
     expect(s.game.session!.accounting.poolSeconds).toBe(0);
@@ -104,7 +104,7 @@ describe("presence: sub-floor absences auto-credit silently on both modes", () =
 
   it("planned, past target, below the floor: still auto-credits silently", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 600, "flow");
     away(s, RECONCILIATION_FLOOR_SECONDS - 1);
     expect(s.game.session!.accounting.creditedSeconds).toBeCloseTo(600 + RECONCILIATION_FLOOR_SECONDS - 1, 6);
@@ -113,7 +113,7 @@ describe("presence: sub-floor absences auto-credit silently on both modes", () =
 
   it("a hidden stretch classifies whole, never per throttled wake-up", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     // A throttled tab wakes ~1/min: ten buffered wake-ups are one absence.
     for (let i = 0; i < 10; i++) advanceIn(s, 60, "flow", "away", 0);
     advanceIn(s, 0, "flow");
@@ -125,7 +125,7 @@ describe("presence: sub-floor absences auto-credit silently on both modes", () =
 describe("presence: slept gaps size by dual-clock drift", () => {
   it("a positive drift step is away even while the tab stayed visible", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     advanceIn(s, 3600, "flow", "visible", 1800);
     // The machine slept for 1800 s of the 3600 s wall gap: that span is
     // away (provisional, open-ended past the floor); the awake half credits
@@ -136,7 +136,7 @@ describe("presence: slept gaps size by dual-clock drift", () => {
 
   it("sleep-gap credit clamps at the plan on planned sessions", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 5000, "flow", "visible", 5000);
     expect(s.game.session!.accounting.creditedSeconds).toBeCloseTo(600, 6);
     expect(s.game.session!.accounting.poolSeconds).toBeCloseTo(4400, 6);
@@ -144,7 +144,7 @@ describe("presence: slept gaps size by dual-clock drift", () => {
 
   it("sub-noise jitter steps neither discard the gap nor size a sleep", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     // Whole-millisecond quantization jitters the measured drift a
     // millisecond or two per boundary (§1): sub-floor in either direction,
     // so each gap credits whole and sizes no sleep.
@@ -156,7 +156,7 @@ describe("presence: slept gaps size by dual-clock drift", () => {
 
   it("a sub-noise positive step sizes no sleep, even where the slice would go provisional", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 600, "flow");
     advanceIn(s, 1800, "flow", "visible", 0.04);
     // +40 ms of jitter lands past the plan, where a real slept slice goes
@@ -168,7 +168,7 @@ describe("presence: slept gaps size by dual-clock drift", () => {
 
   it("a negative drift step (clock rolled back) credits zero", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 600, "flow", "visible", -120);
     expect(s.game.session!.elapsed).toBeCloseTo(0, 6);
     expect(s.game.session!.accounting.creditedSeconds).toBe(0);
@@ -176,14 +176,14 @@ describe("presence: slept gaps size by dual-clock drift", () => {
 
   it("sleep during an already-hidden stretch changes nothing: the stretch is away regardless", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     away(s, 3000);
     expect(s.game.session!.accounting.poolSeconds).toBeCloseTo(3000, 6);
   });
 
   it("slept past the plan on a planned session: the sleep slice past the target goes provisional", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 600, "flow");
     advanceIn(s, 1800, "flow", "visible", 1800);
     // All 1800 s of sleep land past the target: nothing credits, all of it
@@ -194,7 +194,7 @@ describe("presence: slept gaps size by dual-clock drift", () => {
 
   it("a slept gap straddling the plan: sleep clamps at the target, the awake tail credits live", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 1800, "flow", "visible", 1000);
     // Sleep: 600 s trusted up to the plan, 400 s provisional; then 800 s
     // awake presence credits live past the target.
@@ -207,7 +207,7 @@ describe("presence: slept gaps size by dual-clock drift", () => {
 describe("one reconcile path: discard, reload, and import", () => {
   it("a mid-session reload classifies the saved gap as away through the same rules", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 300, "flow");
     const savedAt = 1_000_000;
     const loaded = deserialize(serialize(s, savedAt))!.state!;
@@ -220,7 +220,7 @@ describe("one reconcile path: discard, reload, and import", () => {
 
   it("a discarded tab's long gap flows provisional on open-ended and the report waits", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     advanceIn(s, 120, "flow");
     const loaded = deserialize(serialize(s, 5_000))!.state!;
     away(loaded, 3600);
@@ -231,7 +231,7 @@ describe("one reconcile path: discard, reload, and import", () => {
 
   it("an imported save with a running session reconciles identically", () => {
     const original = fresh();
-    applyIn(original, { type: "startSession", target: 600, now: 0 });
+    begin(original, 600, 0);
     advanceIn(original, 600, "flow");
     const imported = deserialize(serialize(original, 2_000_000))!.state!;
     away(imported, 1500);
@@ -242,7 +242,7 @@ describe("one reconcile path: discard, reload, and import", () => {
 
   it("an imported save's sub-floor gap auto-credits silently, never joining the pool", () => {
     const original = fresh();
-    applyIn(original, { type: "startSession", target: null, now: 0 });
+    begin(original, null, 0);
     advanceIn(original, 60, "flow");
     const imported = deserialize(serialize(original, 2_000_000))!.state!;
     away(imported, RECONCILIATION_FLOOR_SECONDS - 1);
@@ -252,7 +252,7 @@ describe("one reconcile path: discard, reload, and import", () => {
 
   it("a discarded tab's gap on a planned session still under the plan is trusted in full", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 120, "flow");
     const loaded = deserialize(serialize(s, 5_000))!.state!;
     away(loaded, 300);
@@ -265,7 +265,7 @@ describe("one reconcile path: discard, reload, and import", () => {
 describe("the honesty report", () => {
   it("didn't practice: the pool credits 0 in one move", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     advanceIn(s, 60, "flow");
     away(s, 600);
     const resolution = applyIn(s, { type: "settleHonestyReport", outcome: "missed" });
@@ -277,7 +277,7 @@ describe("the honesty report", () => {
 
   it("did what I planned: credit rises to max(C, T); the pool credits only up to the plan", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 600, "flow");
     away(s, 300);
     const resolution = applyIn(s, { type: "settleHonestyReport", outcome: "planned" });
@@ -288,7 +288,7 @@ describe("the honesty report", () => {
 
   it("practiced the whole time away: the pool credits fully", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 600, "flow");
     away(s, 300);
     applyIn(s, { type: "settleHonestyReport", outcome: "full" });
@@ -298,14 +298,14 @@ describe("the honesty report", () => {
 
   it("open-ended sessions have no middle option: matching a plan is rejected", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     away(s, 600);
     expect(applyIn(s, { type: "settleHonestyReport", outcome: "planned" }).ok).toBe(false);
   });
 
   it("an unanswered pool rolls forward and the next answer settles the whole recalculated pool", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     away(s, 300);
     away(s, 300);
     expect(s.game.session!.accounting.poolSeconds).toBeCloseTo(600, 6);
@@ -315,7 +315,7 @@ describe("the honesty report", () => {
 
   it("nothing already credited is ever retracted by a later miss", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     away(s, 600);
     applyIn(s, { type: "settleHonestyReport", outcome: "full" });
     expect(s.game.session!.accounting.creditedSeconds).toBeCloseTo(600, 6);
@@ -339,7 +339,7 @@ describe("the honesty report", () => {
       completedCount: 0,
       createdAt: 0,
     });
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     away(s, 900);
     // Provisional time sits: no habit seconds, no intention progress.
     expect(s.records.habits[0]!.seconds).toBe(0);
@@ -355,7 +355,7 @@ describe("credited practice time is the consumers' seam", () => {
     const s = fresh();
     s.records.habits.push(plainHabit("h1"));
     s.records.activeHabitId = "h1";
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 600, "flow");
     away(s, 300);
     applyIn(s, { type: "settleHonestyReport", outcome: "full" });
@@ -369,7 +369,7 @@ describe("credited practice time is the consumers' seam", () => {
 
   it("a reported miss never suppresses a presence-earned target hit", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 600, "flow");
     away(s, 300);
     applyIn(s, { type: "settleHonestyReport", outcome: "missed" });
@@ -380,7 +380,7 @@ describe("credited practice time is the consumers' seam", () => {
 
   it("ending with the pool outstanding is refused — the answer is mandatory and final", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     away(s, 600);
     const result = applyIn(s, { type: "endSession", now: 5_000 });
     expect(result.ok).toBe(false);

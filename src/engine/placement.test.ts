@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { apply, type Action } from "./apply";
-import { applyIn, fresh, giveHabit, giveOscillators } from "./fixtures";
+import { begin, applyIn, fresh, giveHabit, giveOscillators } from "./fixtures";
 import { lifetimeCells } from "./hex";
 import { placementRefusal, trayRefusal, type PlacementAction } from "./placement";
 import { grantsOf } from "./levels";
@@ -33,7 +33,7 @@ function expectRefused(s: GameState, action: Action) {
 
 function inFlow(s: GameState) {
   giveHabit(s, "Piano", "engineer");
-  applyIn(s, { type: "startSession", target: null, now: 1_000 });
+  begin(s, null, 1_000);
 }
 
 describe("a fresh start", () => {

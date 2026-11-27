@@ -1,7 +1,9 @@
 import { computed, signal } from "@preact/signals";
+import { advance } from "../../engine/advance";
 import { apply, type Action, type ApplyResult } from "../../engine/apply";
 import type { Cell } from "../../engine/hex";
 import { createInitialState } from "../../engine/state";
+import type { Presence } from "../../engine/trust";
 import type { GameState, Habit, HabitClass } from "../../engine/types";
 import { Placing } from "../board/placing";
 import { SharedSave, type SaveStorage } from "../shared-save";
@@ -9,11 +11,15 @@ import { SharedSave, type SaveStorage } from "../shared-save";
 // The shell (issue #21): what opening the app owes before any game surface
 // exists. It loads, migrates and saves through SharedSave (ADR-0032's
 // stale-tab guard), offers the explicit recovery (ADR-0082) when a load
-// requires it, and asks each habit awaiting a class for one.
+// requires it, and asks each habit awaiting a class for one. From upgrade
+// mode it opens Begin flow, and in flow it runs the session clock's
+// boundary (issue #39).
 
 export type Screen =
   | { kind: "recovery"; raw: string; lost: string[]; error: string | null }
   | { kind: "class"; habit: Habit; liveSeconds: number; open: HabitClass[]; error: string | null }
+  | { kind: "begin"; error: string | null }
+  | { kind: "flow"; error: string | null }
   | { kind: "ready" };
 
 interface Offer {
@@ -37,6 +43,16 @@ export class Shell {
   readonly placing = new Placing(this.state, (action) => this.act(action));
   // The cell the Hex detail reads (issue #27), or null while it is empty.
   readonly inspected = signal<Cell | null>(null);
+  // The Begin flow panel (issue #39): open from upgrade mode, with the
+  // last refusal as its one quiet line. The flow screen has its own line.
+  private readonly beginOpen = signal(false);
+  private readonly beginError = signal<string | null>(null);
+  private readonly flowError = signal<string | null>(null);
+  // The clock boundary's last reading: the wall clock and the drift
+  // between the wall and performance clocks, both in ms. Null while no
+  // session clock is running.
+  private lastWall: number | null = null;
+  private lastDrift = 0;
 
   readonly screen = computed<Screen>(() => {
     const offer = this.recovery.value;
@@ -46,10 +62,20 @@ export class Shell {
     if (habit) {
       return { kind: "class", habit, liveSeconds: liveSeconds(state, habit.id), open: [...state.game.openClasses], error: this.classError.value };
     }
+    const mode = state.game.mode;
+    if (mode === "flow" || mode === "paused") return { kind: "flow", error: this.flowError.value };
+    if (this.beginOpen.value) return { kind: "begin", error: this.beginError.value };
     return { kind: "ready" };
   });
 
-  constructor(storage: SaveStorage, private readonly now: () => number = () => Date.now()) {
+  // `now` is the wall clock. `drift` is the wall clock minus the
+  // performance clock, in ms (0 in tests): a step in it is time the page
+  // slept through (trust.applyGap).
+  constructor(
+    storage: SaveStorage,
+    private readonly now: () => number = () => Date.now(),
+    private readonly drift: () => number = () => 0,
+  ) {
     this.save = new SharedSave(storage, now);
   }
 
@@ -65,8 +91,131 @@ export class Shell {
       return;
     }
     this.save.incorporate(parsed.savedAt);
-    this.state.value = parsed.state;
+    this.state.value = this.reconciled(parsed.state, parsed.savedAt);
     this.persist();
+  }
+
+  // A session saved mid-flow (the old console's resume from a save): the
+  // wall-clock gap since the save is an offline absence, settled at once
+  // by the trust rules, since the page is open again. Paused time credits
+  // nothing.
+  private reconciled(state: GameState, savedAt: number): GameState {
+    const mode = state.game.mode;
+    if (mode !== "flow" && mode !== "paused") return state;
+    const now = this.now();
+    let next = state;
+    if (mode === "flow") {
+      const away = advance(next, Math.max(0, (now - savedAt) / 1000), "flow", "offline", 0);
+      if (away.fault === undefined) next = away.state;
+      const back = advance(next, 0, "flow", "visible", 0);
+      if (back.fault === undefined) next = back.state;
+    }
+    this.seed(now);
+    return this.marked(next);
+  }
+
+  private seed(now: number): void {
+    this.lastWall = now;
+    this.lastDrift = this.drift();
+  }
+
+  // The planned target, marked the first time it is passed (spec chunk
+  // 04): once per session. The mark is saved, so a reload never marks it
+  // again, and the session runs on.
+  private marked(state: GameState): GameState {
+    const session = state.game.session;
+    if (!session || session.target === null || session.targetSignaled || session.elapsed < session.target) return state;
+    const result = apply(state, { type: "signalTarget" });
+    return result.ok ? result.state : state;
+  }
+
+  // The clock boundary (issue #39): in flow or paused, the wall-clock gap
+  // and the drift step since the last boundary go to `advance` (paused
+  // time credits nothing). Upgrade mode moves nothing. Every step is
+  // saved.
+  boundary(presence: Presence): void {
+    const state = this.state.peek();
+    const mode = state.game.mode;
+    const now = this.now();
+    if (mode !== "flow" && mode !== "paused") {
+      this.lastWall = null;
+      return;
+    }
+    if (this.lastWall === null) {
+      this.seed(now);
+      return;
+    }
+    const drift = this.drift();
+    const gap = Math.max(0, (now - this.lastWall) / 1000);
+    const driftStep = (drift - this.lastDrift) / 1000;
+    this.lastWall = now;
+    this.lastDrift = drift;
+    const walked = advance(state, gap, "flow", presence, driftStep);
+    if (walked.fault !== undefined) {
+      this.notice.value = `Time couldn't be counted · ${walked.fault}`;
+      return;
+    }
+    this.state.value = this.marked(walked.state);
+    this.persist();
+  }
+
+  openBegin(): void {
+    if (this.state.peek().game.mode !== "upgrade") return;
+    this.beginError.value = null;
+    this.beginOpen.value = true;
+  }
+
+  closeBegin(): void {
+    this.beginOpen.value = false;
+    this.beginError.value = null;
+  }
+
+  // `+ New habit` in the Begin flow panel. A refusal is the panel's line.
+  createHabit(name: string, habitClass: HabitClass): string | null {
+    const result = this.act({ type: "createHabit", name, habitClass });
+    this.beginError.value = result.ok ? null : (result.reason ?? null);
+    return result.ok ? (result.id ?? null) : null;
+  }
+
+  // Begin: the habit and the planned length in minutes, in one action.
+  beginFlow(habitId: string | null, minutes: number): void {
+    const now = this.now();
+    const result = this.act({ type: "startSession", habitId: habitId ?? "", target: minutes * 60, now });
+    if (!result.ok) {
+      this.beginError.value = result.reason ?? null;
+      return;
+    }
+    this.closeBegin();
+    this.flowError.value = null;
+    this.inspected.value = null;
+    this.placing.clear();
+    this.seed(now);
+  }
+
+  // Pause and Resume close the span since the last boundary first, so a
+  // paused span never credits and a live one is never lost.
+  pause(): void {
+    this.boundary("visible");
+    this.act({ type: "pauseSession" });
+  }
+
+  resume(): void {
+    this.boundary("visible");
+    this.act({ type: "resumeSession" });
+  }
+
+  // End flushes a visible boundary, then ends the session.
+  end(): void {
+    this.boundary("visible");
+    const result = this.act({ type: "endSession", now: this.now() });
+    this.flowError.value = result.ok ? null : (result.reason ?? null);
+    if (!result.ok) return;
+    this.lastWall = null;
+    this.inspected.value = null;
+  }
+
+  writeNote(text: string): ApplyResult {
+    return this.act({ type: "writeNote", text, now: this.now() });
   }
 
   // The explicit recovery (ADR-0082): the same bytes through the recovery
@@ -115,8 +264,8 @@ export class Shell {
     this.persist();
   }
 
-  // The one placement path: apply, adopt and save on success. A refusal
-  // leaves the state as it was.
+  // The one path for an action: apply, adopt and save on success. A
+  // refusal leaves the state as it was.
   act(action: Action): ApplyResult {
     const result = apply(this.state.peek(), action);
     if (result.ok) {

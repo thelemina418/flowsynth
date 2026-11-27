@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { RECONCILIATION_FLOOR_SECONDS } from "./constants";
-import { applyIn, advanceIn, fresh, giveHabit, giveOscillators } from "./fixtures";
+import { begin, applyIn, advanceIn, fresh, giveHabit, giveOscillators } from "./fixtures";
 import { cloneState } from "./state";
 import type { GameState, HonestyOutcome } from "./types";
 
@@ -21,7 +21,7 @@ function acceptanceLayout(): GameState {
 }
 
 function start(s: GameState, target: number | null = null): void {
-  if (!applyIn(s, { type: "startSession", target, now: 0 }).ok) throw new Error("fixture session failed");
+  if (!begin(s, target, 0).ok) throw new Error("fixture session failed");
 }
 
 describe("trusted flow", () => {

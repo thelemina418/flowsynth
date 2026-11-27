@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { habitPracticeSummary, habitRecordName, habitTaggedNotes, recordMissed, recordTargetHit, sessionRecordsNewestFirst } from "./records";
 import { deserialize, serialize } from "./save";
 import type { GameState } from "./types";
-import { applyIn, advanceIn, fresh, habitOf, intentionOf } from "./fixtures";
+import { begin, applyIn, advanceIn, fresh, habitOf, intentionOf } from "./fixtures";
 
 // Session records (focus-tool spec §9): one append-only entry per session
 // at close, whatever its length or mode; history derives hits and misses,
@@ -20,19 +20,20 @@ describe("the session record", () => {
     const s = fresh();
     const habit = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
     applyIn(s, { type: "selectHabit", id: habit.id });
-    applyIn(s, { type: "startSession", target: 600, now: START });
+    begin(s, 600, START);
     practice(s, 600);
     applyIn(s, { type: "endSession", now: START + 600_000 });
 
-    applyIn(s, { type: "startSession", target: null, now: START + 700_000 });
+    begin(s, null, START + 700_000);
     practice(s, 60);
     applyIn(s, { type: "endSession", now: START + 760_000 });
 
-    applyIn(s, { type: "selectHabit", id: null });
-    applyIn(s, { type: "startSession", target: null, now: START + 800_000 });
+    // An unstructured session is one a migrated save can still hold.
+    begin(s, null, START + 800_000);
+    s.records.activeHabitId = null;
     applyIn(s, { type: "endSession", now: START + 800_500 });
 
-    applyIn(s, { type: "startSession", target: 600, now: START + 900_000 });
+    begin(s, 600, START + 900_000);
     applyIn(s, { type: "endSession", now: START + 900_400 });
 
     expect(s.records.sessionRecords).toHaveLength(4);
@@ -47,7 +48,7 @@ describe("the session record", () => {
 
   it("carries the start and end stamps from the wall clock", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: START });
+    begin(s, 600, START);
     practice(s, 600);
     applyIn(s, { type: "endSession", now: END });
     expect(s.records.sessionRecords[0]!.startedAt).toBe(START);
@@ -56,7 +57,7 @@ describe("the session record", () => {
 
   it("a pre-§9 session resumed without a start stamp dates its record at close, not 1970", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     practice(s, 60);
     applyIn(s, { type: "endSession", now: END });
     expect(s.records.sessionRecords[0]!.startedAt).toBe(END);
@@ -66,7 +67,7 @@ describe("the session record", () => {
     const s = fresh();
     const habit = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
     applyIn(s, { type: "selectHabit", id: habit.id });
-    applyIn(s, { type: "startSession", target: 600, now: START });
+    begin(s, 600, START);
     practice(s, 600);
     // Half an hour away past the plan, reported as a miss: C stays at the
     // plan.
@@ -81,7 +82,7 @@ describe("the session record", () => {
 
   it("a planned honesty answer lifts credited seconds above presence", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 1800, now: START });
+    begin(s, 1800, START);
     practice(s, 1800);
     advanceIn(s, 600, "flow", "away", 0);
     advanceIn(s, 0, "flow");
@@ -95,7 +96,7 @@ describe("the session record", () => {
 
   it("the reflection joins the record as the summary records it", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: START });
+    begin(s, 600, START);
     practice(s, 600);
     applyIn(s, { type: "endSession", now: END });
     expect(s.records.sessionRecords[0]!.reflection).toBeNull();
@@ -108,7 +109,7 @@ describe("the session record", () => {
     const habit = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
     applyIn(s, { type: "selectHabit", id: habit.id });
     const intention = intentionOf(s, applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 5, schedule: "once", now: START }));
-    applyIn(s, { type: "startSession", target: null, now: START });
+    begin(s, null, START);
     practice(s, 120);
     applyIn(s, { type: "endSession", now: END });
     expect(s.records.sessionRecords[0]!.goalsAdvanced).toMatchObject([{ goalId: intention.id, seconds: 120 }]);
@@ -121,7 +122,7 @@ describe("the session record", () => {
     const habit = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
     applyIn(s, { type: "selectHabit", id: habit.id });
     const intention = intentionOf(s, applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 40, schedule: "once", now: START }));
-    applyIn(s, { type: "startSession", target: 1800, now: START });
+    begin(s, 1800, START);
     practice(s, 1800);
     advanceIn(s, 600, "flow", "away", 0);
     advanceIn(s, 0, "flow");
@@ -137,7 +138,7 @@ describe("the session record", () => {
     applyIn(s, { type: "selectHabit", id: habit.id });
     applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 5, schedule: "once", now: START });
     applyIn(s, { type: "logPractice", habitId: habit.id, minutes: 10, now: START });
-    applyIn(s, { type: "startSession", target: null, now: START });
+    begin(s, null, START);
     practice(s, 60);
     applyIn(s, { type: "endSession", now: END });
     expect(s.records.sessionRecords[0]!.goalsAdvanced).toEqual([]);
@@ -147,7 +148,7 @@ describe("the session record", () => {
     const s = fresh();
     const habit = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
     applyIn(s, { type: "selectHabit", id: habit.id });
-    applyIn(s, { type: "startSession", target: 600, now: START });
+    begin(s, 600, START);
     practice(s, 600);
     applyIn(s, { type: "endSession", now: END });
     expect(s.records.sessionRecords[0]!.habitId).toBe(habit.id);
@@ -161,7 +162,7 @@ describe("the session record", () => {
     const s = fresh();
     const habit = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
     applyIn(s, { type: "selectHabit", id: habit.id });
-    applyIn(s, { type: "startSession", target: 600, now: START });
+    begin(s, 600, START);
     practice(s, 600);
     applyIn(s, { type: "endSession", now: END });
     applyIn(s, { type: "reflect", text: "kept" });
@@ -173,7 +174,7 @@ describe("the session record", () => {
   it("the newest-first view reverses the append-only run", () => {
     const s = fresh();
     for (let i = 0; i < 3; i++) {
-      applyIn(s, { type: "startSession", target: null, now: START + i * 1000 });
+      begin(s, null, START + i * 1000);
       applyIn(s, { type: "endSession", now: START + i * 1000 + 500 });
     }
     expect(sessionRecordsNewestFirst(s).map((r) => r.sessionNumber)).toEqual([3, 2, 1]);
@@ -185,7 +186,7 @@ describe("habit development aggregates (§9)", () => {
     const s = fresh();
     const habit = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
     applyIn(s, { type: "selectHabit", id: habit.id });
-    applyIn(s, { type: "startSession", target: null, now: START });
+    begin(s, null, START);
     practice(s, 60);
     applyIn(s, { type: "endSession", now: START + 120_000 });
     applyIn(s, { type: "logPractice", habitId: habit.id, minutes: 10, now: START + 500_000 });
@@ -204,7 +205,7 @@ describe("habit development aggregates (§9)", () => {
     const s = fresh();
     const habit = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
     applyIn(s, { type: "selectHabit", id: habit.id });
-    applyIn(s, { type: "startSession", target: null, now: START });
+    begin(s, null, START);
     applyIn(s, { type: "writeNote", text: "first thought", now: START + 1000 });
     applyIn(s, { type: "writeNote", text: "second thought", now: START + 2000 });
     expect(habitTaggedNotes(s, habit.id).map((n) => n.text)).toEqual(["second thought", "first thought"]);

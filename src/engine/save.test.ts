@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { D, eq } from "./num";
-import { applyIn, advanceIn, fresh, giveHabit } from "./fixtures";
+import { begin, applyIn, advanceIn, fresh, giveHabit } from "./fixtures";
 import { SAVE_VERSION } from "./constants";
 import { deserialize, serialize, SaveRefusedError } from "./save";
 import type { GameState } from "./types";
@@ -57,7 +57,7 @@ describe("persistence", () => {
     const { habit } = giveHabit(s);
     applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 20, schedule: "daily", now: 1 });
     applyIn(s, { type: "writeNote", text: "between sessions", now: 500 });
-    applyIn(s, { type: "startSession", target: 600, now: 1_000 });
+    begin(s, 600, 1_000);
     advanceIn(s, 123.25, "flow");
     applyIn(s, { type: "writeNote", text: "in flow", now: 1_200 });
     const text = serialize(s, 1_000);
@@ -74,7 +74,7 @@ describe("persistence", () => {
     const build = () => {
       const s = fresh();
       giveHabit(s);
-      applyIn(s, { type: "startSession", target: 600, now: 0 });
+      begin(s, 600, 0);
       return s;
     };
     const straight = build();
@@ -89,7 +89,7 @@ describe("persistence", () => {
 
   it("an unseen summary, its events, and its reflection survive a reload together (§8)", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 600, "flow");
     advanceIn(s, 300, "flow", "away", 0);
     advanceIn(s, 0, "flow");
@@ -107,7 +107,7 @@ describe("persistence", () => {
   it("habits, the practice log, and session history survive a reload", () => {
     const s = fresh();
     const { habit } = giveHabit(s);
-    applyIn(s, { type: "startSession", target: 600, now: 1_000 });
+    begin(s, 600, 1_000);
     advanceIn(s, 600, "flow");
     applyIn(s, { type: "endSession", now: 601_000 });
     applyIn(s, { type: "logPractice", habitId: habit.id, minutes: 5, now: 700_000 });
@@ -250,7 +250,7 @@ describe("serialization refuses what it cannot write (issue #486)", () => {
 
   it("a session's unrepresentable accounting refuses the save", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     s.game.session!.accounting.poolSeconds = Infinity;
     expect(() => serialize(s, 0)).toThrow(/poolSeconds/);
   });
