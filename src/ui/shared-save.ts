@@ -1,15 +1,10 @@
-import { deserialize, recoverLostSave, serialize, STORAGE_KEY, ORIGINAL_SAVE_KEY, PRE_V13_ORIGINAL_SAVE_KEY, PRE_V14_ORIGINAL_SAVE_KEY, PRE_V15_ORIGINAL_SAVE_KEY, type MigrationReport, type RecoveryReport } from "../engine/save";
+import { ARCHIVED_ORIGINAL_SAVE_KEY, deserialize, isPreV16Save, ORIGINAL_SAVE_KEY, PRE_V16_ORIGINAL_SAVE_KEY, recoverLostSave, serialize, STORAGE_KEY, type RecoveryReport } from "../engine/save";
+import { SAVE_VERSION } from "../engine/constants";
 import type { GameState } from "../engine/types";
 
 export interface LoadedSave {
   state: GameState;
   savedAt: number;
-  // The calibrated-economy translation (issue #493): present exactly when
-  // this parse performed the one-time conversion — the fact the flow
-  // explains at the save/import destination.
-  migration?: MigrationReport;
-  footprintMigration?: { areteRefunded: number };
-  combatMigration?: { oldClears: number; discovered: boolean };
   // The explicit lost-money recovery (issue #494): present exactly when
   // this parse performed the player's chosen recovery — the choice was
   // explained before it applied, so this rides without a second surface.
@@ -18,7 +13,9 @@ export interface LoadedSave {
 // A failed parse: the recovery-required shape names the lost paths and —
 // from load() — carries the exact stored bytes, so the app can offer the
 // explicit recovery without reading the slot again.
-export type ParsedSave = LoadedSave | { error: string; recoveryRequired?: boolean; lost?: string[]; raw?: string };
+// A newer build's save is refused and flagged: its bytes are never replaced.
+// A save older than v15 is refused and flagged with its version (issue #19).
+export type ParsedSave = LoadedSave | { error: string; recoveryRequired?: boolean; lost?: string[]; raw?: string; newerVersion?: boolean; olderVersion?: number };
 export type WriteOutcome = "written" | "failed" | "refused";
 export type SaveStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
@@ -43,6 +40,17 @@ export function memorySaveStorage(): SaveStorage {
   };
 }
 
+// A slot written by a newer build (issue #18): this build cannot read it,
+// so it must never replace it.
+function fromNewerBuild(raw: string): boolean {
+  try {
+    const version = (JSON.parse(raw) as { version?: unknown }).version;
+    return typeof version === "number" && version > SAVE_VERSION;
+  } catch {
+    return false;
+  }
+}
+
 function savedAtOf(raw: string): number | null {
   try {
     const savedAt = (JSON.parse(raw) as { savedAt?: unknown }).savedAt;
@@ -57,7 +65,7 @@ function savedAtOf(raw: string): number | null {
 // session reconciliation and save-attempt throttling remain in App.
 export class SharedSave {
   private knownSavedAt = 0;
-  // A lost-money or unbacked migration source is not a fresh-start slot.
+  // A lost-money source is not a fresh-start slot.
   // Boot may show an unsaved opening, but no save (even forced) replaces
   // these bytes. A successful import or load is the only new adoption.
   private sourceProtected = false;
@@ -67,12 +75,16 @@ export class SharedSave {
   parse(text: string): ParsedSave {
     const result = deserialize(text);
     if (result.error || !result.state) {
-      return result.recoveryRequired
-        ? { error: result.error ?? "Explicit recovery required.", recoveryRequired: true, lost: result.lost ?? [] }
-        : { error: result.error ?? "unknown error" };
+      if (result.recoveryRequired) {
+        return { error: result.error ?? "Explicit recovery required.", recoveryRequired: true, lost: result.lost ?? [] };
+      }
+      return {
+        error: result.error ?? "unknown error",
+        ...(result.newerVersion ? { newerVersion: true } : {}),
+        ...(result.olderVersion !== undefined ? { olderVersion: result.olderVersion } : {}),
+      };
     }
-    const { state, migration, footprintMigration, combatMigration } = result;
-    return { state, savedAt: savedAtOf(text) ?? this.now(), ...(migration && { migration }), ...(footprintMigration && { footprintMigration }), ...(combatMigration && { combatMigration }) };
+    return { state: result.state, savedAt: savedAtOf(text) ?? this.now() };
   }
 
   // The recovery choice's parse (issue #494): the same bytes through the
@@ -85,8 +97,6 @@ export class SharedSave {
       state: result.state,
       savedAt: savedAtOf(text) ?? this.now(),
       ...(result.recovered ? { recovered: result.recovered } : {}),
-      ...(result.footprintMigration && { footprintMigration: result.footprintMigration }),
-      ...(result.combatMigration && { combatMigration: result.combatMigration }),
     };
   }
 
@@ -103,31 +113,14 @@ export class SharedSave {
         return { ...parsed, raw, lost: parsed.lost ?? [] };
       }
       this.sourceProtected = false;
-      if ("state" in parsed && (parsed.migration || parsed.footprintMigration || parsed.combatMigration)) {
-        try {
-          if (parsed.migration) {
-            const earlier = this.storage.getItem(ORIGINAL_SAVE_KEY);
-            if (earlier !== null && earlier !== raw) this.storage.setItem(PRE_V13_ORIGINAL_SAVE_KEY, earlier);
-            this.storage.setItem(ORIGINAL_SAVE_KEY, raw);
-          } else {
-            // Keep this source without displacing an earlier boundary's original.
-            const archive = parsed.footprintMigration ? PRE_V14_ORIGINAL_SAVE_KEY : PRE_V15_ORIGINAL_SAVE_KEY;
-            this.storage.setItem(archive, raw);
-            this.retainOnce(raw);
-          }
-        } catch {
-          this.sourceProtected = true;
-          return { error: "The pre-migration save could not be retained. The stored save is unchanged; retry after making storage available." };
-        }
-      } else {
-        try {
-          this.retainOnce(raw);
-        } catch {
-          // A later write retries before replacing the source.
-        }
+      try {
+        this.retainOnce(raw);
+        this.retainPreV16(raw);
+      } catch {
+        // A later write retries before replacing the source.
       }
       // Ordinary rejected versions still permit a fresh start. Lost
-      // money and failed migration retention above never do.
+      // money above never does.
       if ("error" in parsed) this.knownSavedAt = savedAtOf(raw) ?? this.knownSavedAt;
       return parsed;
     } catch {
@@ -138,6 +131,7 @@ export class SharedSave {
   // An import adopts a new lineage only after its source bytes are safe.
   retain(raw: string): boolean {
     try {
+      this.retainPreV16(raw);
       this.storage.setItem(ORIGINAL_SAVE_KEY, raw);
       this.sourceProtected = false;
       return true;
@@ -152,10 +146,12 @@ export class SharedSave {
   // primary intact, and only completed backup writes need undoing.
   // Keep the source timestamp so a reload can still reconcile its gap
   // if the normal post-adoption session save fails.
-  adoptRecovered(raw: string, state: GameState, savedAt: number, source?: { from: "boot" | "import"; version: number | undefined }): boolean {
+  adoptRecovered(raw: string, state: GameState, savedAt: number): boolean {
     const changed: { key: string; previous: string | null }[] = [];
     try {
       const text = serialize(state, savedAt);
+      const current = this.storage.getItem(STORAGE_KEY);
+      if (current !== null && fromNewerBuild(current)) return false;
       const earlier = this.storage.getItem(ORIGINAL_SAVE_KEY);
       const replace = (key: string, value: string, previous: string | null): void => {
         if (previous === value) return;
@@ -179,13 +175,11 @@ export class SharedSave {
         }
         replace(key, value, previous);
       };
-      if (source?.version === 14) archive(PRE_V15_ORIGINAL_SAVE_KEY, raw);
-      // A boot migration does not displace its existing lineage's earlier
-      // original. An import starts a new lineage, even if it migrates too.
-      if (source?.version !== 14 || source.from === "import" || earlier === null) {
-        if (earlier !== null && earlier !== raw) archive(PRE_V13_ORIGINAL_SAVE_KEY, earlier);
-        replace(ORIGINAL_SAVE_KEY, raw, earlier);
-      }
+      // The recovered source starts a new lineage: an earlier original is
+      // archived, never discarded.
+      if (earlier !== null && earlier !== raw) archive(ARCHIVED_ORIGINAL_SAVE_KEY, earlier);
+      if (isPreV16Save(raw)) archive(PRE_V16_ORIGINAL_SAVE_KEY, raw);
+      replace(ORIGINAL_SAVE_KEY, raw, earlier);
       this.storage.setItem(STORAGE_KEY, text);
       this.sourceProtected = false;
       this.knownSavedAt = savedAt;
@@ -210,9 +204,8 @@ export class SharedSave {
     }
   }
 
-  // The retained lineage's exact source bytes (issue #493): what the
-  // migration's explanation offers for download — the untouched original
-  // behind whatever the working state now carries.
+  // The retained lineage's exact source bytes (issue #493): the untouched
+  // original behind whatever the working state now carries.
   retainedOriginal(): string | null {
     try {
       return this.storage.getItem(ORIGINAL_SAVE_KEY);
@@ -227,6 +220,28 @@ export class SharedSave {
     if (this.storage.getItem(ORIGINAL_SAVE_KEY) === null) {
       this.storage.setItem(ORIGINAL_SAVE_KEY, raw);
     }
+  }
+
+  // A save older than v16 keeps its exact text under the pre-v16 key
+  // before the first v16 write (issue #19). A different pre-v16 original
+  // already there moves to the key's numbered history, never discarded.
+  // Let the caller handle denial; a write must never replace that source.
+  private retainPreV16(raw: string): void {
+    if (!isPreV16Save(raw)) return;
+    const previous = this.storage.getItem(PRE_V16_ORIGINAL_SAVE_KEY);
+    if (previous === raw) return;
+    if (previous !== null) {
+      for (let i = 1; ; i++) {
+        const historyKey = `${PRE_V16_ORIGINAL_SAVE_KEY}.${i}`;
+        const saved = this.storage.getItem(historyKey);
+        if (saved === previous) break;
+        if (saved === null) {
+          this.storage.setItem(historyKey, previous);
+          break;
+        }
+      }
+    }
+    this.storage.setItem(PRE_V16_ORIGINAL_SAVE_KEY, raw);
   }
 
   incorporate(savedAt: number): void {
@@ -249,7 +264,12 @@ export class SharedSave {
     try {
       const text = serialize(state, now);
       const raw = this.storage.getItem(STORAGE_KEY);
-      if (raw !== null) this.retainOnce(raw);
+      // A newer build's save is never overwritten, forced or not.
+      if (raw !== null && fromNewerBuild(raw)) return "refused";
+      if (raw !== null) {
+        this.retainOnce(raw);
+        this.retainPreV16(raw);
+      }
       this.storage.setItem(STORAGE_KEY, text);
       this.knownSavedAt = now;
       return "written";

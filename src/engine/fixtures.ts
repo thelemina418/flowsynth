@@ -1,67 +1,78 @@
-import { createInitialState, createModule } from "./state";
-import { createHabit, DEFAULT_HABIT_COLOR, selectHabit } from "./habits";
-import { createHabitClasses, pairOf } from "./classes";
-import { investment } from "./economy";
-import { isOscillatorType } from "./constants";
-import type { ClassPairState, GameState, Habit, Hex, ModuleInstance, ModuleType, RateSnapshot } from "./types";
+import { advance, type Advanced } from "./advance";
+import { apply, type ApplyResult } from "./apply";
+import { isNum } from "./num";
+import { createInitialState } from "./state";
+import type { Presence } from "./trust";
+import { DEFAULT_HABIT_COLOR } from "./habits";
+import type { AdvanceMode, GameState, Intention, Habit, HabitClass } from "./types";
 
-import { generateOffer, type Rng } from "./rolls";
-import { isModuleCandidate, type Candidate, type RollOffer } from "./types";
+// The test harness. The engine's doors are pure; a test that walks one
+// state through many steps holds one object instead, so these run the pure
+// door and write the returned state back into it — every habit or
+// Intention the test holds keeps its identity and reads the new values.
+export function applyIn(state: GameState, action: Parameters<typeof apply>[1]): ApplyResult {
+  const result = apply(state, action);
+  writeBack(state, result.state);
+  return result;
+}
 
-// Legacy module-only scenarios assert that premise while exercising the
-// real generator. Never casts a World reward into a module.
-export function generateModuleOffer(state: GameState, rng: Rng, extraTierChance = 0): RollOffer<Candidate> {
-  const offer = generateOffer(state, rng, extraTierChance);
-  const [a, b, c] = offer.candidates;
-  if (!isModuleCandidate(a) || !isModuleCandidate(b) || !isModuleCandidate(c)) throw new Error("Expected a module-only offer");
-  return { ...offer, candidates: [a, b, c] };
+export function advanceIn(
+  state: GameState,
+  seconds: number,
+  mode: AdvanceMode,
+  presence: Presence = "visible",
+  driftStepSeconds = 0,
+): Advanced {
+  const result = advance(state, seconds, mode, presence, driftStepSeconds);
+  writeBack(state, result.state);
+  return result;
+}
+
+function isContainer(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !isNum(value);
+}
+
+function writeBack(target: GameState, next: GameState): void {
+  if (target !== next) writeInto(target as unknown as Record<string, unknown>, next as unknown as Record<string, unknown>);
+}
+
+function writeInto(target: Record<string, unknown>, next: Record<string, unknown>): void {
+  if (Array.isArray(target) && Array.isArray(next)) target.length = next.length;
+  for (const key of Object.keys(target)) if (!(key in next)) delete target[key];
+  for (const [key, value] of Object.entries(next)) {
+    const current = target[key];
+    if (isContainer(current) && isContainer(value) && Array.isArray(current) === Array.isArray(value)) writeInto(current, value);
+    else target[key] = value;
+  }
 }
 
 export function fresh(): GameState {
   return createInitialState();
 }
 
-// A habit with its Engineer pair selected — the fixture for anything that
-// keys off the active habit–class pair (issue #423). Returns the pair so
-// tests can rig its meter and tree directly.
-export function giveHabit(state: GameState, name = "Piano"): { habit: Habit; pair: ClassPairState } {
-  const created = createHabit(state, name);
-  if (!created.ok || !created.habit) throw new Error("fixture habit failed");
-  selectHabit(state, created.habit.id);
-  return { habit: created.habit, pair: pairOf(created.habit) };
+// A habit, created through `apply` and selected as the session's active
+// habit. Awaiting its class unless one is given.
+export function giveHabit(state: GameState, name = "Piano", habitClass?: HabitClass): { habit: Habit } {
+  const created = applyIn(state, habitClass ? { type: "createHabit", name, habitClass } : { type: "createHabit", name });
+  if (!created.ok || !created.id) throw new Error(`fixture habit failed: ${created.reason}`);
+  if (!applyIn(state, { type: "selectHabit", id: created.id }).ok) throw new Error("fixture habit select failed");
+  return { habit: state.records.habits.find((h) => h.id === created.id)! };
 }
 
-// A complete hand-built habit shape for tests that push habits directly —
-// the save's shape, launch class wear and the palette default included
-// (issue #423, issue #445).
+// A complete hand-built habit shape for tests that push habits directly.
 export function plainHabit(id = "h1", name = "Piano"): Habit {
-  return { id, name, seconds: 0, archived: false, color: DEFAULT_HABIT_COLOR, classId: "engineer", classes: createHabitClasses() };
+  return { id, name, seconds: 0, archived: false, color: DEFAULT_HABIT_COLOR, habitClass: null };
 }
 
-export function give(state: GameState, type: ModuleType, pos: Hex | null, level = 0): ModuleInstance {
-  const module: ModuleInstance = { ...createModule(state, type), pos };
-  if (level > 0) {
-    module.level = level;
-    module.invested = investment(level);
-  }
-  state.modules.push(module);
-  return module;
+// The habit or Intention a create action made, read from the state.
+export function habitOf(state: GameState, made: ApplyResult): Habit {
+  const habit = state.records.habits.find((h) => h.id === made.id);
+  if (!habit) throw new Error(`no habit was made: ${made.reason}`);
+  return habit;
 }
 
-// The displayed module figures summed — the "figures sum to the board rate
-// within rounding" read (ADR-0036) shared by the engine suites.
-export function sumSynthValues(snapshot: RateSnapshot): number {
-  let sum = 0;
-  for (const contribution of snapshot.contributions.values()) {
-    if (isOscillatorType(contribution.type)) sum += contribution.value;
-  }
-  return sum;
-}
-
-export function stubRng(values: number[]): () => number {
-  let i = 0;
-  return () => {
-    if (i >= values.length) throw new Error(`rng exhausted at ${i}`);
-    return values[i++]!;
-  };
+export function intentionOf(state: GameState, made: ApplyResult): Intention {
+  const intention = state.records.intentions.find((g) => g.id === made.id);
+  if (!intention) throw new Error(`no Intention was made: ${made.reason}`);
+  return intention;
 }

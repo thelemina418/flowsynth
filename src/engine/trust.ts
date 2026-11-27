@@ -1,67 +1,44 @@
 import { DRIFT_NOISE_SECONDS, EPS, RECONCILIATION_FLOOR_SECONDS } from "./constants";
-import { NumericFault } from "./numeric";
-import { advance, advanceBreather, earnNous, sumResults } from "./advance";
+import { add, D, gt, requireFinite, requireNotNaN } from "./num";
 import { accrueLivePractice } from "./habits";
-import { accrueClassDevelopment } from "./classes";
-import { accrueGoalFuel, accrueGoalProgress } from "./goals";
-import { syncWorldDiscoveries } from "./world";
-import type { Rng } from "./rolls";
+import { accrueIntentionProgress } from "./intentions";
+import { emptyAdvanceResult, sumResults, walkFlow } from "./walk";
 import type { AdvanceResult, GameState, HonestyOutcome, SessionAccounting } from "./types";
 
 export type { HonestyOutcome };
 
 // Trust accounting (focus-tool spec §1–3, ADR-0019). Presence is visibility;
 // every boundary hands this module the wall-clock gap since the last one and
-// the presence state that held during it, and the whole simulation advances
-// by that gap — never by tick count. Away trust runs to the plan: on a
-// planned session, away time up to the target is trusted (banks and credits
-// silently); past the target — and all away time on open-ended sessions,
-// beyond the reconciliation floor — it is provisional. Provisional time
-// produces into the bucket (nous) and the pool (minutes) and credits nothing
-// until the honesty report settles both in one move. Nothing already banked
-// is ever retracted.
+// the presence state that held during it, and the session advances by that
+// gap — never by tick count. Away trust runs to the plan: on a planned
+// session, away time up to the target is trusted (credits silently); past
+// the target — and all away time on open-ended sessions, beyond the
+// reconciliation floor — it is provisional. Provisional time joins the pool
+// (minutes) and the provisional nous, and credits nothing until the honesty
+// report settles both in one move. Nothing already credited is ever
+// retracted.
 //
 // An absence is the whole contiguous away stretch, never one throttled
 // wake-up's slice of it: while the tab is hidden, each boundary's gap
-// buffers into `pendingAwaySeconds` (a persisted additive field, so a
-// discard/reload/import reconciles into the same stretch), and the flush
-// that classifies it — floor, target split, provisional — happens once,
-// when presence returns.
+// buffers into `pendingAwaySeconds` (persisted, so a discard/reload/import
+// reconciles into the same stretch), and the flush that classifies it
+// happens once, when presence returns.
+//
+// These functions mutate the working copy `advance` and `apply` hand them,
+// and throw NumFault on an unrepresentable figure; the boundary then
+// discards the copy and returns the state it was given.
 
 export function freshAccounting(): SessionAccounting {
-  return { creditedSeconds: 0, poolSeconds: 0, bucketNous: 0, pendingAwaySeconds: 0, events: [] };
+  return { creditedSeconds: 0, poolSeconds: 0, pendingAwaySeconds: 0, events: [], provisionalNous: D(0) };
 }
 
 // Hidden time on a running page may still be trusted. An offline gap
-// (reload/import, suspended page, or detected sleep) uses the same honesty
-// rules for production and practice, but can never advance combat.
+// (reload/import, a suspended page, or a detected sleep) joins the same
+// absence and is classified by the same honesty rules.
 export type Presence = "visible" | "away" | "offline" | "suspended";
 
-const ZERO: AdvanceResult = { nousEarned: 0, rollsBanked: 0, rollsFlow: 0, rollsForge: 0, rollsMutator: 0, goalsCompleted: 0 };
-
 export function poolOutstanding(state: GameState): boolean {
-  return (state.session?.accounting.poolSeconds ?? 0) > EPS;
-}
-
-export interface BreatherGapResult {
-  result: AdvanceResult;
-  // True when the gap reached the allowance: the phase completes itself at
-  // the deadline, whatever the player's presence (docs/breather-spec.md
-  // §4) — the caller ends it.
-  completed: boolean;
-}
-
-// The breather's boundary (docs/breather-spec.md §4): breather time is
-// pre-trusted — presence and the dual-clock drift classify nothing, since
-// the phase's whole design is sanctioned absence. Every wall second up to
-// the remaining allowance is breather production; a gap that reaches the
-// deadline completes the phase at that deadline, and seconds past it
-// produce nothing (the board sits upgrade-quiet from there).
-export function applyBreatherGap(state: GameState, seconds: number, rng: Rng = Math.random, offlineSeconds = 0): BreatherGapResult {
-  if (state.mode !== "breather" || seconds <= EPS || !state.breather) return { result: ZERO, completed: false };
-  const result = advanceBreather(state, seconds, rng, offlineSeconds);
-  const completed = state.breather.elapsed >= state.breather.allowanceSeconds - EPS;
-  return { result, completed };
+  return (state.game.session?.accounting.poolSeconds ?? 0) > EPS;
 }
 
 // One boundary's gap, classified and applied. `seconds` is the wall-clock
@@ -69,135 +46,68 @@ export function applyBreatherGap(state: GameState, seconds: number, rng: Rng = M
 // Date.now() − (performance.timeOrigin + performance.now()) across the same
 // span — a positive step past the noise floor sizes a slept gap, which is
 // away even while the tab was "visible"; a negative step past the floor
-// (clock rolled back) credits zero; steps inside the floor on either side
-// are measurement jitter the boundary ignores. Paused time is neither
-// present nor away: it produces and credits nothing.
-export function applyGap(
-  state: GameState,
-  seconds: number,
-  presence: Presence,
-  driftStepSeconds: number,
-  rng: Rng = Math.random,
-): AdvanceResult {
-  if (state.mode !== "flow" || !state.session) return ZERO;
-  const accounting = state.session.accounting;
-  if (presence === "offline") {
-    // On a resume the persisted buffer is also part of the absence we
-    // reconcile, even if the source timestamp is equal to or ahead of now.
-    accounting.pendingOfflineFrom = 0;
-    delete accounting.pendingSuspensions;
-    if (seconds > EPS) accounting.pendingAwaySeconds += seconds;
-    return ZERO;
-  }
-  if (seconds <= EPS) return ZERO;
-  if (presence === "suspended") {
-    const from = accounting.pendingAwaySeconds;
-    accounting.pendingAwaySeconds += seconds;
-    (accounting.pendingSuspensions ??= []).push({ from, until: accounting.pendingAwaySeconds });
-    return ZERO;
-  }
-  // Past the noise floor on either side is real drift; inside it is the two
-  // clocks' quantization jitter, which the boundary ignores. Treating each
-  // jitter step as drift discarded whole wall gaps (negative) or sized
-  // phantom sleeps from ±2 ms (positive) — a stopwatch against the session
-  // clock read a steady fraction of real time.
-  if (driftStepSeconds < -DRIFT_NOISE_SECONDS) return ZERO;
-  const slept = driftStepSeconds > DRIFT_NOISE_SECONDS ? Math.min(driftStepSeconds, seconds) : 0;
-  const awake = seconds - slept;
-  if (slept > 0) accounting.pendingOfflineFrom ??= accounting.pendingAwaySeconds;
-  if (presence === "away") {
+// (clock rolled back) credits zero; steps inside the floor are jitter.
+// Paused time is neither present nor away: it credits nothing.
+// A visible boundary settles the buffered absence even when its own gap is
+// zero: that is the return of presence.
+export function applyGap(state: GameState, seconds: number, presence: Presence, driftStepSeconds: number): AdvanceResult {
+  if (state.game.mode !== "flow" || !state.game.session) return emptyAdvanceResult();
+  const accounting = state.game.session.accounting;
+  const span = seconds > EPS ? seconds : 0;
+  if (presence !== "visible") {
     // Same contiguous absence: buffer, never classify a throttled slice.
-    // After a hidden-clock sleep, resume the World clock at a known awake
-    // boundary, not during the rest of the buffered absence.
-    accounting.pendingAwaySeconds += seconds;
-    return ZERO;
+    accounting.pendingAwaySeconds = requireFinite(accounting.pendingAwaySeconds + span, "the away buffer");
+    return emptyAdvanceResult();
   }
+  if (span > 0 && driftStepSeconds < -DRIFT_NOISE_SECONDS) return emptyAdvanceResult();
+  const slept = driftStepSeconds > DRIFT_NOISE_SECONDS ? Math.min(driftStepSeconds, span) : 0;
   // The slept span joins the buffered absence and flushes first, so its
-  // credit clamps at the plan (spec §1); whatever presence follows the
-  // sleep banks live regardless, even past the target.
+  // credit clamps at the plan (spec §1); the presence that follows credits
+  // live regardless, even past the target.
   accounting.pendingAwaySeconds += slept;
-  const flushed = flushPendingAway(state, rng);
-  if (flushed.fault) return flushed;
-  const live = advance(state, awake, rng);
-  return sumResults(flushed, live);
+  const flushed = flushPendingAway(state);
+  return sumResults(flushed, walkFlow(state, span - slept, "trusted"));
 }
 
 // Classifies the whole buffered absence through the trust table (spec §1).
-// Sub-floor absences auto-credit silently on both modes — nous banks, time
-// credits, no report, never the pool. A planned absence spanning the target
-// splits in one pass: the under-plan slice auto-banks, the past-target
-// slice goes provisional. Open-ended absences past the floor go wholly
-// provisional.
-export function flushPendingAway(state: GameState, rng: Rng = Math.random): AdvanceResult {
-  if (state.mode !== "flow") return ZERO;
-  const accounting = state.session?.accounting;
-  if (!accounting) return ZERO;
+// Sub-floor absences auto-credit silently on both modes. A planned absence
+// spanning the target splits in one pass: the under-plan slice credits, the
+// past-target slice goes provisional. Open-ended absences past the floor go
+// wholly provisional.
+export function flushPendingAway(state: GameState): AdvanceResult {
+  if (state.game.mode !== "flow") return emptyAdvanceResult();
+  const session = state.game.session;
+  if (!session) return emptyAdvanceResult();
+  const accounting = session.accounting;
   const seconds = accounting.pendingAwaySeconds;
-  if (seconds <= EPS) {
-    delete accounting.pendingOfflineFrom;
-    delete accounting.pendingSuspensions;
-    return ZERO;
-  }
-  const pristine = structuredClone(state);
-  const cutoff = accounting.pendingOfflineFrom;
-  const suspensions = accounting.pendingSuspensions;
+  if (seconds <= EPS) return emptyAdvanceResult();
   accounting.pendingAwaySeconds = 0;
-  delete accounting.pendingOfflineFrom;
-  delete accounting.pendingSuspensions;
-  const session = state.session!;
   const trusted = seconds < RECONCILIATION_FLOOR_SECONDS ? seconds
     : Math.min(seconds, Math.max(0, (session.target ?? 0) - session.elapsed));
-  const onlineUntil = cutoff === undefined ? trusted
-    : Number.isFinite(cutoff) ? Math.min(trusted, Math.max(0, cutoff)) : 0;
-  let result = ZERO;
-  let cursor = 0;
-  const advanceTo = (end: number, sink: "live" | "offline") => {
-    if (!result.fault && end > cursor) result = sumResults(result, advance(state, end - cursor, rng, sink));
-    cursor = Math.max(cursor, end);
-  };
-  // A known suspension can split the trusted prefix without making it a
-  // new absence. The plan/report still sees the whole contiguous stretch.
-  if (onlineUntil > 0) {
-    for (const { from, until } of suspensions ?? []) {
-      if (from >= onlineUntil || result.fault) break;
-      advanceTo(from, "live");
-      advanceTo(Math.min(until, onlineUntil), "offline");
-    }
-  }
-  advanceTo(onlineUntil, "live");
-  advanceTo(trusted, "offline");
-  if (!result.fault && seconds > trusted) result = sumResults(result, advance(state, seconds - trusted, rng, "provisional"));
-  // The buffer belongs to the same transaction as both sides of the plan.
-  // A refused walk must leave the absence available for a later retry.
-  if (result.fault) {
-    Object.assign(state, pristine);
-    return { ...ZERO, fault: result.fault };
-  }
+  // The buffer belongs to the same transaction as both sides of the plan:
+  // a fault in either walk keeps the absence for a later retry.
+  let result = trusted > 0 ? walkFlow(state, trusted, "trusted") : emptyAdvanceResult();
+  if (seconds > trusted) result = sumResults(result, walkFlow(state, seconds - trusted, "provisional"));
   return result;
 }
 
 export interface HonestyResolution {
   ok: boolean;
   reason?: string;
-  // Goal occurrences the credited provisional minutes completed.
+  // Intention occurrences the credited provisional minutes completed.
   completions?: number;
-  // Module rolls the credited provisional minutes banked through the flow
-  // meter (ADR-0041): honesty-credited time fills it like live time.
-  rollsBanked?: number;
 }
 
 // The honesty report's answer (spec §2): settles the whole outstanding pool
-// and its bucket in one move. Didn't practice credits nothing and drops the
-// bucket; did what I planned credits up to the plan (C rises to max(C, T));
-// practiced the whole time away credits fully. Both non-missed answers bank
-// the bucket. The recorded event is the reconciliation's factual line.
-function settleHonestyReport(
-  state: GameState,
-  outcome: HonestyOutcome,
-  rng: Rng = Math.random,
-): HonestyResolution {
-  if (state.mode !== "flow") return { ok: false, reason: "No session is running." };
-  const session = state.session;
+// and its provisional nous in one move. Didn't practice credits nothing and
+// drops the provisional nous; did what I planned credits up to the plan
+// (C rises to max(C, T)); practiced the whole time away credits fully. Both
+// non-missed answers bank the provisional nous. The recorded event is the
+// reconciliation's factual line. Throws NumFault on an unrepresentable
+// figure; `apply` then returns the state it was given.
+export function settleHonestyReport(state: GameState, outcome: HonestyOutcome): HonestyResolution {
+  if (state.game.mode !== "flow") return { ok: false, reason: "No session is running." };
+  const session = state.game.session;
   if (!session) return { ok: false, reason: "No session is running." };
   const accounting = session.accounting;
   if (accounting.poolSeconds <= EPS) return { ok: false, reason: "No provisional time is waiting." };
@@ -206,78 +116,20 @@ function settleHonestyReport(
   }
   const pool = accounting.poolSeconds;
   let credit = 0;
-  if (outcome === "full") {
-    credit = pool;
-  } else if (outcome === "planned") {
-    credit = Math.min(pool, Math.max(0, session.target! - accounting.creditedSeconds));
-  }
-  // The bucket's landing is checked before anything credits (issue #486):
-  // an unrepresentable bucket refuses the whole report — no credited
-  // minute, no partial bank — and the pool stays outstanding for a player
-  // who now knows the figures cannot land as asked. A refusal, never a
-  // throw: the report answers the player's choice.
-  if (outcome !== "missed" && accounting.bucketNous > 0) {
-    const bank = accounting.bucketNous;
-    const lands = [
-      bank,
-      state.nous + bank,
-      state.totalEarned + bank,
-      state.eraEarned + bank,
-      session.earned + bank,
-    ];
-    if (!lands.every((figure) => Number.isFinite(figure))) {
-      return { ok: false, reason: "The provisional nous cannot bank safely, so nothing was credited." };
-    }
-  }
+  if (outcome === "full") credit = pool;
+  else if (outcome === "planned") credit = Math.min(pool, Math.max(0, session.target! - accounting.creditedSeconds));
   let completions = 0;
-  let rollsBanked = 0;
   if (credit > EPS) {
-    accounting.creditedSeconds += credit;
+    accounting.creditedSeconds = requireFinite(accounting.creditedSeconds + credit, "the credited practice time");
     accrueLivePractice(state, credit);
-    // The goal budget (issue #423) accrues ahead of the completion ticks,
-    // so the credited reconciliation funds the draws it may cause.
-    accrueGoalFuel(state, credit);
-    // Honesty-credited minutes are the live side of the boundary (ADR-0047):
-    // the completion tick here banks the goal generator's credit exactly as
-    // a mid-session tick would — only manual logs prorate to zero.
-    completions = accrueGoalProgress(state, state.activeHabitId, credit, "live");
-    // Every credited minute counts (issue #423): honesty-credited
-    // provisional minutes develop the active habit–class pair here, beside
-    // habits and goals — credited flow time is the only class development,
-    // and reconciliation credit is credited flow time. The pair's
-    // practice-roll meter tops up on the same diet.
-    rollsBanked = accrueClassDevelopment(state, credit, rng);
+    completions = accrueIntentionProgress(state, state.records.activeHabitId, credit);
   }
-  if (outcome !== "missed" && accounting.bucketNous > 0) {
-    // The bucket's nous banks through the one production-credit seam; the
-    // landing's figures were checked above, before anything credited.
-    earnNous(state, accounting.bucketNous);
-    session.earned += accounting.bucketNous;
-    // The bucket's landing is an era-earned move outside the walk (issue
-    // #425): every threshold it crossed discovers together, here — the
-    // credited minutes themselves never fight, so this is discovery only,
-    // never combat.
-    syncWorldDiscoveries(state);
+  const held = requireNotNaN(accounting.provisionalNous, "the provisional nous");
+  if (outcome !== "missed" && gt(held, 0)) {
+    state.game.nous = requireNotNaN(add(state.game.nous, held), "nous");
   }
   accounting.events.push({ awaySeconds: pool, outcome });
   accounting.poolSeconds = 0;
-  accounting.bucketNous = 0;
-  return { ok: true, completions, rollsBanked };
-}
-
-// Goal reserve credits also run during settlement, outside the advance
-// walk. Refuse them under the same all-or-nothing accounting boundary.
-export function resolveHonestyReport(
-  state: GameState,
-  outcome: HonestyOutcome,
-  rng: Rng = Math.random,
-): HonestyResolution {
-  const pristine = structuredClone(state);
-  try {
-    return settleHonestyReport(state, outcome, rng);
-  } catch (error) {
-    if (!(error instanceof NumericFault)) throw error;
-    Object.assign(state, pristine);
-    return { ok: false, reason: "The provisional nous cannot bank safely, so nothing was credited." };
-  }
+  accounting.provisionalNous = D(0);
+  return { ok: true, completions };
 }

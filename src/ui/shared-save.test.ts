@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { SAVE_VERSION } from "../engine/constants";
-import { serialize, STORAGE_KEY, ORIGINAL_SAVE_KEY, PRE_V13_ORIGINAL_SAVE_KEY } from "../engine/save";
+import { serialize, STORAGE_KEY, ORIGINAL_SAVE_KEY, ARCHIVED_ORIGINAL_SAVE_KEY, PRE_V16_ORIGINAL_SAVE_KEY } from "../engine/save";
 import { createInitialState } from "../engine/state";
 import { SharedSave, memorySaveStorage } from "./shared-save";
 
@@ -12,13 +13,20 @@ function memoryStorage() {
     removeItem: (key: string) => { files.delete(key); },
   };
 }
+// A fresh state that has completed `count` sessions.
+function withCompleted(count: number) {
+  const state = createInitialState();
+  state.records.sessionsCompleted = count;
+  return state;
+}
+
 function scenario() {
   const storage = memoryStorage();
   const owner = new SharedSave(storage, () => 1000);
   const state = createInitialState();
   owner.write(state);
   const stored = () => JSON.parse(storage.getItem(STORAGE_KEY)!) as { savedAt: number; state: typeof state };
-  const newer = () => storage.setItem(STORAGE_KEY, serialize({ ...state, nous: 777 }, 2000));
+  const newer = () => storage.setItem(STORAGE_KEY, serialize({ ...state, records: { ...state.records, sessionsCompleted: 777 } }, 2000));
   return { owner, state, storage, stored, newer };
 }
 
@@ -26,27 +34,27 @@ describe("shared-save ownership (ADR-0032)", () => {
   it("refuses an older owner without adopting or mutating its working progress", () => {
     const { owner, state, stored, newer } = scenario();
     newer();
-    state.nous = 999;
+    state.records.sessionsCompleted = 999;
     expect(owner.write(state)).toBe("refused");
-    expect(stored().state.nous).toBe(777);
-    expect(state.nous).toBe(999);
+    expect(stored().state.records.sessionsCompleted).toBe(777);
+    expect(state.records.sessionsCompleted).toBe(999);
     expect(owner.isNewer()).toBe(true);
   });
 
   it("the owner holding the newest state writes normally", () => {
     const { owner, state, storage, stored } = scenario();
     storage.setItem(STORAGE_KEY, serialize(state, 999));
-    state.nous = 999;
+    state.records.sessionsCompleted = 999;
     expect(owner.write(state)).toBe("written");
-    expect(stored().state.nous).toBe(999);
+    expect(stored().state.records.sessionsCompleted).toBe(999);
     expect(stored().savedAt).toBe(1000);
   });
 
   it("an exact timestamp tie permits a legitimate write", () => {
     const { owner, state, stored } = scenario();
-    state.nous = 555;
+    state.records.sessionsCompleted = 555;
     expect(owner.write(state, 1000)).toBe("written");
-    expect(stored().state.nous).toBe(555);
+    expect(stored().state.records.sessionsCompleted).toBe(555);
   });
 
   it.each([
@@ -69,9 +77,9 @@ describe("shared-save ownership (ADR-0032)", () => {
   it("a forced write deliberately replaces a newer shared save", () => {
     const { owner, state, stored, newer } = scenario();
     newer();
-    state.nous = 555;
+    state.records.sessionsCompleted = 555;
     expect(owner.write(state, 1000, true)).toBe("written");
-    expect(stored().state.nous).toBe(555);
+    expect(stored().state.records.sessionsCompleted).toBe(555);
     expect(owner.isNewer()).toBe(false);
   });
 
@@ -81,7 +89,7 @@ describe("shared-save ownership (ADR-0032)", () => {
     const loaded = other.load();
     if (!loaded || "error" in loaded) throw new Error("expected a readable save");
     other.incorporate(loaded.savedAt);
-    loaded.state.nous = 777;
+    loaded.state.records.sessionsCompleted = 777;
     expect(other.write(loaded.state)).toBe("written");
     expect(owner.write(state)).toBe("refused");
     const adopted = owner.load();
@@ -108,6 +116,36 @@ describe("shared-save ownership (ADR-0032)", () => {
     expect(owner.write(state)).toBe("written");
     expect(JSON.parse(storage.getItem(STORAGE_KEY)!).version).toBe(SAVE_VERSION);
     expect(stored().savedAt).toBe(1000);
+  });
+
+  // Save v16 (issue #18): a newer build's save is refused and never
+  // overwritten — not by an ordinary write, not by a forced one, and not
+  // when its stamp is older than this tab's.
+  it("a newer-version save loads as refused and its stored text is left untouched", () => {
+    const { owner, storage, state } = scenario();
+    const future = serialize(state, 500).replace(`"version": ${SAVE_VERSION}`, `"version": ${SAVE_VERSION + 1}`);
+    storage.setItem(STORAGE_KEY, future);
+    expect(owner.load()).toMatchObject({ newerVersion: true });
+    expect(owner.write(state, 3000)).toBe("refused");
+    expect(owner.write(state, 3000, true)).toBe("refused");
+    expect(storage.getItem(STORAGE_KEY)).toBe(future);
+  });
+
+  it("a newer build writing the slot mid-session is never overwritten, even by a forced save", () => {
+    const { owner, storage, state } = scenario();
+    const future = serialize(state, 500).replace(`"version": ${SAVE_VERSION}`, `"version": ${SAVE_VERSION + 1}`);
+    storage.setItem(STORAGE_KEY, future);
+    expect(owner.write(state, 3000, true)).toBe("refused");
+    expect(storage.getItem(STORAGE_KEY)).toBe(future);
+  });
+
+  it("a recovery adoption never replaces a newer build's save", () => {
+    const { owner, storage, state } = scenario();
+    const future = serialize(state, 500).replace(`"version": ${SAVE_VERSION}`, `"version": ${SAVE_VERSION + 1}`);
+    storage.setItem(STORAGE_KEY, future);
+    expect(owner.adoptRecovered("source bytes", createInitialState(), 1000)).toBe(false);
+    expect(storage.getItem(STORAGE_KEY)).toBe(future);
+    expect(storage.getItem(ORIGINAL_SAVE_KEY)).not.toBe("source bytes");
   });
 
   it("a missing or invalid load timestamp uses controlled wall time without fabricating new shared progress", () => {
@@ -148,7 +186,7 @@ describe("shared-save ownership (ADR-0032)", () => {
     }, () => 3000);
     owner.incorporate(1000);
     expect(owner.write(state)).toBe("failed");
-    storage.setItem(STORAGE_KEY, serialize({ ...state, nous: 777 }, 2000));
+    storage.setItem(STORAGE_KEY, serialize({ ...state, records: { ...state.records, sessionsCompleted: 777 } }, 2000));
     expect(owner.isNewer()).toBe(true);
     expect(owner.write(state)).toBe("refused");
   });
@@ -157,14 +195,14 @@ describe("shared-save ownership (ADR-0032)", () => {
 describe("the original-bytes backup (issue #486)", () => {
   it("a loaded save's raw bytes are retained before anything can replace them", () => {
     const storage = memoryStorage();
-    const raw = serialize({ ...createInitialState(), nous: 123 }, 500);
+    const raw = serialize(withCompleted(123), 500);
     storage.setItem(STORAGE_KEY, raw);
     const owner = new SharedSave(storage, () => 1000);
     expect(owner.load()).not.toHaveProperty("error");
     expect(storage.getItem(ORIGINAL_SAVE_KEY)).toBe(raw);
     // Ordinary saves move the main slot; the retained bytes stand.
     owner.incorporate(500);
-    expect(owner.write({ ...createInitialState(), nous: 5 }, 1000)).toBe("written");
+    expect(owner.write(withCompleted(5), 1000)).toBe("written");
     expect(storage.getItem(STORAGE_KEY)).not.toBe(raw);
     expect(storage.getItem(ORIGINAL_SAVE_KEY)).toBe(raw);
   });
@@ -186,7 +224,7 @@ describe("the original-bytes backup (issue #486)", () => {
     owner.load();
     owner.incorporate(500); // the loaded save is this owner's to replace
     const broken = createInitialState();
-    broken.nous = Infinity; // serialize refuses: JSON would write null
+    broken.records.sessionsCompleted = Infinity; // serialize refuses: JSON would write null
     expect(owner.write(broken, 1000)).toBe("failed");
     expect(storage.getItem(STORAGE_KEY)).toBe(raw);
     expect(storage.getItem(ORIGINAL_SAVE_KEY)).toBe(raw);
@@ -194,12 +232,12 @@ describe("the original-bytes backup (issue #486)", () => {
 
   it("a later boot never overwrites the retained original with newer slot bytes", () => {
     const storage = memoryStorage();
-    const first = serialize({ ...createInitialState(), nous: 123 }, 500);
+    const first = serialize(withCompleted(123), 500);
     storage.setItem(STORAGE_KEY, first);
     const owner = new SharedSave(storage, () => 1000);
     owner.load();
     owner.incorporate(500);
-    owner.write({ ...createInitialState(), nous: 999 }, 1500);
+    owner.write(withCompleted(999), 1500);
     // A new day's boot reads the newer save; the retained original is the
     // lineage's first-seen bytes, not the newest slot's.
     const owner2 = new SharedSave(storage, () => 2000);
@@ -225,7 +263,7 @@ describe("the original-bytes backup (issue #486)", () => {
     storage.setItem(STORAGE_KEY, first);
     const owner = new SharedSave(storage, () => 1000);
     owner.load();
-    const imported = serialize({ ...createInitialState(), nous: 9 }, 750);
+    const imported = serialize(withCompleted(9), 750);
     owner.parse(imported); // the parse the import applies
     owner.retain(imported);
     expect(storage.getItem(ORIGINAL_SAVE_KEY)).toBe(imported);
@@ -280,14 +318,20 @@ describe("review regressions: retain before replacement (#486)", () => {
 // the explicit adoption retains those bytes as the new lineage's
 // original before anything replaces the slot.
 describe("the lost-money recovery's adoption (issue #494)", () => {
-  // A v12 save whose monetary figures serialized to null — the recovery
-  // class's own shape.
+  // A mid-flow v15 save whose provisional bucket serialized to null — the
+  // recovery class's own shape.
   function lostMoneyText(): string {
-    const file = JSON.parse(serialize(createInitialState(), 750));
-    file.version = 12;
-    file.state.nous = null;
-    file.state.arete = null;
-    return JSON.stringify(file);
+    return JSON.stringify({
+      app: "flowsynth",
+      version: 15,
+      savedAt: 750,
+      state: {
+        mode: "flow", habits: [], practiceLog: [], sessionRecords: [], notes: [], goals: [], modules: [],
+        session: { target: null, elapsed: 60, startedAt: 1, goalSeconds: {}, targetSignaled: false,
+          accounting: { creditedSeconds: 60, poolSeconds: 0, bucketNous: null, pendingAwaySeconds: 0, events: [] } },
+        summary: null, nextId: 1,
+      },
+    });
   }
 
   it("load names the lost paths and carries the exact raw bytes for the recovery choice", () => {
@@ -297,7 +341,7 @@ describe("the lost-money recovery's adoption (issue #494)", () => {
     const owner = new SharedSave(storage, () => 1000);
     const parsed = owner.load();
     expect(parsed).toHaveProperty("recoveryRequired", true);
-    expect((parsed as { lost?: string[] }).lost).toEqual(["nous", "arete"]);
+    expect((parsed as { lost?: string[] }).lost).toEqual(["session.accounting.bucketNous"]);
     expect((parsed as { raw?: string }).raw).toBe(raw);
     // The protection stands: the owner cannot replace the source until
     // the explicit adoption succeeds.
@@ -313,7 +357,7 @@ describe("the lost-money recovery's adoption (issue #494)", () => {
     owner.load();
     expect(owner.adoptRecovered(raw, createInitialState(), 1000)).toBe(true);
     expect(storage.getItem(ORIGINAL_SAVE_KEY)).toBe(raw);
-    // The recovered lineage writes normally: the slot takes the v13
+    // The recovered lineage writes normally: the slot takes the current
     // bytes, the original stands untouched.
     expect(owner.write(createInitialState(), 1000, true)).toBe("written");
     expect(JSON.parse(storage.getItem(STORAGE_KEY)!).version).toBe(SAVE_VERSION);
@@ -329,7 +373,7 @@ describe("the lost-money recovery's adoption (issue #494)", () => {
     const owner = new SharedSave(storage, () => 1000);
     owner.load();
     expect(owner.adoptRecovered(raw, createInitialState(), 1000)).toBe(true);
-    expect(storage.getItem(PRE_V13_ORIGINAL_SAVE_KEY)).toBe(earlier);
+    expect(storage.getItem(ARCHIVED_ORIGINAL_SAVE_KEY)).toBe(earlier);
     expect(storage.getItem(ORIGINAL_SAVE_KEY)).toBe(raw);
   });
 
@@ -338,8 +382,8 @@ describe("the lost-money recovery's adoption (issue #494)", () => {
     const raw = lostMoneyText();
     storage.setItem(STORAGE_KEY, raw);
     if (backups !== "absent") storage.setItem(ORIGINAL_SAVE_KEY, backups === "same source" ? raw : "earlier original");
-    if (backups === "archive") storage.setItem(PRE_V13_ORIGINAL_SAVE_KEY, "earlier archive");
-    const keys = [STORAGE_KEY, ORIGINAL_SAVE_KEY, PRE_V13_ORIGINAL_SAVE_KEY];
+    if (backups === "archive") storage.setItem(ARCHIVED_ORIGINAL_SAVE_KEY, "earlier archive");
+    const keys = [STORAGE_KEY, ORIGINAL_SAVE_KEY, ARCHIVED_ORIGINAL_SAVE_KEY];
     const before = keys.map((key) => storage.getItem(key));
     let deny = true;
     const owner = new SharedSave({
@@ -368,11 +412,11 @@ describe("the lost-money recovery's adoption (issue #494)", () => {
     const owner = new SharedSave(storage);
     owner.load();
     const broken = createInitialState();
-    broken.nous = Infinity;
+    broken.records.sessionsCompleted = Infinity;
     expect(owner.adoptRecovered(raw, broken, 1000)).toBe(false);
     expect(storage.getItem(STORAGE_KEY)).toBe(raw);
     expect(storage.getItem(ORIGINAL_SAVE_KEY)).toBeNull();
-    expect(storage.getItem(PRE_V13_ORIGINAL_SAVE_KEY)).toBeNull();
+    expect(storage.getItem(ARCHIVED_ORIGINAL_SAVE_KEY)).toBeNull();
     expect(owner.write(createInitialState(), 1000, true)).toBe("refused");
   });
 
@@ -404,7 +448,7 @@ describe("the lost-money recovery's adoption (issue #494)", () => {
       getItem: (key: string) => storage.getItem(key),
       removeItem: storage.removeItem,
       setItem: (key: string, value: string) => {
-        if (key === PRE_V13_ORIGINAL_SAVE_KEY) throw new Error("quota exceeded");
+        if (key === ARCHIVED_ORIGINAL_SAVE_KEY) throw new Error("quota exceeded");
         storage.setItem(key, value);
       },
     };
@@ -415,5 +459,97 @@ describe("the lost-money recovery's adoption (issue #494)", () => {
     expect(storage.getItem(ORIGINAL_SAVE_KEY)).toBe(earlier);
     // The protection stands: no save replaces the source.
     expect(owner.write(createInitialState(), 1000, true)).toBe("refused");
+  });
+});
+
+// The one-time v15 → v16 migration (issue #19): the original bytes of any
+// save older than v16 are kept under the pre-v16 key before the first v16
+// write can replace them. A pre-v15 save is refused plainly and kept the
+// same way (ADR-0017's pattern).
+describe("the pre-v16 original (issue #19)", () => {
+  const V15 = readFileSync(new URL("../engine/fixtures/saves/v15-migration.json", import.meta.url), "utf8");
+  const V14 = JSON.stringify({ app: "flowsynth", version: 14, savedAt: 600, state: { mode: "upgrade" } });
+
+  it("a v15 save migrates on load and its exact text is kept under the pre-v16 key before the first v16 write", () => {
+    const storage = memoryStorage();
+    storage.setItem(ORIGINAL_SAVE_KEY, "an earlier lineage's original");
+    storage.setItem(STORAGE_KEY, V15);
+    const owner = new SharedSave(storage, () => 1000);
+    const loaded = owner.load();
+    if (!loaded || "error" in loaded) throw new Error("expected the v15 save to migrate");
+    expect(loaded.state.game.legacyLine).toBe("Legacy era · 4 modules · archived");
+    owner.incorporate(loaded.savedAt);
+    expect(owner.write(loaded.state, loaded.savedAt + 1000)).toBe("written");
+    expect(storage.getItem(PRE_V16_ORIGINAL_SAVE_KEY)).toBe(V15);
+    expect(JSON.parse(storage.getItem(STORAGE_KEY)!).version).toBe(SAVE_VERSION);
+  });
+
+  it("a v15 save written without a prior load is kept before the write replaces it", () => {
+    const storage = memoryStorage();
+    storage.setItem(STORAGE_KEY, V15);
+    const owner = new SharedSave(storage, () => 1000);
+    expect(owner.write(createInitialState(), 2000, true)).toBe("written");
+    expect(storage.getItem(PRE_V16_ORIGINAL_SAVE_KEY)).toBe(V15);
+  });
+
+  it("a denied pre-v16 retention refuses the v16 write rather than lose the original", () => {
+    const storage = memoryStorage();
+    storage.setItem(STORAGE_KEY, V15);
+    const denying = { ...storage, setItem: (key: string, value: string) => {
+      if (key === PRE_V16_ORIGINAL_SAVE_KEY) throw new Error("quota exceeded");
+      storage.setItem(key, value);
+    } };
+    const owner = new SharedSave(denying, () => 1000);
+    expect(owner.write(createInitialState(), 2000, true)).toBe("failed");
+    expect(storage.getItem(STORAGE_KEY)).toBe(V15);
+  });
+
+  it("an imported v15 save is kept under the pre-v16 key with the lineage's original", () => {
+    const storage = memoryStorage();
+    const owner = new SharedSave(storage, () => 1000);
+    expect(owner.retain(V15)).toBe(true);
+    expect(storage.getItem(PRE_V16_ORIGINAL_SAVE_KEY)).toBe(V15);
+    expect(storage.getItem(ORIGINAL_SAVE_KEY)).toBe(V15);
+  });
+
+  it("a pre-v15 save is refused with a plain message, and its original is kept when fresh play replaces it", () => {
+    const storage = memoryStorage();
+    storage.setItem(ORIGINAL_SAVE_KEY, "an earlier lineage's original");
+    storage.setItem(STORAGE_KEY, V14);
+    const owner = new SharedSave(storage, () => 1000);
+    const loaded = owner.load();
+    expect(loaded).toEqual({
+      error: "This save is from an older version of Flowsynth (v14) and can't be read here. It's kept as it was, and the game starts fresh.",
+      olderVersion: 14,
+    });
+    expect(owner.write(createInitialState(), 2000)).toBe("written");
+    expect(storage.getItem(PRE_V16_ORIGINAL_SAVE_KEY)).toBe(V14);
+  });
+
+  it("a lost-money v15 save adopted through recovery is kept under the pre-v16 key", () => {
+    const lost = JSON.stringify({ app: "flowsynth", version: 15, savedAt: 750, state: {
+      mode: "flow", habits: [], practiceLog: [], sessionRecords: [], notes: [], goals: [], modules: [],
+      session: { target: null, elapsed: 60, startedAt: 1, goalSeconds: {}, targetSignaled: false,
+        accounting: { creditedSeconds: 60, poolSeconds: 0, bucketNous: null, pendingAwaySeconds: 0, events: [] } },
+      summary: null, nextId: 1 } });
+    const storage = memoryStorage();
+    storage.setItem(STORAGE_KEY, lost);
+    const owner = new SharedSave(storage, () => 1000);
+    expect(owner.load()).toMatchObject({ recoveryRequired: true });
+    const recovered = owner.parseRecovered(lost);
+    if ("error" in recovered) throw new Error("expected recovery");
+    expect(owner.adoptRecovered(lost, recovered.state, recovered.savedAt)).toBe(true);
+    expect(storage.getItem(PRE_V16_ORIGINAL_SAVE_KEY)).toBe(lost);
+  });
+
+  it("a second pre-v16 original never displaces the first: the earlier one moves to the key's history", () => {
+    const storage = memoryStorage();
+    storage.setItem(STORAGE_KEY, V14);
+    const owner = new SharedSave(storage, () => 1000);
+    owner.load();
+    owner.write(createInitialState(), 2000);
+    expect(owner.retain(V15)).toBe(true);
+    expect(storage.getItem(PRE_V16_ORIGINAL_SAVE_KEY)).toBe(V15);
+    expect(storage.getItem(`${PRE_V16_ORIGINAL_SAVE_KEY}.1`)).toBe(V14);
   });
 });

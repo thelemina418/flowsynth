@@ -24,4 +24,4 @@ The rebalance shipped its calibrated curves behind the frozen century baseline (
 
 ## Provenance
 
-The frozen baseline's figures and limitations: [the century calibration record](../century-calibration.md) (ADR-0079). The conversion's evidence: `src/engine/save.test.ts` ("the v12 → v13 migration"), `src/ui/app.migration.test.ts`, `tools/save-migration.test.ts`, the recorded walk and captures under `docs/evidence/issue-493/`, and the field-by-field table at [save-migration](../save-migration.md).
+The frozen baseline's figures and limitations: [the century calibration record](../archive/century-calibration.md) (ADR-0079). The conversion's evidence: `src/engine/save.test.ts` ("the v12 → v13 migration"), `src/ui/app.migration.test.ts`, `tools/save-migration.test.ts`, the recorded walk and captures under `docs/archive/evidence/issue-493/`, and the field-by-field table at [save-migration](../archive/save-migration.md).

@@ -1,19 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { advance } from "./advance";
-import { endSession, startSession } from "./actions";
-import { fresh } from "./fixtures";
-import { createGoal, editGoal, occurrenceKeyFor, occurrenceStartFor } from "./goals";
-import { createHabit, selectHabit } from "./habits";
-import { composePlaythroughRecipe, runPlaythrough } from "./playthrough";
-import type { GoalSchedule } from "./types";
+import { applyIn, advanceIn, fresh, habitOf, intentionOf } from "./fixtures";
+import { occurrenceKeyFor, occurrenceStartFor } from "./intentions";
+import type { IntentionSchedule } from "./types";
 
 // The calendar-basis regressions (issue #505). The engine's calendar basis
-// is the host's local calendar — goal occurrence days and playthrough
-// schedule days both read it — and that basis is declared, not discovered:
+// is the host's local calendar — intention occurrence days read it — and that
+// basis is declared, not discovered:
 // these cases hold under UTC and under a DST-observing zone alike (the
-// targeted runner, `npm run test:calendar`, executes this file and the goals
+// targeted runner, `npm run test:calendar`, executes this file and the intentions
 // suite under both). The expectations are derived from the raw UTC offset —
-// an independent construction — so the goals primitives can never disagree
+// an independent construction — so the intentions primitives can never disagree
 // with themselves without failing here, and the fixed-figure assertions are
 // identical in both zones by design.
 
@@ -43,8 +39,8 @@ function localMidnightBefore(t: number): number {
 }
 
 function withHabit(s: ReturnType<typeof fresh>) {
-  const habit = createHabit(s, "Piano")!.habit!;
-  selectHabit(s, habit.id);
+  const habit = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
+  applyIn(s, { type: "selectHabit", id: habit.id });
   return habit;
 }
 
@@ -60,7 +56,7 @@ describe("the declared calendar basis (issue #505)", () => {
       Date.UTC(2026, 2, 9, 12, 30, 0),
       Date.UTC(2026, 10, 1, 21, 0, 0),
     ];
-    const schedule: GoalSchedule = { kind: "daily" };
+    const schedule: IntentionSchedule = { kind: "daily" };
     for (const now of stamps) {
       const start = occurrenceStartFor(schedule, now, 0);
       expect(start).toBe(localMidnightBefore(now));
@@ -72,7 +68,7 @@ describe("the declared calendar basis (issue #505)", () => {
 
   it("weekly occurrences begin on the local Monday", () => {
     const stamps = [Date.UTC(2026, 2, 8, 22, 0, 0), Date.UTC(2026, 10, 1, 12, 0, 0)];
-    const schedule: GoalSchedule = { kind: "weekly" };
+    const schedule: IntentionSchedule = { kind: "weekly" };
     for (const now of stamps) {
       const start = occurrenceStartFor(schedule, now, 0);
       expect(new Date(start).getDay()).toBe(1); // Monday, in local terms
@@ -88,90 +84,12 @@ describe("the declared calendar basis (issue #505)", () => {
     const boundary = localMidnightBefore(new Date(2026, 2, 9, 12).getTime());
     const s = fresh();
     const habit = withHabit(s);
-    const goal = createGoal(s, { habitId: habit.id, minutes: 60, schedule: "weekly", now: boundary - DAY_MS }).goal!;
-    startSession(s, null, boundary - 600_000);
-    advance(s, 1200);
-    endSession(s, boundary + 600_000);
-    const fuel = s.goalFuel;
-    editGoal(s, goal.id, { minutes: 60, schedule: "daily" }, boundary + 600_000);
-    // Only the post-boundary share belongs to the new daily occurrence;
-    // the pre-boundary share never replays as fuel.
-    expect(goal.progressSeconds).toBeCloseTo(600, 6);
-    expect(goal.liveSeconds).toBeCloseTo(600, 6);
-    expect(s.goalFuel).toBe(fuel);
-  });
-});
-
-describe("the playthrough schedule's calendar (issue #505)", () => {
-  it("declares the host's calendar and rejects a foreign zone by name", () => {
-    const host = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const recipe = composePlaythroughRecipe();
-    expect(recipe.schedule.timeZone).toBe(host);
-    const foreign = host === "UTC" ? "America/Chicago" : "UTC";
-    expect(() => composePlaythroughRecipe({ schedule: { timeZone: foreign } }))
-      .toThrow(/timeZone must match the engine's host calendar/);
-  });
-
-  it("fits a real spring-forward and fall-back day, whatever the zone's day length", () => {
-    // The anchor's first five days straddle March 8 (23 hours in a
-    // DST-observing zone) and the fall-back stretch similarly.
-    const recipe = composePlaythroughRecipe({
-      seed: 42,
-      budgetDays: 5,
-      schedule: { startAt: Date.UTC(2026, 2, 6, 23, 30, 0) },
-    });
-    expect(recipe.schedule.startAt).toBe(Date.UTC(2026, 2, 6, 23, 30, 0));
-    const fallback = composePlaythroughRecipe({
-      seed: 42,
-      budgetDays: 5,
-      schedule: { startAt: Date.UTC(2026, 9, 30, 23, 30, 0) },
-    });
-    expect(fallback.schedule.startAt).toBe(Date.UTC(2026, 9, 30, 23, 30, 0));
-  });
-
-  it("an over-full day is refused exactly where the calendar is shorter than the schedule", () => {
-    // Two 600-minute sessions with 120-minute breathers span exactly 24
-    // hours — enough for a UTC day, one hour too much for the 23-hour
-    // spring-forward day. The validator must refuse where the calendar is
-    // shorter and accept where it is not, per the host's own day lengths.
-    const anchor = Date.UTC(2026, 2, 6, 23, 30, 0);
-    const dayGap = new Date(2026, 2, 9).getTime() - new Date(2026, 2, 8).getTime();
-    let refused = false;
-    try {
-      composePlaythroughRecipe({
-        seed: 42,
-        budgetDays: 2,
-        schedule: { startAt: anchor, sessionsPerDay: 2, sessionMinutes: 600, breatherMinutes: 120 },
-      });
-    } catch (error) {
-      refused = (error as Error).message.includes("must fit each calendar day");
-    }
-    expect(refused).toBe(dayGap < DAY_MS);
-  });
-
-  it("a short real walk records the declared schedule identically across calendar bases", () => {
-    // Two declared days of two 25-minute sessions: 6,000 credited seconds,
-    // day 2's first session at the second local midnight after the anchor —
-    // 23 hours after it under a DST-observing zone, 24 under UTC — with the
-    // honest budget stop. The figures are computed from the host's own day
-    // lengths, so the same assertion pins both zones.
-    const anchor = Date.UTC(2026, 2, 7, 9, 0, 0);
-    const record = runPlaythrough(composePlaythroughRecipe({
-      seed: 42,
-      budgetDays: 2,
-      schedule: { startAt: anchor },
-    }));
-    expect(record.days).toBe(2);
-    expect(record.complete).toBe(false);
-    expect(record.stop.kind).toBe("budget");
-    expect(record.creditedSeconds).toBe(4 * 25 * 60);
-    const sessions = record.events.filter((event) => event.kind === "session");
-    expect(sessions).toHaveLength(4);
-    // Session events record at the session's end: 1,500 s after its start.
-    expect(sessions[0]!.at).toBe(25 * 60);
-    expect(sessions[1]!.at).toBe(25 * 60 + 30 * 60);
-    const springGap = new Date(2026, 2, 9).getTime() - new Date(2026, 2, 8).getTime();
-    expect(sessions[2]!.at).toBe(springGap / 1000 + 25 * 60);
-    expect(sessions[3]!.at).toBe(springGap / 1000 + 25 * 60 + 30 * 60);
+    const intention = intentionOf(s, applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 60, schedule: "weekly", now: boundary - DAY_MS }));
+    applyIn(s, { type: "startSession", target: null, now: boundary - 600_000 });
+    advanceIn(s, 1200, "flow");
+    applyIn(s, { type: "endSession", now: boundary + 600_000 });
+    applyIn(s, { type: "editIntention", id: intention.id, minutes: 60, schedule: "daily", now: boundary + 600_000 });
+    // Only the post-boundary share belongs to the new daily occurrence.
+    expect(intention.progressSeconds).toBeCloseTo(600, 6);
   });
 });

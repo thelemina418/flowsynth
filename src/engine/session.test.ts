@@ -1,108 +1,71 @@
 import { describe, expect, it } from "vitest";
-import { advance } from "./advance";
-import { endSession, pauseSession, resumeSession, startSession } from "./actions";
-import { computeRates } from "./economy";
-import { fresh, give, giveHabit } from "./fixtures";
-import { hex } from "./hex";
+import { applyIn, advanceIn, fresh, giveHabit } from "./fixtures";
 
-function earned(state: ReturnType<typeof fresh>, seconds: number): number {
-  const before = state.nous;
-  advance(state, seconds);
-  return state.nous - before;
+// Session rules (ADR-0019) in the interim shape (issue #15): time moves only
+// the session's practice facts, so credited seconds are what a span earns.
+function credited(state: ReturnType<typeof fresh>, seconds: number): number {
+  const before = state.game.session?.accounting.creditedSeconds ?? 0;
+  advanceIn(state, seconds, "flow");
+  return (state.game.session?.accounting.creditedSeconds ?? 0) - before;
 }
 
 describe("session rules", () => {
-  it("produces nothing in upgrade mode or while paused", () => {
+  it("credits nothing in upgrade mode or while paused", () => {
     const s = fresh();
-    expect(earned(s, 100)).toBe(0);
-    startSession(s, 600);
-    pauseSession(s);
-    expect(earned(s, 100)).toBe(0);
-    resumeSession(s);
-    expect(earned(s, 1)).toBeGreaterThan(0);
+    expect({ ...advanceIn(s, 100, "flow"), state: undefined }).toEqual({ intentionsCompleted: 0 });
+    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    applyIn(s, { type: "pauseSession" });
+    expect(credited(s, 100)).toBe(0);
+    expect(s.game.session?.elapsed).toBe(0);
+    applyIn(s, { type: "resumeSession" });
+    expect(credited(s, 1)).toBe(1);
   });
 
-  it("zero elapsed time produces nothing", () => {
+  it("zero elapsed time credits nothing", () => {
     const s = fresh();
-    startSession(s, 600);
-    expect(earned(s, 0)).toBe(0);
+    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    expect(credited(s, 0)).toBe(0);
   });
 
-  it("splitting integration preserves income", () => {
+  it("splitting the walk preserves credited time", () => {
     const a = fresh();
-    startSession(a, 600);
-    const full = earned(a, 600);
-
+    applyIn(a, { type: "startSession", target: 600, now: 0 });
+    const full = credited(a, 600);
     const b = fresh();
-    startSession(b, 600);
-    const split = earned(b, 20) + earned(b, 580);
-    expect(split).toBeCloseTo(full, 6);
+    applyIn(b, { type: "startSession", target: 600, now: 0 });
+    expect(credited(b, 20) + credited(b, 580)).toBeCloseTo(full, 9);
   });
 
-  it("open-ended sessions produce exactly what the board produces", () => {
+  it("open-ended sessions credit the active habit with present time", () => {
     const s = fresh();
-    give(s, "forge", hex(1, 0));
-    const { pair } = giveHabit(s);
-    startSession(s, null);
-    // The lone opening synth: 0.1 ν/s; the forge receives no charge (no
-    // generator) — the 3600 credited seconds cross the practice meter's
-    // opening fill plus one flat cadence block, carrying 1620.
-    expect(earned(s, 3600)).toBeCloseTo(0.1 * 3600, 6);
-    expect(computeRates(s, true).forgeRate).toBe(0);
-    expect(s.forge.earned).toBe(0);
-    expect(pair.rollMeter.earned).toBe(2);
-    expect(pair.rollMeter.progress).toBeCloseTo(1620, 6);
-    expect(s.session?.target).toBeNull();
+    const { habit } = giveHabit(s);
+    applyIn(s, { type: "startSession", target: null, now: 0 });
+    expect(credited(s, 3600)).toBe(3600);
+    expect(habit.seconds).toBe(3600);
+    expect(s.game.session?.target).toBeNull();
   });
 
-  it("ending early keeps production; there is no completion bonus", () => {
+  it("reaching the target is informational only; crediting continues unchanged", () => {
     const s = fresh();
-    startSession(s, 600);
-    const half = earned(s, 300);
-    expect(half).toBeCloseTo(0.1 * 300, 6);
-    endSession(s);
-    expect(s.totalEarned).toBeCloseTo(0.1 * 300, 6);
+    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    expect(credited(s, 600)).toBe(600);
+    expect(credited(s, 100)).toBe(100);
+    expect(s.game.session?.elapsed).toBe(700);
   });
 
-  it("reaching the target is informational only; production continues unchanged", () => {
+  it("ending early keeps the credited time in the record", () => {
     const s = fresh();
-    startSession(s, 600);
-    expect(earned(s, 600)).toBeCloseTo(60, 6);
-    expect(s.session?.elapsed).toBeCloseTo(600, 6);
-    const before = s.nous;
-    advance(s, 100);
-    expect(s.nous - before).toBeCloseTo(10, 6);
+    applyIn(s, { type: "startSession", target: 600, now: 1_000 });
+    credited(s, 300);
+    expect(applyIn(s, { type: "endSession", now: 301_000 }).ok).toBe(true);
+    expect(s.records.sessionsCompleted).toBe(1);
+    expect(s.records.sessionRecords[0]).toMatchObject({ creditedSeconds: 300, plannedTarget: 600, mode: "planned" });
+    expect(s.game.summary).toMatchObject({ seconds: 300, plannedTarget: 600, seen: false });
   });
 
   it("accepts any timed duration; presets are a UI concern, not an engine rule", () => {
     const s = fresh();
-    expect(startSession(s, 30).ok).toBe(true);
-    const result = advance(s, 30);
-    expect(result.nousEarned).toBeCloseTo(3, 6);
-  });
-
-  it("the first session completes like any session: no rewards beyond board production", () => {
-    const s = fresh();
-    startSession(s, 600);
-    const result = advance(s, 600);
-    expect(result.nousEarned).toBeCloseTo(60, 6);
-    endSession(s);
-    expect(s.sessionsCompleted).toBe(1);
-  });
-
-  it("session production derives entirely from board modules", () => {
-    const s = fresh();
-    startSession(s, 600);
-    expect(earned(s, 600)).toBeCloseTo(60, 6);
-    endSession(s);
-
-    // Same session shape with a second synthesizer: production grows only
-    // because the board grew. (2,0) is D5 — its own island, chordless, so
-    // the arithmetic stays pure amplitude; the chord lessons live in
-    // chords.test.ts. The achievement boost is a global multiplier outside
-    // that comparison.
-    give(s, "additive", hex(2, 0));
-    startSession(s, 600);
-    expect(earned(s, 600)).toBeCloseTo((0.1 + 0.1) * 600 * computeRates(s, true).achievementBoost, 6);
+    expect(applyIn(s, { type: "startSession", target: 30, now: 0 }).ok).toBe(true);
+    expect(credited(s, 30)).toBe(30);
   });
 });

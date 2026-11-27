@@ -117,7 +117,7 @@ const chords = {
 // The habit palette (issue #312, re-owned by the habit with issue #445):
 // the six swatches the habit editor offers, vermillion the default. The
 // six keys ride habit state (`HabitColor`) and read these tokens wherever
-// the habit — and the goal that inherits its color — renders. The hexes
+// the habit — and the intention that inherits its color — renders. The hexes
 // are the issue's pin.
 const habitPalette = {
   "habit-vermillion": "#cc603d",

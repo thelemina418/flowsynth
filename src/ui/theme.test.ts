@@ -7,11 +7,8 @@ import { HABIT_COLORS } from "../engine/habits";
 // see real source read it off disk — one canonical load per file.
 const readSource = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 // Stylesheet comments are stripped first: they carry issue references
-// ("#151"), not palette literals. render.ts keeps its comments — its guards
-// only read var(--…) tokens, and stripping block comments there could mangle
-// string literals.
+// ("#151"), not palette literals.
 const stylesheet = readSource("./style.css").replace(/\/\*[\s\S]*?\*\//g, "");
-const renderSource = readSource("./render.ts");
 
 const tokens = defaultTheme.tokens;
 
@@ -134,20 +131,6 @@ describe("theme token table", () => {
     expect(stylesheet.match(/\.hex-icon/g)).toBeNull();
   });
 
-  it("keeps board and tray gestures from selecting text (#151)", () => {
-    // Dragging a module or the board is a gesture, not a text edit: every
-    // drag surface (grid, Hex detail, tray) must be a selector of some rule
-    // whose body denies selection, so Chrome never highlights page text.
-    for (const surface of ["#grid", ".hex-detail", ".tray-column", ".inventory-tray"]) {
-      const denied = [...stylesheet.matchAll(/([^{}]+)\{([^}]*)\}/g)].some(
-        ([, selectors, body]) =>
-          selectors!.split(",").map((s) => s.trim()).includes(surface) &&
-          body!.includes("user-select: none"),
-      );
-      expect(denied, `${surface} denies text selection`).toBe(true);
-    }
-  });
-
   it("only produces valid color values", () => {
     const primitive = /^(#[0-9a-fA-F]{3,8}|rgba\(.+\))$/;
     const derived = /^color-mix\(in srgb, var\(--[a-z0-9-]+\) \d+%, (var\(--[a-z0-9-]+\)|transparent)\)$/;
@@ -193,17 +176,6 @@ describe("theme token table", () => {
     const referenced = new Set([...stylesheet.matchAll(/var\(--([a-z0-9-]+)[),]/g)].map((m) => m[1]!));
     for (const name of referenced) {
       expect(name === "mono" || name === "cc" || name === "seam-dur" || name === "pip" || name === "category-hue" || name in tokens || defined.has(name), `--${name} resolves`).toBe(true);
-    }
-  });
-
-  it("is the single source the rendered markup colors through", () => {
-    for (const match of renderSource.matchAll(/var\(--([a-z0-9-]+)/g)) {
-      const name = match[1];
-      // Dynamic refs are built by prefix, e.g. var(--finish-${rarity}).
-      const resolves = name.endsWith("-")
-        ? Object.keys(tokens).some((key) => key.startsWith(name))
-        : name in tokens;
-      expect(resolves, `--${name} resolves`).toBe(true);
     }
   });
 });

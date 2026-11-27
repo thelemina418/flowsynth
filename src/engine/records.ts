@@ -30,7 +30,7 @@ export function recordMissed(record: SessionRecord): boolean {
 // The habit name behind a record or note, resolved at render: renames show
 // forward through history, and an archived habit's name keeps resolving.
 export function habitRecordName(state: GameState, habitId: string): string {
-  return state.habits.find((habit) => habit.id === habitId)?.name ?? "a removed habit";
+  return state.records.habits.find((habit) => habit.id === habitId)?.name ?? "a removed habit";
 }
 
 // The per-habit aggregates (§9), read off the practice log — live sessions
@@ -41,7 +41,7 @@ export function habitRecordName(state: GameState, habitId: string): string {
 export function habitPracticeSummary(state: GameState, habitId: string): { sessions: number; lastPracticed: number | null } {
   let sessions = 0;
   let lastPracticed: number | null = null;
-  for (const entry of state.practiceLog) {
+  for (const entry of state.records.practiceLog) {
     if (entry.habitId !== habitId) continue;
     if (entry.source === "live") sessions++;
     if (lastPracticed === null || entry.at > lastPracticed) lastPracticed = entry.at;
@@ -51,10 +51,10 @@ export function habitPracticeSummary(state: GameState, habitId: string): { sessi
 
 // The habit's tagged notes (§9), newest first — the stream order reversed.
 export function habitTaggedNotes(state: GameState, habitId: string): NoteEntry[] {
-  return state.notes.filter((note) => note.habitId === habitId).reverse();
+  return state.records.notes.filter((note) => note.habitId === habitId).reverse();
 }
 
 // The history list's order (§9): newest first.
 export function sessionRecordsNewestFirst(state: GameState): SessionRecord[] {
-  return [...state.sessionRecords].reverse();
+  return [...state.records.sessionRecords].reverse();
 }

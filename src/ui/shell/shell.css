@@ -1,0 +1,47 @@
+/* The shell (issue #21): one floating panel for the question first load
+   owes, centred on the empty instrument. Colors come from the token table. */
+.shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 16px;
+  padding: 24px 16px;
+}
+
+.shell-panel {
+  width: min(100%, 440px);
+  display: grid;
+  gap: 12px;
+  padding: 24px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  clip-path: var(--inst-clip);
+}
+
+.shell-title {
+  font: 600 22px/1.2 var(--font-condensed);
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+}
+
+.shell-panel .mono { overflow-wrap: anywhere; }
+
+.shell-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.shell-actions button { flex: 1 1 auto; text-align: left; }
+.shell-actions .quiet { flex: 0 0 auto; }
+
+.shell-notice {
+  width: min(100%, 440px);
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.shell-error { color: var(--danger); }
