@@ -1,6 +1,5 @@
 import { DRIFT_NOISE_SECONDS, EPS, RECONCILIATION_FLOOR_SECONDS } from "./constants";
-import { add, D, gt, requireNotNaN } from "./num";
-import { requireFinite } from "./numeric";
+import { add, D, gt, requireFinite, requireNotNaN } from "./num";
 import { accrueLivePractice } from "./habits";
 import { accrueGoalProgress } from "./goals";
 import { emptyAdvanceResult, sumResults, walkFlow } from "./walk";

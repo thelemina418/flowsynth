@@ -67,7 +67,7 @@ describe("persistence", () => {
   });
 
   it("saves carry the current version", () => {
-    expect(JSON.parse(serialize(fresh())).version).toBe(SAVE_VERSION);
+    expect(JSON.parse(serialize(fresh(), 0)).version).toBe(SAVE_VERSION);
   });
 
   it("resuming from a mid-flow save does not duplicate credit", () => {
@@ -81,7 +81,7 @@ describe("persistence", () => {
     advanceIn(straight, 400, "flow");
     const split = build();
     advanceIn(split, 150, "flow");
-    const restored = deserialize(serialize(split)).state!;
+    const restored = deserialize(serialize(split, 0)).state!;
     advanceIn(restored, 250, "flow");
     expect(restored.game.session!.accounting).toEqual(straight.game.session!.accounting);
     expect(restored.records.habits).toEqual(straight.records.habits);
@@ -111,7 +111,7 @@ describe("persistence", () => {
     advanceIn(s, 600, "flow");
     applyIn(s, { type: "endSession", now: 601_000 });
     applyIn(s, { type: "logPractice", habitId: habit.id, minutes: 5, now: 700_000 });
-    const loaded = deserialize(serialize(s)).state!;
+    const loaded = deserialize(serialize(s, 0)).state!;
     expect(loaded.records.habits).toEqual(s.records.habits);
     expect(loaded.records.practiceLog).toEqual(s.records.practiceLog);
     expect(loaded.records.sessionRecords).toEqual(s.records.sessionRecords);
@@ -212,7 +212,7 @@ describe("a v15 save's records (issues #15, #19)", () => {
 describe("the version gate", () => {
   it("rejects every version older than v15 with the start-fresh message", () => {
     for (const version of [1, 7, 10, 12, 13, 14]) {
-      const text = serialize(fresh()).replace(`"version": ${SAVE_VERSION}`, `"version": ${version}`);
+      const text = serialize(fresh(), 0).replace(`"version": ${SAVE_VERSION}`, `"version": ${version}`);
       const result = deserialize(text);
       expect(result.error, `v${version}`).toMatch(/older version/i);
       expect(result.olderVersion, `v${version}`).toBe(version);
@@ -243,7 +243,7 @@ describe("serialization refuses what it cannot write (issue #486)", () => {
     for (const figure of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN]) {
       const s: GameState = fresh();
       s.records.sessionsCompleted = figure;
-      expect(() => serialize(s)).toThrow(SaveRefusedError);
+      expect(() => serialize(s, 0)).toThrow(SaveRefusedError);
     }
   });
 
@@ -251,13 +251,13 @@ describe("serialization refuses what it cannot write (issue #486)", () => {
     const s = fresh();
     giveHabit(s);
     s.records.habits[0]!.seconds = NaN;
-    expect(() => serialize(s)).toThrow(/habits\[0\]\.seconds/);
+    expect(() => serialize(s, 0)).toThrow(/habits\[0\]\.seconds/);
   });
 
   it("a session's unrepresentable accounting refuses the save", () => {
     const s = fresh();
     applyIn(s, { type: "startSession", target: null, now: 0 });
     s.game.session!.accounting.poolSeconds = Infinity;
-    expect(() => serialize(s)).toThrow(/poolSeconds/);
+    expect(() => serialize(s, 0)).toThrow(/poolSeconds/);
   });
 });

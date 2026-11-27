@@ -1,5 +1,5 @@
 import { EPS } from "./constants";
-import { requireFinite } from "./numeric";
+import { requireFinite } from "./num";
 import { accrueGoalProgress, rollGoalOccurrences } from "./goals";
 import type { GameState, Habit, HabitClass, HabitColor, PracticeEntry } from "./types";
 

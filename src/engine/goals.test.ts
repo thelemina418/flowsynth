@@ -195,7 +195,7 @@ describe("goal edits (issue #445)", () => {
     applyIn(s, { type: "endSession", now: midnight + 600_000 });
     applyIn(s, { type: "editIntention", id: goal.id, minutes: 60, schedule: "daily", now: midnight + 600_000 });
     expect(goal.progressSeconds).toBeCloseTo(600);
-    const loaded = deserialize(serialize(s)).state!;
+    const loaded = deserialize(serialize(s, 0)).state!;
     expect(activeGoalOf(loaded, habit.id)!.progressSeconds).toBeCloseTo(600);
   });
 
@@ -209,7 +209,7 @@ describe("goal edits (issue #445)", () => {
     applyIn(s, { type: "editIntention", id: goal.id, minutes: 60, schedule: "weekly", now: 602000 });
     applyIn(s, { type: "deleteIntention", id: goal.id });
     expect(applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 10, schedule: "once", now: 603000 }).ok).toBe(true);
-    const loaded = deserialize(serialize(s)).state!;
+    const loaded = deserialize(serialize(s, 0)).state!;
     expect(loaded.records.sessionRecords[0]!.goalsAdvanced[0]!.goal!.condition.minutes).toBe(30);
     expect(loaded.records.sessionRecords[0]!.goalsAdvanced[0]!.goal!.schedule.kind).toBe("daily");
     expect(loaded.records.intentions.find(row => row.id === goal.id)!.retired).toBe(true);
@@ -340,7 +340,7 @@ describe("the migration's retain-one choice (issue #445)", () => {
     const s = fresh();
     withHabit(s);
     const [a, b] = pendingPair(s);
-    const loaded = deserialize(serialize(s)).state!;
+    const loaded = deserialize(serialize(s, 0)).state!;
     const loadedA = loaded.records.intentions.find((g) => g.id === a.id)!;
     const loadedB = loaded.records.intentions.find((g) => g.id === b.id)!;
     expect(loadedA.pendingChoice).toBe(true);
@@ -397,7 +397,7 @@ describe("persistence", () => {
     const habit = withHabit(s);
     applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 20, schedule: "daily", now: 7_000 });
     accrueGoalProgress(s, habit.id, 240);
-    const loaded = deserialize(serialize(s))!;
+    const loaded = deserialize(serialize(s, 0))!;
     expect(loaded.state!.records.intentions).toHaveLength(1);
     expect(loaded.state!.records.intentions[0]!.progressSeconds).toBeCloseTo(240, 6);
   });

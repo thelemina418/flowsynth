@@ -48,6 +48,14 @@ export function isNaNNum(value: Num): boolean {
   return Number.isNaN(value.mag) || Number.isNaN(value.sign) || Number.isNaN(value.layer);
 }
 
+// The plain-number seconds' guard (issue #486): JSON.stringify silently
+// writes null for a nonfinite number, and an accumulated Infinity compounds
+// forever after, so every commit of a seconds figure checks it first.
+export function requireFinite(value: number, detail: string): number {
+  if (!Number.isFinite(value)) throw new NumFault(detail);
+  return value;
+}
+
 // Returns the value so a guard can wrap the computed figure inline.
 export function requireNotNaN(value: Num, detail: string): Num {
   if (isNaNNum(value)) throw new NumFault(`${detail} is NaN`);

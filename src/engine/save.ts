@@ -95,7 +95,8 @@ function encode(value: unknown, path: string): unknown {
   return value;
 }
 
-export function serialize(state: GameState, savedAt: number = Date.now()): string {
+// `savedAt` is the caller's wall clock: the engine never reads one.
+export function serialize(state: GameState, savedAt: number): string {
   const file: SaveFile = { app: "flowsynth", version: SAVE_VERSION, savedAt, state: encode(state, "save.state") };
   assertSerializable(file, "save");
   return JSON.stringify(file, null, 2);

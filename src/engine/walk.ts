@@ -1,5 +1,5 @@
 import { EPS } from "./constants";
-import { requireFinite } from "./numeric";
+import { requireFinite } from "./num";
 import { accrueLivePractice } from "./habits";
 import { accrueGoalProgress } from "./goals";
 import type { AdvanceResult, GameState } from "./types";
@@ -28,8 +28,6 @@ export function walkFlow(state: GameState, seconds: number, sink: Sink): Advance
   session.elapsed = requireFinite(session.elapsed + seconds, "the session clock");
   const accounting = session.accounting;
   if (sink === "provisional") {
-    // The board's provisional production joins accounting.provisionalNous
-    // here once chunk 02 makes nous.
     accounting.poolSeconds = requireFinite(accounting.poolSeconds + seconds, "the provisional pool");
     return result;
   }

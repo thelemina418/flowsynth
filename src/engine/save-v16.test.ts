@@ -48,12 +48,12 @@ describe("save v16", () => {
   it("a NaN Decimal refuses the write, naming its path", () => {
     const s = flowing();
     s.game.nous = D(NaN);
-    expect(() => serialize(s)).toThrow(SaveRefusedError);
-    expect(() => serialize(s)).toThrow(/game\.nous/);
+    expect(() => serialize(s, 0)).toThrow(SaveRefusedError);
+    expect(() => serialize(s, 0)).toThrow(/game\.nous/);
   });
 
   it("refuses a save from a newer build", () => {
-    const text = serialize(fresh()).replace(`"version": 16`, `"version": 17`);
+    const text = serialize(fresh(), 0).replace(`"version": 16`, `"version": 17`);
     const loaded = deserialize(text);
     expect(loaded.state).toBeUndefined();
     expect(loaded.newerVersion).toBe(true);

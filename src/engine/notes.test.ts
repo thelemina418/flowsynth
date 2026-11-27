@@ -42,7 +42,7 @@ describe("notes app", () => {
     applyIn(s, { type: "writeNote", text: "persisted thought", now: 0 });
     advanceIn(s, 60, "flow");
     applyIn(s, { type: "endSession", now: 0 });
-    const loaded = deserialize(serialize(s))!;
+    const loaded = deserialize(serialize(s, 0))!;
     expect(loaded.state!.records.notes).toHaveLength(1);
     expect(loaded.state!.records.notes[0]!.text).toBe("persisted thought");
   });

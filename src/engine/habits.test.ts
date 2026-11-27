@@ -65,7 +65,7 @@ describe("the habit's palette (issue #445, ADR-0075)", () => {
     const s = fresh();
     const habit = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
     applyIn(s, { type: "recolorHabit", id: habit.id, color: "indigo" });
-    const loaded = deserialize(serialize(s)).state!;
+    const loaded = deserialize(serialize(s, 0)).state!;
     expect(loaded.records.habits[0]!.color).toBe("indigo");
   });
 });
@@ -150,7 +150,7 @@ describe("habit development", () => {
     advanceIn(s, 300, "flow");
     applyIn(s, { type: "endSession", now: 9_000 });
     applyIn(s, { type: "logPractice", habitId: piano.id, minutes: 5, now: 9_500 });
-    const loaded = deserialize(serialize(s))!;
+    const loaded = deserialize(serialize(s, 0))!;
     expect(loaded.state!.records.habits[0]!.name).toBe("Piano");
     expect(loaded.state!.records.activeHabitId).toBe(piano.id);
     expect(loaded.state!.records.practiceLog).toHaveLength(2);

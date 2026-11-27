@@ -1,7 +1,5 @@
-// The interim constants (spec chunk 01, issue #15): only what the kept
-// modules read — trust accounting, the summary reflection, and the save
-// version. The economy's constants retired with the systems they priced;
-// the rebuild adds its own from docs/design/mechanics-sketch.md.
+// The engine's constants: trust accounting, the summary reflection, and
+// the save version.
 
 export const EPS = 1e-9;
 
