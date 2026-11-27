@@ -33,7 +33,14 @@ export function App({ shell }: { shell: Shell }) {
         />
       )}
       {screen.kind === "ready" && (
-        <Stage nous={game.nous} board={game.board} arrived={game.arrived} placing={shell.placing} />
+        <Stage
+          nous={game.nous}
+          board={game.board}
+          rates={game.rates}
+          flowing={game.mode === "flow"}
+          arrived={game.arrived}
+          placing={shell.placing}
+        />
       )}
     </div>
   );

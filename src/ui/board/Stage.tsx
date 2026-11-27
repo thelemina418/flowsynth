@@ -1,5 +1,5 @@
 import { useEffect } from "preact/hooks";
-import type { Board as BoardState, ModuleType } from "../../engine/types";
+import type { Board as BoardState, BoardRates, ModuleType } from "../../engine/types";
 import type { Num } from "../../engine/num";
 import { Board } from "./Board";
 import { NousReadout } from "./NousReadout";
@@ -9,7 +9,16 @@ import { Tray } from "./Tray";
 // The game surface once nothing is owed on first load: the ν readout, the
 // board and the tray beside it. Escape or a tap away cancels a pick
 // (PRODUCT.md).
-export function Stage({ nous, board, arrived, placing }: { nous: Num; board: BoardState; arrived: ModuleType[]; placing: Placing }) {
+interface StageProps {
+  nous: Num;
+  board: BoardState;
+  rates: BoardRates;
+  flowing: boolean;
+  arrived: ModuleType[];
+  placing: Placing;
+}
+
+export function Stage({ nous, board, rates, flowing, arrived, placing }: StageProps) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") placing.clear();
@@ -43,7 +52,7 @@ export function Stage({ nous, board, arrived, placing }: { nous: Num; board: Boa
     <section class="stage">
       <NousReadout nous={nous} />
       <div class="stage-board">
-        <Board board={board} placing={placing} onDrop={onDrop} />
+        <Board board={board} rates={rates} flowing={flowing} placing={placing} onDrop={onDrop} />
         <Tray arrived={arrived} placing={placing} onDrop={onDrop} />
       </div>
       {note !== null && (

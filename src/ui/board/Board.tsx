@@ -4,10 +4,11 @@ import { corners, hexKey, lifetimeCells, ring, sameHex, toPixel, type Hex } from
 import { wallAt } from "../../engine/map";
 import { categoryOf, moduleName } from "../../engine/modules";
 import { moduleAt } from "../../engine/placement";
-import type { Board as BoardState, HabitClass, ModuleType } from "../../engine/types";
+import type { Board as BoardState, BoardRates, HabitClass, ModuleType } from "../../engine/types";
 import { startDrag } from "./drag";
 import { Glyph } from "./glyphs";
 import type { Placing, Target } from "./placing";
+import { Resonances } from "./Resonances";
 
 // The board (spec chunk 02, issue #24): the lifetime board drawn as
 // flat-top hexes in The Rack's style. Open cells are machined plates (a
@@ -19,6 +20,7 @@ import type { Placing, Target } from "./placing";
 // faceplate in its category hue with its glyph and nameplate (issue #25);
 // a pick's targets carry data-target (valid: clear outline, invalid:
 // muted outline) and the picked module data-picked (a firm inset).
+// Resonance outlines (issue #26) are one layer drawn over the cells.
 
 // The hex circumradius in viewBox units; the SVG scales to its container.
 const SIZE = 30;
@@ -156,7 +158,15 @@ function Cell({ cell, kind, module, picked, target, actions }: CellProps) {
 // The board with its placements. In upgrade mode a cell is a click target
 // (and a placed module a drag source) routed to the pick; outside it the
 // layout is locked and the cells carry no handlers.
-export function Board({ board, placing, onDrop }: { board: BoardState; placing: Placing; onDrop: (target: Element | null) => void }) {
+interface BoardProps {
+  board: BoardState;
+  rates: BoardRates;
+  flowing: boolean;
+  placing: Placing;
+  onDrop: (target: Element | null) => void;
+}
+
+export function Board({ board, rates, flowing, placing, onDrop }: BoardProps) {
   const pick = placing.pick.value;
   const targets = placing.targets.value;
   const locked = placing.locked.value;
@@ -182,6 +192,7 @@ export function Board({ board, placing, onDrop }: { board: BoardState; placing: 
           />
         );
       })}
+      <Resonances rates={rates} flowing={flowing} size={SIZE} />
     </svg>
   );
 }
