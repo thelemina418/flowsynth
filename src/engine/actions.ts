@@ -4,10 +4,9 @@ import { rollGoalOccurrences } from "./goals";
 import { freshAccounting } from "./trust";
 import type { GameState, SessionReflection } from "./types";
 
-// The interim session actions (issue #15): start, pause, resume and end a
-// flow session, and record the summary's reflection. The board's actions
-// retired with the old game; issue #17 routes every mutation through
-// `apply(state, action)`.
+// The session's mutations: start, pause, resume and end a flow session,
+// mark the target signalled, and record the summary's reflection. Callers
+// reach them through `apply(state, action)` (engine/apply.ts).
 
 export interface ActionResult {
   ok: boolean;
@@ -21,10 +20,10 @@ function fail(reason: string): ActionResult {
 }
 
 export function startSession(state: GameState, target: number | null, now: number = 0): ActionResult {
-  if (state.mode !== "upgrade") return fail("A session is already running.");
-  state.sessionIndex++;
-  state.mode = "flow";
-  state.session = {
+  if (state.game.mode !== "upgrade") return fail("A session is already running.");
+  state.records.sessionIndex++;
+  state.game.mode = "flow";
+  state.game.session = {
     target,
     elapsed: 0,
     accounting: freshAccounting(),
@@ -36,8 +35,8 @@ export function startSession(state: GameState, target: number | null, now: numbe
 }
 
 export function endSession(state: GameState, now: number = 0): ActionResult {
-  if (state.mode === "upgrade") return fail("No session is running.");
-  const session = state.session;
+  if (state.game.mode === "upgrade") return fail("No session is running.");
+  const session = state.game.session;
   // The exit gate (spec §1–2): the honesty report's answer is mandatory and
   // final. A still unclassified absence buffer counts too: it would have
   // flushed at the visible boundary that preceded any real exit.
@@ -48,32 +47,32 @@ export function endSession(state: GameState, now: number = 0): ActionResult {
   // summary's practice minutes key off C — never raw elapsed.
   const credited = session?.accounting.creditedSeconds ?? 0;
   const target = session?.target ?? null;
-  state.mode = "upgrade";
-  state.session = null;
-  state.sessionsCompleted++;
+  state.game.mode = "upgrade";
+  state.game.session = null;
+  state.records.sessionsCompleted++;
   logSessionPractice(state, credited, now);
   rollGoalOccurrences(state, now);
   const events = (session?.accounting.events ?? []).map((event) => ({ ...event }));
   // The session record (§9): one append-only entry at close, whatever the
   // length or mode. The goals-advanced ledger snapshots from the session,
   // so deleting or replacing a goal never rewrites history.
-  state.sessionRecords.push({
-    sessionNumber: state.sessionsCompleted,
+  state.records.sessionRecords.push({
+    sessionNumber: state.records.sessionsCompleted,
     startedAt: session && session.startedAt > 0 ? session.startedAt : now,
     endedAt: now,
-    habitId: state.activeHabitId,
+    habitId: state.records.activeHabitId,
     mode: target !== null ? "planned" : "open-ended",
     plannedTarget: target,
     creditedSeconds: credited,
     honestyEvents: events,
     reflection: null,
     goalsAdvanced: Object.entries(session?.goalSeconds ?? {}).map(([goalId, seconds]) => {
-      const goal = state.goals.find((row) => row.id === goalId);
+      const goal = state.records.intentions.find((row) => row.id === goalId);
       return { goalId, seconds, ...(goal ? { goal: structuredClone(goal) } : {}) };
     }),
   });
-  state.summary = {
-    sessionNumber: state.sessionsCompleted,
+  state.game.summary = {
+    sessionNumber: state.records.sessionsCompleted,
     seconds: credited,
     plannedTarget: target,
     honestyEvents: events,
@@ -83,15 +82,25 @@ export function endSession(state: GameState, now: number = 0): ActionResult {
   return ok;
 }
 
+// The first wake-up past the target (spec §4): persisted so a reload never
+// re-delivers the signals.
+export function signalTarget(state: GameState): ActionResult {
+  const session = state.game.session;
+  if (!session || session.target === null) return fail("No planned session is running.");
+  if (session.targetSignaled) return fail("The target was already signalled.");
+  session.targetSignaled = true;
+  return ok;
+}
+
 export function pauseSession(state: GameState): ActionResult {
-  if (state.mode !== "flow") return fail("Only a live session can be paused.");
-  state.mode = "paused";
+  if (state.game.mode !== "flow") return fail("Only a live session can be paused.");
+  state.game.mode = "paused";
   return ok;
 }
 
 export function resumeSession(state: GameState): ActionResult {
-  if (state.mode !== "paused") return fail("Only a paused session can be resumed.");
-  state.mode = "flow";
+  if (state.game.mode !== "paused") return fail("Only a paused session can be resumed.");
+  state.game.mode = "flow";
   return ok;
 }
 
@@ -99,20 +108,20 @@ export function resumeSession(state: GameState): ActionResult {
 // touched — the untouched field keeps its neutral default — and absent
 // while neither is. The record's reflection slot fills from the same touch.
 export function recordSummaryReflection(state: GameState, part: Partial<SessionReflection>): ActionResult {
-  if (!state.summary) return fail("No session summary to reflect on.");
-  const current = state.summary.reflection ?? { text: "", slider: REFLECTION_SLIDER_NEUTRAL };
-  state.summary.reflection = {
+  if (!state.game.summary) return fail("No session summary to reflect on.");
+  const current = state.game.summary.reflection ?? { text: "", slider: REFLECTION_SLIDER_NEUTRAL };
+  state.game.summary.reflection = {
     text: part.text ?? current.text,
     slider: Math.min(REFLECTION_SLIDER_POSITIONS, Math.max(REFLECTION_SLIDER_MIN, part.slider ?? current.slider)),
   };
-  const record = state.sessionRecords.find((r) => r.sessionNumber === state.summary!.sessionNumber);
-  if (record) record.reflection = { ...state.summary.reflection };
+  const record = state.records.sessionRecords.find((r) => r.sessionNumber === state.game.summary!.sessionNumber);
+  if (record) record.reflection = { ...state.game.summary.reflection };
   return ok;
 }
 
 // The summary's dismissal (§5.7): one-time per session, persisted.
 export function dismissSummary(state: GameState): ActionResult {
-  if (!state.summary) return fail("No session summary to dismiss.");
-  state.summary.seen = true;
+  if (!state.game.summary) return fail("No session summary to dismiss.");
+  state.game.summary.seen = true;
   return ok;
 }

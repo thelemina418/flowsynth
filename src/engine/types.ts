@@ -1,8 +1,10 @@
-// The interim game state (spec chunk 01, issue #15): only what the kept
-// modules read — trust and session accounting, the honesty report, habits,
-// Notes, the practice log, the goal and occurrence calendar, and the
-// session history. Every economy and board field retired with its system.
-// Issue #17 replaces this shape with the rebuild's single GameState.
+import type { Num } from "./num";
+
+// The single serialisable GameState (spec chunk 01, issue #17). It has two
+// parts: the real-life records, which nothing in the game ever resets, and
+// the game state, which later chunks grow (board, walls, console,
+// prestige). `apply` is the only way it changes and `advance` the only way
+// time passes (engine/apply.ts, engine/advance.ts).
 
 // The per-reconciliation honesty outcome (focus-tool spec §2).
 export type HonestyOutcome = "missed" | "planned" | "full";
@@ -26,6 +28,10 @@ export interface SessionAccounting {
   // one pass when presence returns.
   pendingAwaySeconds: number;
   events: HonestyEvent[];
+  // The provisional nous (story 27): what the board made during provisional
+  // time, held aside until the honesty report settles it. Didn't-practice
+  // drops it; either other answer banks it into nous.
+  provisionalNous: Num;
 }
 
 export interface SessionState {
@@ -92,12 +98,18 @@ export interface NoteEntry {
 
 export type HabitColor = "vermillion" | "amber" | "green" | "cyan" | "indigo" | "violet";
 
+// The four habit classes (GLOSSARY). Each grants allowance of its craft.
+export type HabitClass = "engineer" | "producer" | "mixer" | "roadie";
+
 export interface Habit {
   id: string;
   name: string;
   seconds: number;
   archived: boolean;
   color: HabitColor;
+  // The attuned class, or null while the habit awaits its class (a
+  // migrated habit, or one created before its class was chosen).
+  habitClass: HabitClass | null;
 }
 
 export interface PracticeEntry {
@@ -133,24 +145,49 @@ export interface Goal {
 
 export type Mode = "upgrade" | "flow" | "paused";
 
+// The way `advance` passes time. 'upgrade' freezes everything; 'breather'
+// is reserved for chunk 04.
+export type AdvanceMode = "flow" | "breather" | "upgrade";
+
 // The console's fixed-function instruments (ADR-0012).
 export type FocusApp = "habit" | "time" | "notes";
 
-export interface GameState {
-  mode: Mode;
-  sessionIndex: number;
-  sessionsCompleted: number;
-  muted: boolean;
-  notificationAsked: boolean;
-  notes: NoteEntry[];
+// The real-life records: nothing in the game ever resets them.
+export interface Records {
   habits: Habit[];
+  // The habit a session credits, locked for the session (ADR-0001).
   activeHabitId: string | null;
   practiceLog: PracticeEntry[];
   sessionRecords: SessionRecord[];
-  goals: Goal[];
+  notes: NoteEntry[];
+  // The player's Intentions (the old goals) and their schedules.
+  intentions: Goal[];
+  // Class credit: credited flow seconds per class. Live credited time only;
+  // manual log entries never add to it. Levels are chunk 04's.
+  classCredit: Record<HabitClass, number>;
+  // Session accounting: the session counter and the completed count.
+  sessionIndex: number;
+  sessionsCompleted: number;
+  nextId: number;
+}
+
+// The game state: minimal in chunk 01.
+export interface Game {
+  nous: Num;
+  mode: Mode;
   session: SessionState | null;
   summary: SessionSummary | null;
-  nextId: number;
+  // The classes a habit may attune to. Engineer and Producer open at the
+  // start; later chunks open the others.
+  openClasses: HabitClass[];
+  // The Almanac's legacy line (`Legacy era · <n> modules · archived`),
+  // written once by the v15 migration; null on a fresh start.
+  legacyLine: string | null;
+}
+
+export interface GameState {
+  records: Records;
+  game: Game;
 }
 
 export interface AdvanceResult {

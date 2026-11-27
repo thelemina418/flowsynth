@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { apply } from "./apply";
 import { advance } from "./advance";
-import { pauseSession, startSession } from "./actions";
-import { createGoal } from "./goals";
 import { deserialize, serialize } from "./save";
-import { applyGap, flushPendingAway, resolveHonestyReport } from "./trust";
 import { fresh, giveHabit } from "./fixtures";
 import type { GameState } from "./types";
 
@@ -19,16 +17,16 @@ const EDGE = 1.7e308;
 function flowState(target: number | null = null): GameState {
   const s = fresh();
   giveHabit(s);
-  startSession(s, target);
+  apply(s, { type: "startSession", target: target, now: 0 });
   return s;
 }
 
 describe("the advance walk refuses what it cannot represent (issue #486)", () => {
   it("a session clock past the representable range refuses the span and commits nothing", () => {
     const s = flowState();
-    s.session!.elapsed = EDGE;
+    s.game.session!.elapsed = EDGE;
     const before = serialize(s, 1000);
-    const result = advance(s, EDGE);
+    const result = advance(s, EDGE, "flow");
     expect(result.fault).toBe("the session clock");
     expect(serialize(s, 1000)).toBe(before);
   });
@@ -36,43 +34,45 @@ describe("the advance walk refuses what it cannot represent (issue #486)", () =>
   it("credited time past the range refuses the span, habit and goal untouched", () => {
     const s = fresh();
     const { habit } = giveHabit(s);
-    expect(createGoal(s, { habitId: habit.id, minutes: 5, schedule: "once", now: 1 }).ok).toBe(true);
-    startSession(s, null);
-    s.session!.accounting.creditedSeconds = EDGE;
+    expect(apply(s, { type: "createIntention", habitId: habit.id, minutes: 5, schedule: "once", now: 1 }).ok).toBe(true);
+    apply(s, { type: "startSession", target: null, now: 0 });
+    s.game.session!.accounting.creditedSeconds = EDGE;
     const before = serialize(s, 1000);
-    expect(advance(s, EDGE).fault).toBe("the credited practice time");
+    expect(advance(s, EDGE, "flow").fault).toBe("the credited practice time");
     expect(serialize(s, 1000)).toBe(before);
   });
 
   it("a big-but-finite span still credits: the refusal never bites the representable range", () => {
     const s = flowState();
-    expect(advance(s, 1e300).fault).toBeUndefined();
-    expect(s.session!.accounting.creditedSeconds).toBe(1e300);
+    expect(advance(s, 1e300, "flow").fault).toBeUndefined();
+    expect(s.game.session!.accounting.creditedSeconds).toBe(1e300);
   });
 
   it("a paused session advances nothing even at the edge", () => {
     const s = flowState();
-    s.session!.elapsed = EDGE;
-    pauseSession(s);
-    expect(advance(s, EDGE)).toEqual({ goalsCompleted: 0 });
+    s.game.session!.elapsed = EDGE;
+    apply(s, { type: "pauseSession" });
+    expect(advance(s, EDGE, "flow")).toEqual({ goalsCompleted: 0 });
   });
 });
 
 describe("every sink refuses whole (issue #486)", () => {
   it("a provisional span's refused moments leave no pool", () => {
     const s = flowState();
-    s.session!.accounting.poolSeconds = EDGE;
+    s.game.session!.accounting.poolSeconds = EDGE;
+    s.game.session!.accounting.pendingAwaySeconds = EDGE;
     const before = serialize(s, 1000);
-    expect(advance(s, EDGE, "provisional").fault).toBe("the provisional pool");
+    // The return of presence classifies the open-ended absence as provisional.
+    expect(advance(s, 0, "flow").fault).toBe("the provisional pool");
     expect(serialize(s, 1000)).toBe(before);
   });
 
   it("an honesty report crediting an unrepresentable figure is refused before it credits a minute", () => {
     const s = flowState();
-    s.session!.accounting.creditedSeconds = EDGE;
-    s.session!.accounting.poolSeconds = EDGE;
+    s.game.session!.accounting.creditedSeconds = EDGE;
+    s.game.session!.accounting.poolSeconds = EDGE;
     const before = serialize(s, 1000);
-    const resolution = resolveHonestyReport(s, "full");
+    const resolution = apply(s, { type: "settleHonestyReport", outcome: "full" });
     expect(resolution.ok).toBe(false);
     expect(resolution.reason).toBeTruthy();
     expect(serialize(s, 1000)).toBe(before);
@@ -82,46 +82,46 @@ describe("every sink refuses whole (issue #486)", () => {
 describe("failure without destructive mutation, then a valid save (issue #486)", () => {
   it("prior valid progress survives the refused update and saves whole", () => {
     const s = flowState();
-    expect(advance(s, 60).fault).toBeUndefined();
-    s.session!.elapsed = EDGE;
-    expect(advance(s, EDGE).fault).toBeTruthy();
-    expect(s.session!.accounting.creditedSeconds).toBe(60);
+    expect(advance(s, 60, "flow").fault).toBeUndefined();
+    s.game.session!.elapsed = EDGE;
+    expect(advance(s, EDGE, "flow").fault).toBeTruthy();
+    expect(s.game.session!.accounting.creditedSeconds).toBe(60);
     const reloaded = deserialize(serialize(s, 1000));
-    expect(reloaded.state?.session?.accounting.creditedSeconds).toBe(60);
-    expect(reloaded.state?.habits[0]!.seconds).toBe(60);
+    expect(reloaded.state?.game.session?.accounting.creditedSeconds).toBe(60);
+    expect(reloaded.state?.records.habits[0]!.seconds).toBe(60);
   });
 
   it("a refused absence survives reload and retries once", () => {
     const s = flowState();
-    s.session!.elapsed = EDGE;
-    s.session!.accounting.pendingAwaySeconds = EDGE;
+    s.game.session!.elapsed = EDGE;
+    s.game.session!.accounting.pendingAwaySeconds = EDGE;
     const before = serialize(s, 1000);
-    expect(flushPendingAway(s).fault).toBeTruthy();
+    expect(advance(s, 0, "flow").fault).toBeTruthy();
     expect(serialize(s, 1000)).toBe(before);
     const restored = deserialize(before).state!;
-    restored.session!.elapsed = 0;
-    expect(flushPendingAway(restored).fault).toBeUndefined();
-    expect(restored.session!.accounting.pendingAwaySeconds).toBe(0);
+    restored.game.session!.elapsed = 0;
+    expect(advance(restored, 0, "flow").fault).toBeUndefined();
+    expect(restored.game.session!.accounting.pendingAwaySeconds).toBe(0);
     const settled = serialize(restored, 1000);
-    flushPendingAway(restored);
+    advance(restored, 0, "flow");
     expect(serialize(restored, 1000)).toBe(settled);
   });
 
   it("a refused absence prevents the following live slice from committing", () => {
     const s = flowState();
-    s.session!.elapsed = EDGE;
-    s.session!.accounting.pendingAwaySeconds = EDGE;
-    expect(applyGap(s, 60, "visible", 0).fault).toBeTruthy();
-    expect(s.session!.accounting.pendingAwaySeconds).toBe(EDGE);
-    expect(s.session!.accounting.creditedSeconds).toBe(0);
+    s.game.session!.elapsed = EDGE;
+    s.game.session!.accounting.pendingAwaySeconds = EDGE;
+    expect(advance(s, 60, "flow", "visible", 0).fault).toBeTruthy();
+    expect(s.game.session!.accounting.pendingAwaySeconds).toBe(EDGE);
+    expect(s.game.session!.accounting.creditedSeconds).toBe(0);
   });
 
   it("a provisional failure rolls back the successful trusted half of a split absence", () => {
     const s = flowState(600);
-    s.session!.accounting.poolSeconds = EDGE;
-    s.session!.accounting.pendingAwaySeconds = 1e308;
+    s.game.session!.accounting.poolSeconds = EDGE;
+    s.game.session!.accounting.pendingAwaySeconds = 1e308;
     const before = serialize(s, 1000);
-    const result = flushPendingAway(s);
+    const result = advance(s, 0, "flow");
     expect(result.fault).toBe("the provisional pool");
     expect(serialize(s, 1000)).toBe(before);
   });

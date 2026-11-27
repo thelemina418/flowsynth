@@ -21,16 +21,16 @@ export function writeNote(state: GameState, text: string, now: number = 0): { ok
   const trimmed = text.trim();
   if (!trimmed) return { ok: false, reason: "Write something first." };
   const stored = trimmed.slice(0, 2000);
-  const live = state.session !== null;
-  state.notes.push({
-    id: `n${state.nextId++}`,
-    sessionId: state.sessionIndex,
-    atElapsed: live ? state.session!.elapsed : NOTE_BETWEEN_SESSIONS,
+  const live = state.game.session !== null;
+  state.records.notes.push({
+    id: `n${state.records.nextId++}`,
+    sessionId: state.records.sessionIndex,
+    atElapsed: live ? state.game.session!.elapsed : NOTE_BETWEEN_SESSIONS,
     text: stored,
     // The habit-keyed tag (§9): the active habit while a session runs —
     // flow or paused, same session — null when unstructured or between
     // sessions.
-    habitId: live ? state.activeHabitId : null,
+    habitId: live ? state.records.activeHabitId : null,
     at: now,
   });
   return { ok: true };

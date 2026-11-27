@@ -17,15 +17,15 @@ export type { Goal, GoalCondition, GoalSchedule };
 // unresolved rows are pending (they neither run nor light a read until the
 // player retains one) and retired rows are history.
 export function activeGoalOf(state: GameState, habitId: string): Goal | undefined {
-  return state.goals.find((goal) => !goal.retired && !goal.pendingChoice && goal.condition.habitId === habitId);
+  return state.records.intentions.find((goal) => !goal.retired && !goal.pendingChoice && goal.condition.habitId === habitId);
 }
 
 export function activeGoals(state: GameState): Goal[] {
-  return state.goals.filter((goal) => !goal.retired && !goal.pendingChoice && goal.condition.habitId !== null);
+  return state.records.intentions.filter((goal) => !goal.retired && !goal.pendingChoice && goal.condition.habitId !== null);
 }
 
 export function pendingGoalsOf(state: GameState, habitId: string): Goal[] {
-  return state.goals.filter((goal) => !goal.retired && goal.pendingChoice === true && goal.condition.habitId === habitId);
+  return state.records.intentions.filter((goal) => !goal.retired && goal.pendingChoice === true && goal.condition.habitId === habitId);
 }
 
 export function goalRequiredSeconds(goal: Goal): number {
@@ -100,7 +100,7 @@ function validGoalMinutes(minutes: number): boolean {
 // Preserve the description older session records resolved through this row
 // before an edit changes it. New records already carry their own snapshot.
 function preserveGoalHistory(state: GameState, goal: Goal): void {
-  for (const record of state.sessionRecords) {
+  for (const record of state.records.sessionRecords) {
     for (const advanced of record.goalsAdvanced) {
       if (advanced.goalId === goal.id && !advanced.goal) advanced.goal = structuredClone(goal);
     }
@@ -108,22 +108,22 @@ function preserveGoalHistory(state: GameState, goal: Goal): void {
 }
 
 export function createGoal(state: GameState, input: GoalCreateInput): { ok: boolean; reason?: string; goal?: Goal } {
-  if (state.mode !== "upgrade") return { ok: false, reason: "Goals are managed between sessions." };
+  if (state.game.mode !== "upgrade") return { ok: false, reason: "Intentions are managed between sessions." };
   // Goals are owned by a habit (issue #423): the cross-habit template
   // retired with the shared slot economy.
-  if (input.habitId === null) return { ok: false, reason: "Pick the habit this goal tracks." };
+  if (input.habitId === null) return { ok: false, reason: "Pick the habit this Intention tracks." };
   // One active goal per habit (issue #445): an unresolved migration choice
   // counts — the carried rows stand until the player retains one.
   if (activeGoalOf(state, input.habitId) || pendingGoalsOf(state, input.habitId).length > 0) {
-    return { ok: false, reason: "That habit already tracks a goal — edit or remove it first." };
+    return { ok: false, reason: "That habit already has an Intention — edit or remove it first." };
   }
   if (!validGoalMinutes(input.minutes)) return { ok: false, reason: "Choose between 1 and 1440 minutes." };
-  if (!state.habits.some((h) => h.id === input.habitId && !h.archived)) {
+  if (!state.records.habits.some((h) => h.id === input.habitId && !h.archived)) {
     return { ok: false, reason: "That habit does not exist." };
   }
   const schedule: GoalSchedule = { kind: input.schedule };
   const goal: Goal = {
-    id: `g${state.nextId++}`,
+    id: `g${state.records.nextId++}`,
     condition: { kind: "habit-minutes", habitId: input.habitId, minutes: Math.round(input.minutes) },
     schedule,
     occurrenceKey: occurrenceKeyFor(schedule, input.now),
@@ -132,16 +132,16 @@ export function createGoal(state: GameState, input: GoalCreateInput): { ok: bool
     completedCount: 0,
     createdAt: input.now,
   };
-  state.goals.push(goal);
+  state.records.intentions.push(goal);
   return { ok: true, goal };
 }
 
 export function deleteGoal(state: GameState, id: string): { ok: boolean; reason?: string } {
-  if (state.mode !== "upgrade") return { ok: false, reason: "Goals are managed between sessions." };
-  const index = state.goals.findIndex((g) => !g.retired && !g.pendingChoice && g.id === id);
-  if (index === -1) return { ok: false, reason: "Goal not found." };
-  preserveGoalHistory(state, state.goals[index]!);
-  state.goals[index]!.retired = true;
+  if (state.game.mode !== "upgrade") return { ok: false, reason: "Intentions are managed between sessions." };
+  const index = state.records.intentions.findIndex((g) => !g.retired && !g.pendingChoice && g.id === id);
+  if (index === -1) return { ok: false, reason: "Intention not found." };
+  preserveGoalHistory(state, state.records.intentions[index]!);
+  state.records.intentions[index]!.retired = true;
   return { ok: true };
 }
 
@@ -160,9 +160,9 @@ export function editGoal(
   edit: { minutes: number; schedule: GoalSchedule["kind"] },
   now: number,
 ): { ok: boolean; reason?: string } {
-  if (state.mode !== "upgrade") return { ok: false, reason: "Goals are managed between sessions." };
+  if (state.game.mode !== "upgrade") return { ok: false, reason: "Intentions are managed between sessions." };
   const goal = activeGoals(state).find((g) => g.id === id);
-  if (!goal) return { ok: false, reason: "Goal not found." };
+  if (!goal) return { ok: false, reason: "Intention not found." };
   if (!validGoalMinutes(edit.minutes)) return { ok: false, reason: "Choose between 1 and 1440 minutes." };
   const schedule: GoalSchedule = { kind: edit.schedule };
   preserveGoalHistory(state, goal);
@@ -178,7 +178,7 @@ export function editGoal(
   goal.occurrenceKey = occurrenceKeyFor(schedule, now);
   const start = occurrenceStartFor(schedule, now, goal.createdAt);
   let qualifying = 0;
-  for (const entry of state.practiceLog) {
+  for (const entry of state.records.practiceLog) {
     if (entry.habitId !== goal.condition.habitId || entry.at < start || entry.at > now) continue;
     const seconds = entry.source === "manual" ? entry.seconds : Math.min(entry.seconds, (entry.at - start) / 1000);
     qualifying += seconds;
@@ -194,9 +194,9 @@ export function editGoal(
 // facts exactly as carried — nothing is reinterpreted, and no completion
 // fires here.
 export function retainGoalChoice(state: GameState, id: string): { ok: boolean; reason?: string } {
-  if (state.mode !== "upgrade") return { ok: false, reason: "Goals are managed between sessions." };
-  const goal = state.goals.find((g) => g.pendingChoice === true && g.id === id);
-  if (!goal || goal.condition.habitId === null) return { ok: false, reason: "Goal not found." };
+  if (state.game.mode !== "upgrade") return { ok: false, reason: "Intentions are managed between sessions." };
+  const goal = state.records.intentions.find((g) => g.pendingChoice === true && g.id === id);
+  if (!goal || goal.condition.habitId === null) return { ok: false, reason: "Intention not found." };
   for (const pending of pendingGoalsOf(state, goal.condition.habitId)) {
     if (pending.id === id) delete pending.pendingChoice;
     else {
@@ -214,7 +214,7 @@ export function goalTargetSummary(goal: Goal): string {
 }
 
 export function goalSummary(state: GameState, goal: Goal): string {
-  const name = goal.condition.habitId === null ? "Any habit" : state.habits.find((h) => h.id === goal.condition.habitId)?.name ?? "a habit";
+  const name = goal.condition.habitId === null ? "Any habit" : state.records.habits.find((h) => h.id === goal.condition.habitId)?.name ?? "a habit";
   return `${name} · ${goalTargetSummary(goal)}`;
 }
 
@@ -258,7 +258,7 @@ export function accrueGoalProgress(state: GameState, habitId: string | null, sec
     // Only practice up to completion belongs to this occurrence.
     const qualifying = Math.min(seconds, Math.max(0, goalRequiredSeconds(goal) - goal.progressSeconds));
     goal.progressSeconds += qualifying;
-    const session = state.session;
+    const session = state.game.session;
     if (session) session.goalSeconds[goal.id] = (session.goalSeconds[goal.id] ?? 0) + qualifying;
     if (goal.progressSeconds >= goalRequiredSeconds(goal)) {
       goal.completed = true;

@@ -1,90 +1,89 @@
 import { describe, expect, it } from "vitest";
+import { apply } from "./apply";
 import { advance } from "./advance";
-import { endSession, startSession } from "./actions";
-import { fresh } from "./fixtures";
-import { createHabit, selectHabit } from "./habits";
-import { NOTE_BETWEEN_SESSIONS, writeNote } from "./notes";
+import { fresh, habitOf } from "./fixtures";
+import { NOTE_BETWEEN_SESSIONS } from "./notes";
 import { deserialize, serialize } from "./save";
 
 describe("notes app", () => {
   it("captures notes in flow, paused, and between sessions (ADR-0018)", () => {
     const s = fresh();
-    expect(writeNote(s, "hello").ok).toBe(true);
+    expect(apply(s, { type: "writeNote", text: "hello", now: 0 }).ok).toBe(true);
     // A note written outside any session carries the between-sessions mark
     // instead of a session clock.
-    expect(s.notes[0]!.atElapsed).toBe(NOTE_BETWEEN_SESSIONS);
-    expect(writeNote(s, "   ").ok).toBe(false);
-    startSession(s, 600);
-    expect(writeNote(s, "first thought").ok).toBe(true);
-    expect(s.notes.filter((n) => n.sessionId === s.sessionIndex).length).toBe(1);
-    expect(s.notes[1]!.atElapsed).toBe(0);
-    s.mode = "paused";
-    expect(writeNote(s, "paused thought").ok).toBe(true);
-    endSession(s);
-    expect(writeNote(s, "after the session").ok).toBe(true);
-    expect(s.notes).toHaveLength(4);
+    expect(s.records.notes[0]!.atElapsed).toBe(NOTE_BETWEEN_SESSIONS);
+    expect(apply(s, { type: "writeNote", text: "   ", now: 0 }).ok).toBe(false);
+    apply(s, { type: "startSession", target: 600, now: 0 });
+    expect(apply(s, { type: "writeNote", text: "first thought", now: 0 }).ok).toBe(true);
+    expect(s.records.notes.filter((n) => n.sessionId === s.records.sessionIndex).length).toBe(1);
+    expect(s.records.notes[1]!.atElapsed).toBe(0);
+    s.game.mode = "paused";
+    expect(apply(s, { type: "writeNote", text: "paused thought", now: 0 }).ok).toBe(true);
+    apply(s, { type: "endSession", now: 0 });
+    expect(apply(s, { type: "writeNote", text: "after the session", now: 0 }).ok).toBe(true);
+    expect(s.records.notes).toHaveLength(4);
   });
 
   it("notes are notes: capture changes no practice accounting", () => {
     const early = fresh();
-    startSession(early, 600);
-    advance(early, 10);
-    writeNote(early, "early");
-    advance(early, 590);
+    apply(early, { type: "startSession", target: 600, now: 0 });
+    advance(early, 10, "flow");
+    apply(early, { type: "writeNote", text: "early", now: 0 });
+    advance(early, 590, "flow");
 
     const late = fresh();
-    startSession(late, 600);
-    advance(late, 600);
+    apply(late, { type: "startSession", target: 600, now: 0 });
+    advance(late, 600, "flow");
 
-    expect(early.session!.accounting).toEqual(late.session!.accounting);
+    expect(early.game.session!.accounting).toEqual(late.game.session!.accounting);
   });
 
   it("keeps notes across save round-trips", () => {
     const s = fresh();
-    startSession(s, 600);
-    writeNote(s, "persisted thought");
-    advance(s, 60);
-    endSession(s);
+    apply(s, { type: "startSession", target: 600, now: 0 });
+    apply(s, { type: "writeNote", text: "persisted thought", now: 0 });
+    advance(s, 60, "flow");
+    apply(s, { type: "endSession", now: 0 });
     const loaded = deserialize(serialize(s))!;
-    expect(loaded.state!.notes).toHaveLength(1);
-    expect(loaded.state!.notes[0]!.text).toBe("persisted thought");
+    expect(loaded.state!.records.notes).toHaveLength(1);
+    expect(loaded.state!.records.notes[0]!.text).toBe("persisted thought");
   });
 
   it("in-session capture tags the active habit; the tag never retags (§9)", () => {
     const s = fresh();
-    const habit = createHabit(s, "Piano").habit!;
-    selectHabit(s, habit.id);
-    startSession(s, null);
-    writeNote(s, "tagged thought");
-    expect(s.notes[0]!.habitId).toBe(habit.id);
-    endSession(s);
+    const habit = habitOf(s, apply(s, { type: "createHabit", name: "Piano" }));
+    apply(s, { type: "selectHabit", id: habit.id });
+    apply(s, { type: "startSession", target: null, now: 0 });
+    apply(s, { type: "writeNote", text: "tagged thought", now: 0 });
+    expect(s.records.notes[0]!.habitId).toBe(habit.id);
+    apply(s, { type: "endSession", now: 0 });
     // Renaming or archiving the habit never rewrites the captured tag —
     // the id is stored raw and resolves at render.
     habit.name = "Fortepiano";
-    expect(s.notes[0]!.habitId).toBe(habit.id);
+    expect(s.records.notes[0]!.habitId).toBe(habit.id);
   });
 
   it("unstructured notes go untagged; paused-session notes tag the session's habit", () => {
     const s = fresh();
-    const habit = createHabit(s, "Piano").habit!;
-    selectHabit(s, habit.id);
-    startSession(s, null);
-    s.mode = "paused";
-    writeNote(s, "paused but tagged");
-    selectHabit(s, null);
+    const habit = habitOf(s, apply(s, { type: "createHabit", name: "Piano" }));
+    apply(s, { type: "selectHabit", id: habit.id });
+    apply(s, { type: "startSession", target: null, now: 0 });
+    s.game.mode = "paused";
+    apply(s, { type: "writeNote", text: "paused but tagged", now: 0 });
+    apply(s, { type: "selectHabit", id: null });
     // Selection is locked during flow/pause; unstructured is a start-time
     // choice, so simulate one by a habitless session.
-    s.activeHabitId = null;
-    writeNote(s, "unstructured");
-    expect(s.notes[0]!.habitId).toBe(habit.id);
-    expect(s.notes[1]!.habitId).toBeNull();
+    s.records.activeHabitId = null;
+    apply(s, { type: "writeNote", text: "unstructured", now: 0 });
+    expect(s.records.notes[0]!.habitId).toBe(habit.id);
+    expect(s.records.notes[1]!.habitId).toBeNull();
   });
 
   it("upgrade-mode notes stay untagged and carry the wall-clock stamp (§9)", () => {
     const s = fresh();
-    writeNote(s, "between sessions", 5_000);
-    expect(s.notes[0]!.habitId).toBeNull();
-    expect(s.notes[0]!.at).toBe(5_000);
-    expect(s.notes[0]!.atElapsed).toBe(NOTE_BETWEEN_SESSIONS);
+    apply(s, { type: "writeNote", text: "between sessions", now: 5_000 });
+    expect(s.records.notes[0]!.habitId).toBeNull();
+    expect(s.records.notes[0]!.at).toBe(5_000);
+    expect(s.records.notes[0]!.atElapsed).toBe(NOTE_BETWEEN_SESSIONS);
   });
 });

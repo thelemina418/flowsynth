@@ -1,52 +1,35 @@
-import { EPS } from "./constants";
-import { NumericFault, requireFinite } from "./numeric";
-import { accrueLivePractice } from "./habits";
-import { accrueGoalProgress } from "./goals";
-import type { AdvanceResult, GameState } from "./types";
+import { NumFault } from "./num";
+import { cloneState, requireNoNaN, restoreState } from "./state";
+import { applyGap, type Presence } from "./trust";
+import { emptyAdvanceResult } from "./walk";
+import type { AdvanceMode, AdvanceResult, GameState } from "./types";
 
-// The interim advance (issue #15): with the board retired, time moves only
-// the session's practice facts. Trusted time — present, or away under the
-// plan — credits practice: the session clock, credited seconds, the active
-// habit, and its goal. Provisional time runs the session clock and joins
-// the pool; it credits nothing until the honesty report settles it (§3).
-// Issue #17 replaces this with `advance(state, seconds, mode)`.
-export type AdvanceSink = "trusted" | "provisional";
-
-export function emptyAdvanceResult(): AdvanceResult {
-  return { goalsCompleted: 0 };
-}
-
-export function sumResults(a: AdvanceResult, b: AdvanceResult): AdvanceResult {
-  return { goalsCompleted: a.goalsCompleted + b.goalsCompleted, fault: a.fault ?? b.fault };
-}
-
-function walkFlow(state: GameState, seconds: number, sink: AdvanceSink): AdvanceResult {
-  const result = emptyAdvanceResult();
-  const session = state.session;
-  if (state.mode !== "flow" || !session || seconds <= 0) return result;
-  session.elapsed = requireFinite(session.elapsed + seconds, "the session clock");
-  const accounting = session.accounting;
-  if (sink === "provisional") {
-    accounting.poolSeconds = requireFinite(accounting.poolSeconds + seconds, "the provisional pool");
-    return result;
-  }
-  accounting.creditedSeconds = requireFinite(accounting.creditedSeconds + seconds, "the credited practice time");
-  if (seconds > EPS) {
-    accrueLivePractice(state, seconds);
-    result.goalsCompleted += accrueGoalProgress(state, state.activeHabitId, seconds);
-  }
-  return result;
-}
-
-// The refusal wrapper (issue #486): a numeric fault restores the state the
-// walk was given, and the refusal rides the result's fault detail.
-export function advance(state: GameState, seconds: number, sink: AdvanceSink = "trusted"): AdvanceResult {
-  const pristine = structuredClone(state);
+// The only way time passes (spec chunk 01). `mode` is how the time passes:
+// - 'upgrade' freezes everything: no board resource, wall or session fact
+//   moves, however long the player stays (ADR-0001).
+// - 'flow' runs the trust layer (ADR-0019): `presence` and
+//   `driftStepSeconds` describe the boundary that measured the gap (see
+//   trust.applyGap). A visible boundary first settles any buffered absence,
+//   so `advance(s, 0, 'flow')` is the return-of-presence flush.
+// - 'breather' is reserved for chunk 04 and moves nothing yet.
+// The update is all-or-nothing: a numeric fault (a nonfinite second, a NaN
+// Decimal) restores the state it was given and names the figure in `fault`.
+export function advance(
+  state: GameState,
+  seconds: number,
+  mode: AdvanceMode,
+  presence: Presence = "visible",
+  driftStepSeconds = 0,
+): AdvanceResult {
+  if (mode !== "flow") return emptyAdvanceResult();
+  const pristine = cloneState(state);
   try {
-    return walkFlow(state, seconds, sink);
+    const result = applyGap(state, seconds, presence, driftStepSeconds);
+    requireNoNaN(state);
+    return result;
   } catch (error) {
-    if (!(error instanceof NumericFault)) throw error;
-    Object.assign(state, pristine);
+    if (!(error instanceof NumFault)) throw error;
+    restoreState(state, pristine);
     return { ...emptyAdvanceResult(), fault: error.detail };
   }
 }

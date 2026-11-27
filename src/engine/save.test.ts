@@ -1,13 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { D, eq } from "./num";
+import { apply } from "./apply";
 import { advance } from "./advance";
-import { endSession, startSession } from "./actions";
 import { fresh, giveHabit } from "./fixtures";
-import { addPracticeLog } from "./habits";
 import { SAVE_VERSION } from "./constants";
-import { createGoal } from "./goals";
 import { deserialize, serialize, SaveRefusedError } from "./save";
-import { applyGap, flushPendingAway, resolveHonestyReport } from "./trust";
-import { writeNote } from "./notes";
 import type { GameState } from "./types";
 
 // The interim save boundary (issue #15): the real-life records round-trip,
@@ -60,11 +57,11 @@ describe("persistence", () => {
   it("round-trips the full interim state byte-identical", () => {
     const s = fresh();
     const { habit } = giveHabit(s);
-    createGoal(s, { habitId: habit.id, minutes: 20, schedule: "daily", now: 1 });
-    writeNote(s, "between sessions", 500);
-    startSession(s, 600, 1_000);
-    advance(s, 123.25);
-    writeNote(s, "in flow", 1_200);
+    apply(s, { type: "createIntention", habitId: habit.id, minutes: 20, schedule: "daily", now: 1 });
+    apply(s, { type: "writeNote", text: "between sessions", now: 500 });
+    apply(s, { type: "startSession", target: 600, now: 1_000 });
+    advance(s, 123.25, "flow");
+    apply(s, { type: "writeNote", text: "in flow", now: 1_200 });
     const text = serialize(s, 1_000);
     const loaded = deserialize(text);
     expect(loaded.error).toBeUndefined();
@@ -79,31 +76,31 @@ describe("persistence", () => {
     const build = () => {
       const s = fresh();
       giveHabit(s);
-      startSession(s, 600);
+      apply(s, { type: "startSession", target: 600, now: 0 });
       return s;
     };
     const straight = build();
-    advance(straight, 400);
+    advance(straight, 400, "flow");
     const split = build();
-    advance(split, 150);
+    advance(split, 150, "flow");
     const restored = deserialize(serialize(split)).state!;
-    advance(restored, 250);
-    expect(restored.session!.accounting).toEqual(straight.session!.accounting);
-    expect(restored.habits).toEqual(straight.habits);
+    advance(restored, 250, "flow");
+    expect(restored.game.session!.accounting).toEqual(straight.game.session!.accounting);
+    expect(restored.records.habits).toEqual(straight.records.habits);
   });
 
   it("an unseen summary, its events, and its reflection survive a reload together (§8)", () => {
     const s = fresh();
-    startSession(s, 600);
-    advance(s, 600);
-    applyGap(s, 300, "away", 0);
-    flushPendingAway(s);
-    resolveHonestyReport(s, "missed");
-    endSession(s, 5_000);
-    s.summary!.reflection = { text: "drifted", slider: 3 };
+    apply(s, { type: "startSession", target: 600, now: 0 });
+    advance(s, 600, "flow");
+    advance(s, 300, "flow", "away", 0);
+    advance(s, 0, "flow");
+    apply(s, { type: "settleHonestyReport", outcome: "missed" });
+    apply(s, { type: "endSession", now: 5_000 });
+    s.game.summary!.reflection = { text: "drifted", slider: 3 };
     const loaded = deserialize(serialize(s, 1_000));
     expect(loaded.error).toBeUndefined();
-    const summary = loaded.state!.summary!;
+    const summary = loaded.state!.game.summary!;
     expect(summary.seen).toBe(false);
     expect(summary.honestyEvents).toEqual([{ awaySeconds: 300, outcome: "missed" }]);
     expect(summary.reflection).toEqual({ text: "drifted", slider: 3 });
@@ -112,14 +109,14 @@ describe("persistence", () => {
   it("habits, the practice log, and session history survive a reload", () => {
     const s = fresh();
     const { habit } = giveHabit(s);
-    startSession(s, 600, 1_000);
-    advance(s, 600);
-    endSession(s, 601_000);
-    addPracticeLog(s, habit.id, 5, 700_000);
+    apply(s, { type: "startSession", target: 600, now: 1_000 });
+    advance(s, 600, "flow");
+    apply(s, { type: "endSession", now: 601_000 });
+    apply(s, { type: "logPractice", habitId: habit.id, minutes: 5, now: 700_000 });
     const loaded = deserialize(serialize(s)).state!;
-    expect(loaded.habits).toEqual(s.habits);
-    expect(loaded.practiceLog).toEqual(s.practiceLog);
-    expect(loaded.sessionRecords).toEqual(s.sessionRecords);
+    expect(loaded.records.habits).toEqual(s.records.habits);
+    expect(loaded.records.practiceLog).toEqual(s.records.practiceLog);
+    expect(loaded.records.sessionRecords).toEqual(s.records.sessionRecords);
   });
 });
 
@@ -128,27 +125,30 @@ describe("a v15 save's records (issue #15)", () => {
     const result = deserialize(legacyV15());
     expect(result.error).toBeUndefined();
     const state = result.state!;
-    expect(state.habits).toEqual([
-      { id: "h1", name: "Piano", seconds: 5_400.5, archived: false, color: "cyan" },
-      { id: "h2", name: "Cello", seconds: 60, archived: true, color: "amber" },
+    expect(state.records.habits).toEqual([
+      { id: "h1", name: "Piano", seconds: 5_400.5, archived: false, color: "cyan", habitClass: null },
+      { id: "h2", name: "Cello", seconds: 60, archived: true, color: "amber", habitClass: null },
     ]);
-    expect(state.activeHabitId).toBe("h1");
-    expect(state.notes).toEqual([{ id: "n5", sessionId: 2, atElapsed: 30, text: "kept", habitId: "h1", at: 8_000 }]);
-    expect(state.practiceLog).toHaveLength(1);
-    expect(state.goals[0]).not.toHaveProperty("liveSeconds");
-    expect(state.goals[0]).toMatchObject({ id: "g6", progressSeconds: 600, completedCount: 4 });
-    expect(state.sessionRecords).toEqual([{
+    expect(state.records.activeHabitId).toBe("h1");
+    expect(state.records.notes).toEqual([{ id: "n5", sessionId: 2, atElapsed: 30, text: "kept", habitId: "h1", at: 8_000 }]);
+    expect(state.records.practiceLog).toHaveLength(1);
+    expect(state.records.intentions[0]).not.toHaveProperty("liveSeconds");
+    expect(state.records.intentions[0]).toMatchObject({ id: "g6", progressSeconds: 600, completedCount: 4 });
+    expect(state.records.sessionRecords).toEqual([{
       sessionNumber: 3, startedAt: 7_000, endedAt: 9_000, habitId: "h1", mode: "planned", plannedTarget: 1_500, creditedSeconds: 1_500,
       honestyEvents: [{ awaySeconds: 300, outcome: "planned" }], reflection: { text: "good", slider: 4 },
       goalsAdvanced: [{ goalId: "g6", seconds: 600 }],
     }]);
-    expect(state).toMatchObject({ sessionIndex: 3, sessionsCompleted: 3, muted: true, notificationAsked: true, nextId: 7 });
+    expect(state.records).toMatchObject({ sessionIndex: 3, sessionsCompleted: 3, nextId: 7 });
+    expect(state.records.classCredit).toEqual({ engineer: 0, producer: 0, mixer: 0, roadie: 0 });
+    // The game starts fresh: the retired economy's nous stays behind.
+    expect(state.game).toEqual(fresh().game);
     for (const retired of ["nous", "modules", "cells", "world", "forge", "achievements", "arete", "prestiges", "scrap"]) {
       expect(state, retired).not.toHaveProperty(retired);
     }
   });
 
-  it("a running session keeps its trust ledger; the provisional nous stays behind", () => {
+  it("a running session keeps its trust ledger and its provisional nous (story 27)", () => {
     const result = deserialize(legacyV15({
       mode: "flow",
       session: {
@@ -158,20 +158,22 @@ describe("a v15 save's records (issue #15)", () => {
       },
     }));
     expect(result.error).toBeUndefined();
-    expect(result.state!.mode).toBe("flow");
-    expect(result.state!.session).toEqual({
+    expect(result.state!.game.mode).toBe("flow");
+    expect(result.state!.game.session).toEqual({
       target: 1_500, elapsed: 900, targetSignaled: false, startedAt: 5_000, goalSeconds: { g6: 300 },
-      accounting: { creditedSeconds: 600, poolSeconds: 300, pendingAwaySeconds: 12, events: [] },
+      accounting: { creditedSeconds: 600, poolSeconds: 300, pendingAwaySeconds: 12, events: [], provisionalNous: D(30) },
     });
-    // The pool still settles through the honesty report.
-    expect(resolveHonestyReport(result.state!, "full").ok).toBe(true);
-    expect(result.state!.session!.accounting.creditedSeconds).toBe(900);
+    // The pool still settles through the honesty report, banking the
+    // provisional nous.
+    expect(apply(result.state!, { type: "settleHonestyReport", outcome: "full" }).ok).toBe(true);
+    expect(result.state!.game.session!.accounting.creditedSeconds).toBe(900);
+    expect(eq(result.state!.game.nous, 30)).toBe(true);
   });
 
   it("a breather in progress lands between sessions", () => {
     const state = deserialize(legacyV15({ mode: "breather", breather: { startedAt: 1, allowanceSeconds: 300, elapsed: 10 } })).state!;
-    expect(state.mode).toBe("upgrade");
-    expect(state.session).toBeNull();
+    expect(state.game.mode).toBe("upgrade");
+    expect(state.game.session).toBeNull();
   });
 
   it("an unseen summary keeps its practice facts", () => {
@@ -179,7 +181,7 @@ describe("a v15 save's records (issue #15)", () => {
       summary: { sessionNumber: 3, earned: 150, seconds: 1_500, ratePerMinute: 6, plannedTarget: 1_500, honestyEvents: [],
         reflection: null, achievements: [], breatherAllowance: 300, seen: false },
     })).state!;
-    expect(state.summary).toEqual({ sessionNumber: 3, seconds: 1_500, plannedTarget: 1_500, honestyEvents: [], reflection: null, seen: false });
+    expect(state.game.summary).toEqual({ sessionNumber: 3, seconds: 1_500, plannedTarget: 1_500, honestyEvents: [], reflection: null, seen: false });
   });
 });
 
@@ -204,10 +206,10 @@ describe("the version gate", () => {
 
   it("exported saves load unchanged", () => {
     const s = fresh();
-    writeNote(s, "portable", 1_000);
+    apply(s, { type: "writeNote", text: "portable", now: 1_000 });
     const loaded = deserialize(serialize(s, 42));
     expect(loaded.error).toBeUndefined();
-    expect(loaded.state!.notes[0]!.text).toBe("portable");
+    expect(loaded.state!.records.notes[0]!.text).toBe("portable");
   });
 });
 
@@ -215,7 +217,7 @@ describe("serialization refuses what it cannot write (issue #486)", () => {
   it("a state carrying a nonfinite number refuses the save instead of writing null", () => {
     for (const figure of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN]) {
       const s: GameState = fresh();
-      s.sessionsCompleted = figure;
+      s.records.sessionsCompleted = figure;
       expect(() => serialize(s)).toThrow(SaveRefusedError);
     }
   });
@@ -223,14 +225,14 @@ describe("serialization refuses what it cannot write (issue #486)", () => {
   it("the refusal names where the figure lives, however deep it hides", () => {
     const s = fresh();
     giveHabit(s);
-    s.habits[0]!.seconds = NaN;
+    s.records.habits[0]!.seconds = NaN;
     expect(() => serialize(s)).toThrow(/habits\[0\]\.seconds/);
   });
 
   it("a session's unrepresentable accounting refuses the save", () => {
     const s = fresh();
-    startSession(s, null);
-    s.session!.accounting.poolSeconds = Infinity;
+    apply(s, { type: "startSession", target: null, now: 0 });
+    s.game.session!.accounting.poolSeconds = Infinity;
     expect(() => serialize(s)).toThrow(/poolSeconds/);
   });
 });

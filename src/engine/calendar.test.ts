@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { apply } from "./apply";
 import { advance } from "./advance";
-import { endSession, startSession } from "./actions";
-import { fresh } from "./fixtures";
-import { createGoal, editGoal, occurrenceKeyFor, occurrenceStartFor } from "./goals";
-import { createHabit, selectHabit } from "./habits";
+import { fresh, habitOf, intentionOf } from "./fixtures";
+import { occurrenceKeyFor, occurrenceStartFor } from "./goals";
 import type { GoalSchedule } from "./types";
 
 // The calendar-basis regressions (issue #505). The engine's calendar basis
@@ -42,8 +41,8 @@ function localMidnightBefore(t: number): number {
 }
 
 function withHabit(s: ReturnType<typeof fresh>) {
-  const habit = createHabit(s, "Piano")!.habit!;
-  selectHabit(s, habit.id);
+  const habit = habitOf(s, apply(s, { type: "createHabit", name: "Piano" }));
+  apply(s, { type: "selectHabit", id: habit.id });
   return habit;
 }
 
@@ -87,11 +86,11 @@ describe("the declared calendar basis (issue #505)", () => {
     const boundary = localMidnightBefore(new Date(2026, 2, 9, 12).getTime());
     const s = fresh();
     const habit = withHabit(s);
-    const goal = createGoal(s, { habitId: habit.id, minutes: 60, schedule: "weekly", now: boundary - DAY_MS }).goal!;
-    startSession(s, null, boundary - 600_000);
-    advance(s, 1200);
-    endSession(s, boundary + 600_000);
-    editGoal(s, goal.id, { minutes: 60, schedule: "daily" }, boundary + 600_000);
+    const goal = intentionOf(s, apply(s, { type: "createIntention", habitId: habit.id, minutes: 60, schedule: "weekly", now: boundary - DAY_MS }));
+    apply(s, { type: "startSession", target: null, now: boundary - 600_000 });
+    advance(s, 1200, "flow");
+    apply(s, { type: "endSession", now: boundary + 600_000 });
+    apply(s, { type: "editIntention", id: goal.id, minutes: 60, schedule: "daily", now: boundary + 600_000 });
     // Only the post-boundary share belongs to the new daily occurrence.
     expect(goal.progressSeconds).toBeCloseTo(600, 6);
   });

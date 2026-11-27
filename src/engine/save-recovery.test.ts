@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { D } from "./num";
+import { apply } from "./apply";
 import { deserialize, recoverLostSave, serialize } from "./save";
-import { resolveHonestyReport } from "./trust";
 
 // The lost-money recovery (ADR-0082, issue #494) at the interim boundary
 // (issue #15). A v15 save whose monetary figures serialized to null is a
@@ -57,9 +58,9 @@ describe("the lost-money recovery (ADR-0082)", () => {
     expect(loaded.error).toBeUndefined();
     expect(loaded.recovered).toEqual({ fromVersion: 15, lost: LOST });
     const state = loaded.state!;
-    expect(state.habits[0]!.seconds).toBe(7_200);
-    expect(state.practiceLog).toHaveLength(1);
-    expect(state.notes[0]!.text).toBe("kept");
+    expect(state.records.habits[0]!.seconds).toBe(7_200);
+    expect(state.records.practiceLog).toHaveLength(1);
+    expect(state.records.notes[0]!.text).toBe("kept");
     expect(state).not.toHaveProperty("nous");
   });
 
@@ -84,12 +85,12 @@ describe("the lost-money recovery (ADR-0082)", () => {
     });
     expect(deserialize(source).lost).toContain("session.accounting.bucketNous");
     const state = recoverLostSave(source).state!;
-    expect(state.mode).toBe("flow");
-    expect(state.session!.accounting).toEqual({ creditedSeconds: 300, poolSeconds: 600, pendingAwaySeconds: 0, events: [] });
+    expect(state.game.mode).toBe("flow");
+    expect(state.game.session!.accounting).toEqual({ creditedSeconds: 300, poolSeconds: 600, pendingAwaySeconds: 0, events: [], provisionalNous: D(0) });
     // Settling the report credits the minutes, never the retired money.
-    expect(resolveHonestyReport(state, "full").ok).toBe(true);
-    expect(state.session!.accounting.creditedSeconds).toBe(900);
-    expect(state.habits[0]!.seconds).toBe(7_800);
+    expect(apply(state, { type: "settleHonestyReport", outcome: "full" }).ok).toBe(true);
+    expect(state.game.session!.accounting.creditedSeconds).toBe(900);
+    expect(state.records.habits[0]!.seconds).toBe(7_800);
   });
 
   it("missing session accounting refuses ordinary loading and fails recovery without inventing practice", () => {

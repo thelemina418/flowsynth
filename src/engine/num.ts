@@ -11,6 +11,10 @@ export function D(value: NumLike): Num {
   return new Decimal(value);
 }
 
+export function isNum(value: unknown): value is Num {
+  return value instanceof Decimal;
+}
+
 export const add = (a: NumLike, b: NumLike): Num => D(a).add(b);
 export const sub = (a: NumLike, b: NumLike): Num => D(a).sub(b);
 export const mul = (a: NumLike, b: NumLike): Num => D(a).mul(b);

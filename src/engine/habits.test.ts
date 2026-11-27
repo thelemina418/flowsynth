@@ -1,70 +1,59 @@
 import { describe, expect, it } from "vitest";
+import { apply } from "./apply";
 import { advance } from "./advance";
-import { endSession, startSession } from "./actions";
-import { fresh } from "./fixtures";
-import {
-  activeHabit,
-  addPracticeLog,
-  archiveHabit,
-  createHabit,
-  DEFAULT_HABIT_COLOR,
-  HABIT_COLORS,
-  normalizeHabitColor,
-  renameHabit,
-  selectHabit,
-  setHabitColor,
-} from "./habits";
+import { fresh, habitOf } from "./fixtures";
+import { activeHabit, DEFAULT_HABIT_COLOR, HABIT_COLORS, normalizeHabitColor } from "./habits";
 import { serialize, deserialize } from "./save";
 
 describe("habit management", () => {
   it("creates, renames, and archives habits between sessions only", () => {
     const s = fresh();
-    const made = createHabit(s, "  Piano  ");
+    const made = apply(s, { type: "createHabit", name: "  Piano  " });
     expect(made.ok).toBe(true);
-    expect(made.habit!.name).toBe("Piano");
-    expect(createHabit(s, "   ").ok).toBe(false);
+    expect(habitOf(s, made).name).toBe("Piano");
+    expect(apply(s, { type: "createHabit", name: "   " }).ok).toBe(false);
 
-    expect(renameHabit(s, made.habit!.id, "Cooking").ok).toBe(true);
-    expect(archiveHabit(s, made.habit!.id).ok).toBe(true);
+    expect(apply(s, { type: "renameHabit", id: made.id!, name: "Cooking" }).ok).toBe(true);
+    expect(apply(s, { type: "archiveHabit", id: made.id! }).ok).toBe(true);
     expect(activeHabit(s)).toBeUndefined();
 
-    startSession(s, 600);
-    expect(createHabit(s, "X").ok).toBe(false);
-    expect(renameHabit(s, "h1", "Y").ok).toBe(false);
-    expect(archiveHabit(s, "h1").ok).toBe(false);
-    expect(selectHabit(s, null).ok).toBe(false);
+    apply(s, { type: "startSession", target: 600, now: 0 });
+    expect(apply(s, { type: "createHabit", name: "X" }).ok).toBe(false);
+    expect(apply(s, { type: "renameHabit", id: "h1", name: "Y" }).ok).toBe(false);
+    expect(apply(s, { type: "archiveHabit", id: "h1" }).ok).toBe(false);
+    expect(apply(s, { type: "selectHabit", id: null }).ok).toBe(false);
   });
 
   it("archives the active habit cleanly", () => {
     const s = fresh();
-    const habit = createHabit(s, "Piano")!.habit!;
-    expect(selectHabit(s, habit.id).ok).toBe(true);
-    expect(s.activeHabitId).toBe(habit.id);
-    archiveHabit(s, habit.id);
-    expect(s.activeHabitId).toBeNull();
+    const habit = habitOf(s, apply(s, { type: "createHabit", name: "Piano" }));
+    expect(apply(s, { type: "selectHabit", id: habit.id }).ok).toBe(true);
+    expect(s.records.activeHabitId).toBe(habit.id);
+    apply(s, { type: "archiveHabit", id: habit.id });
+    expect(s.records.activeHabitId).toBeNull();
   });
 
   it("selection accepts null (unstructured practice) and rejects unknown habits", () => {
     const s = fresh();
-    expect(selectHabit(s, null).ok).toBe(true);
-    expect(selectHabit(s, "nope").ok).toBe(false);
+    expect(apply(s, { type: "selectHabit", id: null }).ok).toBe(true);
+    expect(apply(s, { type: "selectHabit", id: "nope" }).ok).toBe(false);
   });
 });
 
 describe("the habit's palette (issue #445, ADR-0075)", () => {
   it("creates with the default color and re-colors between sessions only, on real habits with real keys", () => {
     const s = fresh();
-    const habit = createHabit(s, "Piano")!.habit!;
+    const habit = habitOf(s, apply(s, { type: "createHabit", name: "Piano" }));
     expect(habit.color).toBe(DEFAULT_HABIT_COLOR);
     expect(HABIT_COLORS).toEqual(["vermillion", "amber", "green", "cyan", "indigo", "violet"]);
-    expect(setHabitColor(s, habit.id, "cyan").ok).toBe(true);
+    expect(apply(s, { type: "recolorHabit", id: habit.id, color: "cyan" }).ok).toBe(true);
     expect(habit.color).toBe("cyan");
-    expect(setHabitColor(s, "nope", "amber").ok).toBe(false);
-    expect(setHabitColor(s, habit.id, "chartreuse" as never).ok).toBe(false);
+    expect(apply(s, { type: "recolorHabit", id: "nope", color: "amber" }).ok).toBe(false);
+    expect(apply(s, { type: "recolorHabit", id: habit.id, color: "chartreuse" as never }).ok).toBe(false);
     expect(habit.color).toBe("cyan");
-    startSession(s, 600);
-    expect(setHabitColor(s, habit.id, "amber").ok).toBe(false);
-    endSession(s);
+    apply(s, { type: "startSession", target: 600, now: 0 });
+    expect(apply(s, { type: "recolorHabit", id: habit.id, color: "amber" }).ok).toBe(false);
+    apply(s, { type: "endSession", now: 0 });
     expect(habit.color).toBe("cyan");
   });
 
@@ -76,97 +65,97 @@ describe("the habit's palette (issue #445, ADR-0075)", () => {
 
   it("persists the color across saves", () => {
     const s = fresh();
-    const habit = createHabit(s, "Piano")!.habit!;
-    setHabitColor(s, habit.id, "indigo");
+    const habit = habitOf(s, apply(s, { type: "createHabit", name: "Piano" }));
+    apply(s, { type: "recolorHabit", id: habit.id, color: "indigo" });
     const loaded = deserialize(serialize(s)).state!;
-    expect(loaded.habits[0]!.color).toBe("indigo");
+    expect(loaded.records.habits[0]!.color).toBe("indigo");
   });
 });
 
 describe("habit development", () => {
   it("accrues live flow time for the selected habit only, one-for-one", () => {
     const s = fresh();
-    const piano = createHabit(s, "Piano")!.habit!;
-    selectHabit(s, piano.id);
-    startSession(s, 600);
-    advance(s, 300);
+    const piano = habitOf(s, apply(s, { type: "createHabit", name: "Piano" }));
+    apply(s, { type: "selectHabit", id: piano.id });
+    apply(s, { type: "startSession", target: 600, now: 0 });
+    advance(s, 300, "flow");
     expect(piano.seconds).toBeCloseTo(300, 6);
-    endSession(s, 1_000);
+    apply(s, { type: "endSession", now: 1_000 });
 
-    const cooking = createHabit(s, "Cooking")!.habit!;
-    selectHabit(s, cooking.id);
-    startSession(s, 600);
-    advance(s, 120);
+    const cooking = habitOf(s, apply(s, { type: "createHabit", name: "Cooking" }));
+    apply(s, { type: "selectHabit", id: cooking.id });
+    apply(s, { type: "startSession", target: 600, now: 0 });
+    advance(s, 120, "flow");
     expect(piano.seconds).toBeCloseTo(300, 6);
     expect(cooking.seconds).toBeCloseTo(120, 6);
   });
 
   it("does not accrue while paused or in upgrade mode", () => {
     const s = fresh();
-    const piano = createHabit(s, "Piano")!.habit!;
-    selectHabit(s, piano.id);
-    startSession(s, 600);
-    advance(s, 60);
-    s.mode = "paused";
-    advance(s, 600);
-    s.mode = "flow";
-    advance(s, 60);
-    endSession(s);
+    const piano = habitOf(s, apply(s, { type: "createHabit", name: "Piano" }));
+    apply(s, { type: "selectHabit", id: piano.id });
+    apply(s, { type: "startSession", target: 600, now: 0 });
+    advance(s, 60, "flow");
+    s.game.mode = "paused";
+    advance(s, 600, "flow");
+    s.game.mode = "flow";
+    advance(s, 60, "flow");
+    apply(s, { type: "endSession", now: 0 });
     expect(piano.seconds).toBeCloseTo(120, 6);
   });
 
   it("manual logs advance the habit's credited time", () => {
     const s = fresh();
-    const piano = createHabit(s, "Piano")!.habit!;
-    addPracticeLog(s, piano.id, 15, 2_000);
+    const piano = habitOf(s, apply(s, { type: "createHabit", name: "Piano" }));
+    apply(s, { type: "logPractice", habitId: piano.id, minutes: 15, now: 2_000 });
     expect(piano.seconds).toBeCloseTo(900, 6);
-    expect(s.practiceLog).toHaveLength(1);
-    expect(s.practiceLog[0]!.source).toBe("manual");
-    expect(s.practiceLog[0]!.at).toBe(2_000);
-    expect(addPracticeLog(s, piano.id, -5).ok).toBe(false);
+    expect(s.records.practiceLog).toHaveLength(1);
+    expect(s.records.practiceLog[0]!.source).toBe("manual");
+    expect(s.records.practiceLog[0]!.at).toBe(2_000);
+    expect(apply(s, { type: "logPractice", habitId: piano.id, minutes: -5, now: 0 }).ok).toBe(false);
   });
 
   it("the habit app is a fixed instrument: development never scales with any module", () => {
     const s = fresh();
-    const piano = createHabit(s, "Piano")!.habit!;
-    addPracticeLog(s, piano.id, 10);
+    const piano = habitOf(s, apply(s, { type: "createHabit", name: "Piano" }));
+    apply(s, { type: "logPractice", habitId: piano.id, minutes: 10, now: 0 });
     expect(piano.seconds).toBeCloseTo(600, 6);
-    selectHabit(s, piano.id);
-    startSession(s, 600);
-    advance(s, 100);
+    apply(s, { type: "selectHabit", id: piano.id });
+    apply(s, { type: "startSession", target: 600, now: 0 });
+    advance(s, 100, "flow");
     expect(piano.seconds).toBeCloseTo(700, 6);
   });
 
   it("logs one live practice entry per session with a timestamp", () => {
     const s = fresh();
-    const piano = createHabit(s, "Piano")!.habit!;
-    selectHabit(s, piano.id);
-    startSession(s, 600);
-    advance(s, 250);
-    endSession(s, 5_000);
-    expect(s.practiceLog).toHaveLength(1);
-    expect(s.practiceLog[0]!.source).toBe("live");
-    expect(s.practiceLog[0]!.seconds).toBeCloseTo(250, 6);
-    expect(s.practiceLog[0]!.at).toBe(5_000);
+    const piano = habitOf(s, apply(s, { type: "createHabit", name: "Piano" }));
+    apply(s, { type: "selectHabit", id: piano.id });
+    apply(s, { type: "startSession", target: 600, now: 0 });
+    advance(s, 250, "flow");
+    apply(s, { type: "endSession", now: 5_000 });
+    expect(s.records.practiceLog).toHaveLength(1);
+    expect(s.records.practiceLog[0]!.source).toBe("live");
+    expect(s.records.practiceLog[0]!.seconds).toBeCloseTo(250, 6);
+    expect(s.records.practiceLog[0]!.at).toBe(5_000);
 
-    startSession(s, 600);
-    advance(s, 10);
-    endSession(s, 6_000);
-    expect(s.practiceLog).toHaveLength(2);
+    apply(s, { type: "startSession", target: 600, now: 0 });
+    advance(s, 10, "flow");
+    apply(s, { type: "endSession", now: 6_000 });
+    expect(s.records.practiceLog).toHaveLength(2);
   });
 
   it("persists habits, selection, and the practice log across saves", () => {
     const s = fresh();
-    const piano = createHabit(s, "Piano")!.habit!;
-    selectHabit(s, piano.id);
-    startSession(s, 600);
-    advance(s, 300);
-    endSession(s, 9_000);
-    addPracticeLog(s, piano.id, 5, 9_500);
+    const piano = habitOf(s, apply(s, { type: "createHabit", name: "Piano" }));
+    apply(s, { type: "selectHabit", id: piano.id });
+    apply(s, { type: "startSession", target: 600, now: 0 });
+    advance(s, 300, "flow");
+    apply(s, { type: "endSession", now: 9_000 });
+    apply(s, { type: "logPractice", habitId: piano.id, minutes: 5, now: 9_500 });
     const loaded = deserialize(serialize(s))!;
-    expect(loaded.state!.habits[0]!.name).toBe("Piano");
-    expect(loaded.state!.activeHabitId).toBe(piano.id);
-    expect(loaded.state!.practiceLog).toHaveLength(2);
-    expect(loaded.state!.habits[0]!.seconds).toBeCloseTo(piano.seconds, 6);
+    expect(loaded.state!.records.habits[0]!.name).toBe("Piano");
+    expect(loaded.state!.records.activeHabitId).toBe(piano.id);
+    expect(loaded.state!.records.practiceLog).toHaveLength(2);
+    expect(loaded.state!.records.habits[0]!.seconds).toBeCloseTo(piano.seconds, 6);
   });
 });
