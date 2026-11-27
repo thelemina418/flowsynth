@@ -40,6 +40,7 @@ export function App({ shell }: { shell: Shell }) {
           flowing={game.mode === "flow"}
           arrived={game.arrived}
           placing={shell.placing}
+          inspected={shell.inspected}
         />
       )}
     </div>

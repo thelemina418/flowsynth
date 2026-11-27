@@ -78,17 +78,16 @@ interface CellProps {
   kind: CellKind;
   module: ModuleType | undefined;
   picked: boolean;
+  inspected: boolean;
   target: Target | undefined;
-  // Present only while the cell can be acted on (upgrade mode).
-  actions: CellActions | undefined;
-}
-
-interface CellActions {
-  onClick: () => void;
+  // A click, Enter or Space on the cell: always reads it into the Hex
+  // detail, and in upgrade mode also picks or places.
+  onActivate: () => void;
+  // Present only while a placed module can be dragged (upgrade mode).
   onPointerDown: ((event: PointerEvent) => void) | undefined;
 }
 
-function Cell({ cell, kind, module, picked, target, actions }: CellProps) {
+function Cell({ cell, kind, module, picked, inspected, target, onActivate, onPointerDown }: CellProps) {
   const center = toPixel(cell, SIZE);
   const common = {
     "data-cell": hexKey(cell),
@@ -96,26 +95,26 @@ function Cell({ cell, kind, module, picked, target, actions }: CellProps) {
     "data-ring": String(ring(cell)),
     "data-target": target,
     "data-picked": picked ? "" : undefined,
+    "data-inspected": inspected ? "" : undefined,
     class: `cell cell-${kind}`,
+    onClick: onActivate,
   };
+  // Open cells and walls take focus, so the Hex detail opens from the
+  // keyboard; the dark rings stay out of the tab order.
+  const focusable = (label: string) => ({
+    tabindex: 0,
+    role: "button" as const,
+    "aria-label": label,
+    "aria-pressed": picked ? ("true" as const) : undefined,
+    onKeyDown: (event: KeyboardEvent) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      onActivate();
+    },
+  });
   if (kind === "open") {
-    const interactive = actions
-      ? {
-          tabindex: 0,
-          role: "button" as const,
-          "aria-label": module ? moduleName(module) : "Open cell",
-          "aria-pressed": picked ? ("true" as const) : undefined,
-          onClick: actions.onClick,
-          onPointerDown: actions.onPointerDown,
-          onKeyDown: (event: KeyboardEvent) => {
-            if (event.key !== "Enter" && event.key !== " ") return;
-            event.preventDefault();
-            actions.onClick();
-          },
-        }
-      : {};
     return (
-      <g {...common} {...interactive}>
+      <g {...common} {...focusable(module ? moduleName(module) : "Open cell")} onPointerDown={onPointerDown}>
         <polygon class="cell-face" points={points(center, FACE)} />
         <polygon class="cell-engrave" points={points(center, ENGRAVE)} />
         {module && (
@@ -142,7 +141,7 @@ function Cell({ cell, kind, module, picked, target, actions }: CellProps) {
   const mark = wall.opens ? CLASS_MARKS[wall.opens] : undefined;
   const initialY = mark ? center.y - 2 : center.y + 5;
   return (
-    <g {...common} onClick={actions?.onClick}>
+    <g {...common} {...focusable(wall.name ?? "Wall")}>
       <polygon class="cell-face" points={points(center, FACE)} />
       {wall.name !== null && (
         <text class="wall-initial" x={round(center.x)} y={round(initialY)} text-anchor="middle">
@@ -155,18 +154,21 @@ function Cell({ cell, kind, module, picked, target, actions }: CellProps) {
   );
 }
 
-// The board with its placements. In upgrade mode a cell is a click target
-// (and a placed module a drag source) routed to the pick; outside it the
-// layout is locked and the cells carry no handlers.
+// The board with its placements. Every cell is a click target for the Hex
+// detail. In upgrade mode a click also goes to the pick (and a placed
+// module is a drag source); outside it the layout is locked, so a click
+// only inspects.
 interface BoardProps {
   board: BoardState;
   rates: BoardRates;
   flowing: boolean;
   placing: Placing;
+  inspected: Hex | null;
+  onCell: (cell: Hex) => void;
   onDrop: (target: Element | null) => void;
 }
 
-export function Board({ board, rates, flowing, placing, onDrop }: BoardProps) {
+export function Board({ board, rates, flowing, placing, inspected, onCell, onDrop }: BoardProps) {
   const pick = placing.pick.value;
   const targets = placing.targets.value;
   const locked = placing.locked.value;
@@ -174,12 +176,6 @@ export function Board({ board, rates, flowing, placing, onDrop }: BoardProps) {
     <svg class="board" viewBox={VIEW_BOX} role="img" aria-label="Board">
       {boardCells(board).map(({ cell, kind }) => {
         const module = kind === "open" ? moduleAt(board, cell)?.module : undefined;
-        const actions: CellActions | undefined = locked
-          ? undefined
-          : {
-              onClick: () => placing.clickCell(cell),
-              onPointerDown: module ? (event) => startDrag(event, { begin: () => placing.pickCell(cell), drop: onDrop }) : undefined,
-            };
         return (
           <Cell
             key={hexKey(cell)}
@@ -187,8 +183,10 @@ export function Board({ board, rates, flowing, placing, onDrop }: BoardProps) {
             kind={kind}
             module={module}
             picked={pick?.from === "cell" && sameHex(pick.cell, cell)}
+            inspected={inspected !== null && sameHex(inspected, cell)}
             target={targets.get(hexKey(cell))}
-            actions={kind === "dark" ? undefined : actions}
+            onActivate={() => onCell(cell)}
+            onPointerDown={!locked && module ? (event) => startDrag(event, { begin: () => placing.pickCell(cell), drop: onDrop }) : undefined}
           />
         );
       })}

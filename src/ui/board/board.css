@@ -170,3 +170,33 @@
   font-size: 13px;
   color: var(--muted);
 }
+
+/* The Hex detail (issue #27): a fixed panel under the board. Its
+   five-line lane is reserved (ADR-0031), so opening it never moves what
+   sits around it; while empty it draws nothing. Open, it is plain mono
+   lines under one hairline, no card. The cell it reads keeps a thin ink
+   outline. */
+.hex-detail {
+  min-height: calc(5 * 1.5em + 9px);
+  padding-top: 8px;
+  border-top: 1px solid transparent;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.hex-detail[data-open] { border-top-color: var(--line); }
+
+.hex-detail-line {
+  margin: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.hex-detail-line:first-child,
+.hex-detail-line[data-effect] { color: var(--ink); }
+
+.cell[tabindex],
+.cell-dark { cursor: pointer; }
+.cell[tabindex]:focus { outline: none; }
+.cell-wall[tabindex]:focus-visible .cell-face { stroke: var(--ink); stroke-width: 2.4; }
+.cell[data-inspected] .cell-face { stroke: var(--ink); stroke-width: 1.8; }

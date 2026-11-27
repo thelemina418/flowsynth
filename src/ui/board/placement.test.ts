@@ -161,6 +161,8 @@ describe("the layout is locked outside upgrade mode", () => {
     click(entry("Triangle"));
     click(cell("1,0"));
     expect(placed(shell)).toEqual(["sine@0,0"]);
-    expect(cell("1,0").getAttribute("tabindex")).toBeNull();
+    // The cell stays focusable for the Hex detail (issue #27), but is no
+    // target for anything.
+    expect(cell("1,0").hasAttribute("data-target")).toBe(false);
   });
 });

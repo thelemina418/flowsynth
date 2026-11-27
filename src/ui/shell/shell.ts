@@ -1,5 +1,6 @@
 import { computed, signal } from "@preact/signals";
 import { apply, type Action, type ApplyResult } from "../../engine/apply";
+import type { Hex } from "../../engine/hex";
 import { createInitialState } from "../../engine/state";
 import type { GameState, Habit, HabitClass } from "../../engine/types";
 import { Placing } from "../board/placing";
@@ -34,6 +35,8 @@ export class Shell {
   private readonly save: SharedSave;
   // The board's pick (issue #25); every placement goes through `act`.
   readonly placing = new Placing(this.state, (action) => this.act(action));
+  // The cell the Hex detail reads (issue #27), or null while it is empty.
+  readonly inspected = signal<Hex | null>(null);
 
   readonly screen = computed<Screen>(() => {
     const offer = this.recovery.value;
