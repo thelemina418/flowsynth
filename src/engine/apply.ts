@@ -69,7 +69,7 @@ function run(state: GameState, action: Action): Step {
     case "startSession": return startSession(state, action.target, action.now);
     case "pauseSession": return pauseSession(state);
     case "resumeSession": return resumeSession(state);
-    case "endSession": return endSession(state, action.now);
+    case "endSession": return relaid(state, endSession(state, action.now));
     case "signalTarget": return signalTarget(state);
     case "settleHonestyReport": return settleHonestyReport(state, action.outcome);
     case "reflect": {
@@ -98,10 +98,12 @@ function run(state: GameState, action: Action): Step {
   }
 }
 
-// A layout or facing change recomputes the board's rates once (issue #26); a
-// refusal changed nothing, so it recomputes nothing.
+// A layout or facing change recomputes the board's rates once (issue #26),
+// and so does a session's end, so the Flywheel picks up that session's
+// Producer credit (issue #32); a refusal changed nothing, so it recomputes
+// nothing.
 function relaid(state: GameState, step: Step): Step {
-  if (step.ok) state.game.rates = computeBoardRates(state.game.board);
+  if (step.ok) state.game.rates = computeBoardRates(state.game.board, state.records.classCredit.producer);
   return step;
 }
 

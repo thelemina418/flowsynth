@@ -62,6 +62,28 @@ describe("recomputing the board's rates", () => {
     expect(s.game.nous.toNumber()).toBeGreaterThan(0);
   });
 
+  it("recomputes once for a rotation and once for a session's end, and nothing for a refused rotation (issue #32)", () => {
+    const s = acceptanceLayout();
+    applyIn(s, { type: "removeModule", cell: { q: 0, r: 1 } });
+    applyIn(s, { type: "placeModule", module: "flywheel", cell: { q: 0, r: 1 } });
+    counted.mockClear();
+    applyIn(s, { type: "rotateModule", cell: { q: 0, r: 1 }, turn: "clockwise" });
+    expect(counted).toHaveBeenCalledTimes(1);
+    counted.mockClear();
+    applyIn(s, { type: "rotateModule", cell: { q: 0, r: 0 }, turn: "clockwise" });
+    giveHabit(s, "Synthesis", "producer");
+    applyIn(s, { type: "startSession", target: null, now: 0 });
+    applyIn(s, { type: "rotateModule", cell: { q: 0, r: 1 }, turn: "clockwise" });
+    for (let i = 0; i < 100; i++) advanceIn(s, 36, "flow");
+    expect(counted).not.toHaveBeenCalled();
+    applyIn(s, { type: "endSession", now: 1 });
+    expect(counted).toHaveBeenCalledTimes(1);
+    expect(s.game.rates.modulators[0]!.output.toNumber()).toBe(1.1);
+    counted.mockClear();
+    applyIn(s, { type: "endSession", now: 2 });
+    expect(counted).not.toHaveBeenCalled();
+  });
+
   it("recomputes once on load, from the layout, and never writes the rates to the save", () => {
     const s = acceptanceLayout();
     const text = serialize(s, 0);
