@@ -47,7 +47,7 @@ describe("advance in upgrade mode freezes the game", () => {
     expect(s).toEqual(before);
   });
 
-  it("breather time is reserved: it moves nothing yet", () => {
+  it("breather time outside a breather moves nothing (issue #41)", () => {
     const s = flowing();
     const before = cloneState(s);
     advanceIn(s, 3600, "breather");

@@ -50,8 +50,14 @@ export function startSession(state: GameState, habitId: string, target: number |
   return ok;
 }
 
+// The breather's bounds (issue #41): banked from 10 credited minutes, and
+// 5 to 15 minutes long.
+const BREATHER_MIN_CREDITED = 10 * 60;
+const BREATHER_MIN_SECONDS = 5 * 60;
+const BREATHER_MAX_SECONDS = 15 * 60;
+
 export function endSession(state: GameState, now: number = 0): ActionResult {
-  if (state.game.mode === "upgrade") return fail("No session is running.");
+  if (state.game.mode !== "flow" && state.game.mode !== "paused") return fail("No session is running.");
   const session = state.game.session;
   // The exit gate (spec §1–2): the honesty report's answer is mandatory and
   // final. A still unclassified absence buffer counts too: it would have
@@ -70,6 +76,11 @@ export function endSession(state: GameState, now: number = 0): ActionResult {
   const credit = habitClass !== null ? state.records.classCredit[habitClass] : 0;
   const levelAfter = classLevelOf(credit).level;
   const levelBefore = classLevelOf(Math.max(0, credit - classSeconds)).level;
+  // A session of at least 10 credited minutes banks a breather of
+  // credited ÷ 5, from 5 to 15 minutes, in place of any banked one; a
+  // shorter one leaves the bank alone (ADR-0095).
+  const breather = credited >= BREATHER_MIN_CREDITED - EPS ? Math.min(BREATHER_MAX_SECONDS, Math.max(BREATHER_MIN_SECONDS, credited / 5)) : null;
+  if (breather !== null) state.game.breather.banked = { seconds: breather };
   state.game.mode = "upgrade";
   state.game.session = null;
   state.records.sessionsCompleted++;
@@ -102,6 +113,7 @@ export function endSession(state: GameState, now: number = 0): ActionResult {
     classSeconds,
     levelBefore,
     levelAfter,
+    breather,
     plannedTarget: target,
     honestyEvents: events,
     reflection: null,

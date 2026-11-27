@@ -4,7 +4,7 @@ import { apply, type Action, type ApplyResult } from "../../engine/apply";
 import type { Cell } from "../../engine/hex";
 import { createInitialState } from "../../engine/state";
 import { poolOutstanding, type Presence } from "../../engine/trust";
-import type { GameState, Habit, HabitClass, HonestyOutcome, SessionState, SessionSummary } from "../../engine/types";
+import type { BreatherState, GameState, Habit, HabitClass, HonestyOutcome, SessionState, SessionSummary } from "../../engine/types";
 import { Placing } from "../board/placing";
 import { SharedSave, type SaveStorage } from "../shared-save";
 
@@ -14,7 +14,9 @@ import { SharedSave, type SaveStorage } from "../shared-save";
 // requires it, and asks each habit awaiting a class for one. From upgrade
 // mode it opens Begin flow, and in flow it runs the session clock's
 // boundary (issue #39). At End it asks the honesty report when
-// provisional time is owed, then shows the summary (issue #40).
+// provisional time is owed, then shows the summary (issue #40). Between
+// sessions it takes a banked breather, runs it on the same boundary, and
+// shows its result on the next upgrade-mode view (issue #41).
 
 export type Screen =
   | { kind: "recovery"; raw: string; lost: string[]; error: string | null }
@@ -23,6 +25,8 @@ export type Screen =
   | { kind: "flow"; error: string | null }
   | { kind: "honesty"; session: SessionState; error: string | null }
   | { kind: "summary"; summary: SessionSummary }
+  | { kind: "breather"; running: NonNullable<BreatherState["running"]> }
+  | { kind: "breather-result"; result: NonNullable<BreatherState["result"]> }
   | { kind: "ready" };
 
 interface Offer {
@@ -75,8 +79,12 @@ export class Shell {
       if (this.ending.value && session && poolOutstanding(state)) return { kind: "honesty", session, error: this.flowError.value };
       return { kind: "flow", error: this.flowError.value };
     }
+    const running = state.game.breather.running;
+    if (mode === "breather" && running) return { kind: "breather", running };
     const summary = state.game.summary;
     if (mode === "upgrade" && summary && !summary.seen) return { kind: "summary", summary };
+    const result = state.game.breather.result;
+    if (mode === "upgrade" && result) return { kind: "breather-result", result };
     if (this.beginOpen.value) return { kind: "begin", error: this.beginError.value };
     return { kind: "ready" };
   });
@@ -111,11 +119,17 @@ export class Shell {
   // A session saved mid-flow (the old console's resume from a save): the
   // wall-clock gap since the save is an offline absence, settled at once
   // by the trust rules, since the page is open again. Paused time credits
-  // nothing.
+  // nothing. A breather saved running moves on by the same gap, and one
+  // whose deadline passed while closed completes here (issue #41).
   private reconciled(state: GameState, savedAt: number): GameState {
     const mode = state.game.mode;
-    if (mode !== "flow" && mode !== "paused") return state;
     const now = this.now();
+    if (mode === "breather") {
+      const ran = advance(state, Math.max(0, (now - savedAt) / 1000), "breather");
+      this.seed(now);
+      return ran.fault === undefined ? ran.state : state;
+    }
+    if (mode !== "flow" && mode !== "paused") return state;
     let next = state;
     if (mode === "flow") {
       const away = advance(next, Math.max(0, (now - savedAt) / 1000), "flow", "offline", 0);
@@ -144,13 +158,14 @@ export class Shell {
 
   // The clock boundary (issue #39): in flow or paused, the wall-clock gap
   // and the drift step since the last boundary go to `advance` (paused
-  // time credits nothing). Upgrade mode moves nothing. Every step is
-  // saved.
+  // time credits nothing). In a breather the wall gap goes to `advance`
+  // as breather time, which knows no presence (issue #41). Upgrade mode
+  // moves nothing. Every step is saved.
   boundary(presence: Presence): void {
     const state = this.state.peek();
     const mode = state.game.mode;
     const now = this.now();
-    if (mode !== "flow" && mode !== "paused") {
+    if (mode === "upgrade") {
       this.lastWall = null;
       return;
     }
@@ -163,7 +178,7 @@ export class Shell {
     const driftStep = (drift - this.lastDrift) / 1000;
     this.lastWall = now;
     this.lastDrift = drift;
-    const walked = advance(state, gap, "flow", presence, driftStep);
+    const walked = mode === "breather" ? advance(state, gap, "breather") : advance(state, gap, "flow", presence, driftStep);
     if (walked.fault !== undefined) {
       this.notice.value = `Time couldn't be counted · ${walked.fault}`;
       return;
@@ -254,6 +269,28 @@ export class Shell {
   // The summary's one control: dismissed, it leads to upgrade mode.
   dismissSummary(): void {
     this.act({ type: "dismissSummary" });
+  }
+
+  // `Take breather`: from upgrade mode while one is banked. The calm
+  // screen's clock starts now.
+  takeBreather(): void {
+    const now = this.now();
+    if (!this.act({ type: "takeBreather", now }).ok) return;
+    this.closeBegin();
+    this.inspected.value = null;
+    this.placing.clear();
+    this.seed(now);
+  }
+
+  // `End early`: the span since the last boundary passes first, so a
+  // breather whose deadline has come completes rather than re-banking.
+  endBreatherEarly(): void {
+    this.boundary("visible");
+    if (this.act({ type: "endBreatherEarly" }).ok) this.lastWall = null;
+  }
+
+  dismissBreatherResult(): void {
+    this.act({ type: "dismissBreatherResult" });
   }
 
   writeNote(text: string): ApplyResult {

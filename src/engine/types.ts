@@ -69,6 +69,8 @@ export interface SessionSummary {
   classSeconds: number;
   levelBefore: number;
   levelAfter: number;
+  // The breather this session banked, in seconds, or null (issue #41).
+  breather: number | null;
   plannedTarget: number | null;
   honestyEvents: HonestyEvent[];
   reflection: SessionReflection | null;
@@ -157,14 +159,23 @@ export interface Intention {
   createdAt: number;
 }
 
-export type Mode = "upgrade" | "flow" | "paused";
+export type Mode = "upgrade" | "flow" | "paused" | "breather";
 
 // The way `advance` passes time. 'upgrade' freezes everything; 'breather'
-// is reserved for chunk 04.
+// runs a taken breather to its deadline (issue #41).
 export type AdvanceMode = "flow" | "breather" | "upgrade";
 
 // The console's fixed-function instruments (ADR-0012).
 export type FocusApp = "habit" | "time" | "notes";
+
+// The breather (spec chunk 04, issue #41; ADR-0095): at most one banked,
+// at most one running, and the last completed one's payout until the
+// player dismisses it. Lengths and elapsed time are in seconds.
+export interface BreatherState {
+  banked: { seconds: number } | null;
+  running: { seconds: number; elapsed: number; startedAt: number } | null;
+  result: { nous: Num } | null;
+}
 
 // The real-life records: nothing in the game ever resets them.
 export interface Records {
@@ -262,6 +273,9 @@ export interface OscillatorRate {
   faders: Num;
   pressure: Num;
   rate: Num;
+  // The same product with the breather base (issue #41): Release's 6 in
+  // place of its flow base of 0, every other type its flow base.
+  breatherRate: Num;
 }
 
 // What a reach cell holds when a modulator's charge arrives (issue #32): a
@@ -306,6 +320,8 @@ export interface BoardRates {
   // Walls in the order a Patch first targets them.
   walls: WallRate[];
   total: Num;
+  // 2 × the sum of breatherRate: what a breather makes per second.
+  breatherTotal: Num;
 }
 
 // The game state.
@@ -314,6 +330,7 @@ export interface Game {
   mode: Mode;
   session: SessionState | null;
   summary: SessionSummary | null;
+  breather: BreatherState;
   // The classes a habit may attune to. Engineer and Producer open at the
   // start; later chunks open the others.
   openClasses: HabitClass[];

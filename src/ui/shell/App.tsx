@@ -7,6 +7,9 @@ import { ClassChoice } from "./ClassChoice";
 import { FlowScreen } from "./FlowScreen";
 import { HonestyReport } from "./HonestyReport";
 import { Summary } from "./Summary";
+import { Breather } from "./Breather";
+import { BreatherResult } from "./BreatherResult";
+import { breatherMinutes } from "./readouts";
 import { RecoveryChoice } from "./RecoveryChoice";
 import { downloadSave } from "./download";
 import { Stage } from "../board/Stage";
@@ -14,7 +17,8 @@ import { Stage } from "../board/Stage";
 // The shell's one surface (issue #21): the question owed on first load,
 // and once nothing is owed, the board and its tray (issues #24, #25),
 // `Begin flow` and its panel, and the flow screen (issue #39), and at End
-// the honesty report and the summary (issue #40). Upgrade mode carries the
+// the honesty report and the summary (issue #40), and the breather's calm
+// screen and result (issue #41). Upgrade mode carries the
 // Goal line; the chips and doors wait for the first completed session
 // (issue #42).
 export function App({ shell }: { shell: Shell }) {
@@ -69,6 +73,11 @@ export function App({ shell }: { shell: Shell }) {
           {/* The Almanac and Encyclopedia doors (issues #43, #44) go here,
               from the first completed session on (issue #42). */}
           {shown.doors && <nav class="shell-doors" data-doors="" aria-label="Doors" />}
+          {game.breather.banked && (
+            <button type="button" onClick={() => shell.takeBreather()}>
+              {`Take breather · ${breatherMinutes(game.breather.banked.seconds)}`}
+            </button>
+          )}
           <button type="button" class="main-switch" onClick={() => shell.openBegin()}>
             Begin flow
           </button>
@@ -86,6 +95,8 @@ export function App({ shell }: { shell: Shell }) {
       {screen.kind === "flow" && <FlowScreen shell={shell} error={screen.error} />}
       {screen.kind === "honesty" && <HonestyReport session={screen.session} error={screen.error} onAnswer={(outcome) => shell.answerHonesty(outcome)} />}
       {screen.kind === "summary" && <Summary summary={screen.summary} onDismiss={() => shell.dismissSummary()} />}
+      {screen.kind === "breather" && <Breather running={screen.running} onEndEarly={() => shell.endBreatherEarly()} />}
+      {screen.kind === "breather-result" && <BreatherResult result={screen.result} onDismiss={() => shell.dismissBreatherResult()} />}
     </div>
   );
 }

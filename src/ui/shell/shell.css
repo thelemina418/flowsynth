@@ -244,3 +244,16 @@
   gap: 8px;
   margin-right: auto;
 }
+
+/* The breather (issue #41): one calm line and a quiet way out. */
+.breather-screen {
+  width: min(100%, 440px);
+  display: grid;
+  justify-items: center;
+  gap: 24px;
+  text-align: center;
+}
+.breather-line { font-size: 18px; color: var(--muted); overflow-wrap: anywhere; }
+.breather-clock { color: var(--ink); }
+.summary-breather { font-size: 13px; color: var(--muted); }
+.shell-transport { gap: 8px; }
