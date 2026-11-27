@@ -1,6 +1,6 @@
 import { transact } from "./state";
 import { dismissSummary, endSession, pauseSession, recordSummaryReflection, resumeSession, signalTarget, startSession } from "./actions";
-import { addPracticeLog, archiveHabit, chooseHabitClass, createHabit, renameHabit, selectHabit, setHabitColor } from "./habits";
+import { addPracticeLog, archiveHabit, chooseHabitClass, createHabit, reattuneHabit, renameHabit, selectHabit, setHabitColor } from "./habits";
 import { createIntention, deleteIntention, editIntention, retainIntentionChoice, rollIntentionOccurrences } from "./intentions";
 import { writeNote } from "./notes";
 import { recable, type CableAction } from "./cables";
@@ -20,6 +20,7 @@ export type Action =
   | { type: "archiveHabit"; id: string }
   | { type: "selectHabit"; id: string | null }
   | { type: "chooseClass"; habitId: string; habitClass: HabitClass }
+  | { type: "reattuneHabit"; habitId: string; habitClass: HabitClass }
   | { type: "logPractice"; habitId: string; minutes: number; now: number }
   // The session.
   | { type: "startSession"; habitId: string; target: number | null; now: number }
@@ -73,6 +74,8 @@ function run(state: GameState, action: Action): Step {
       const step = chooseHabitClass(state, action.habitId, action.habitClass);
       return state.records.classCredit.producer === before ? step : relaid(state, step);
     }
+    // Re-attuning moves no credit, so no rate reads anything new.
+    case "reattuneHabit": return reattuneHabit(state, action.habitId, action.habitClass);
     case "logPractice": return addPracticeLog(state, action.habitId, action.minutes, action.now);
     case "startSession": return startSession(state, action.habitId, action.target, action.now);
     case "pauseSession": return pauseSession(state);

@@ -22,7 +22,9 @@ function stamp(note: NoteEntry): string {
 interface Props {
   state: GameState;
   onCapture: (text: string) => { ok: boolean; reason?: string };
-  onClose: () => void;
+  // The Notes door's panel closes; the Almanac's Notes surface has no
+  // close of its own and sits flat inside the Almanac.
+  onClose?: () => void;
 }
 
 export function Notes({ state, onCapture, onClose }: Props) {
@@ -38,6 +40,7 @@ export function Notes({ state, onCapture, onClose }: Props) {
   }, [face]);
 
   useEffect(() => {
+    if (!onClose) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
@@ -54,7 +57,7 @@ export function Notes({ state, onCapture, onClose }: Props) {
 
   const stream = [...state.records.notes].reverse();
   return (
-    <section class="shell-panel notes-panel" aria-label="Notes">
+    <section class={onClose ? "shell-panel notes-panel" : "notes-panel"} aria-label="Notes">
       <div class="notes-head">
         <div class="notes-tabs" role="group" aria-label="Notes faces">
           {(["capture", "logged"] as const).map((key) => (
@@ -64,9 +67,11 @@ export function Notes({ state, onCapture, onClose }: Props) {
           ))}
         </div>
         <span class="mono muted small">{session !== null ? `session ${state.records.sessionsCompleted + 1}` : "stream"}</span>
-        <button type="button" class="quiet small" onClick={onClose}>
-          Close
-        </button>
+        {onClose && (
+          <button type="button" class="quiet small" onClick={onClose}>
+            Close
+          </button>
+        )}
       </div>
       {face === "capture" ? (
         <div class="notes-capture">
