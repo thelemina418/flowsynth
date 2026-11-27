@@ -132,6 +132,52 @@ export function corners(center: Point, size: number): Point[] {
   });
 }
 
+// Twice the signed area of the triangle a, b, c. Crossing is an affine
+// property, and axial (q, r) is an affine image of the flat-top pixel
+// layout, so the test runs on the integer cells exactly.
+function orient(a: Cell, b: Cell, c: Cell): number {
+  return (b.q - a.q) * (c.r - a.r) - (b.r - a.r) * (c.q - a.q);
+}
+
+// c lies on segment ab, given the three are collinear.
+function within(a: Cell, b: Cell, c: Cell): boolean {
+  return Math.min(a.q, b.q) <= c.q && c.q <= Math.max(a.q, b.q) && Math.min(a.r, b.r) <= c.r && c.r <= Math.max(a.r, b.r);
+}
+
+function meet(a: Cell, b: Cell, c: Cell, d: Cell): boolean {
+  const d1 = orient(c, d, a);
+  const d2 = orient(c, d, b);
+  const d3 = orient(a, b, c);
+  const d4 = orient(a, b, d);
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return true;
+  return (d1 === 0 && within(c, d, a)) || (d2 === 0 && within(c, d, b)) || (d3 === 0 && within(a, b, c)) || (d4 === 0 && within(a, b, d));
+}
+
+// The cable-crossing test (spec chunk 03, issue #33): two straight
+// segments between cell centres, ab and cd, cross when they meet anywhere
+// but an endpoint they share. Collinear overlap counts, and so does running
+// through the other's endpoint; meeting only at a shared end doesn't.
+export function crosses(a: Cell, b: Cell, c: Cell, d: Cell): boolean {
+  const ends: [Cell, Cell][] = [
+    [a, b],
+    [b, a],
+  ];
+  for (const [shared, far] of ends) {
+    for (const [otherShared, otherFar] of [
+      [c, d],
+      [d, c],
+    ] as [Cell, Cell][]) {
+      if (!sameCell(shared, otherShared)) continue;
+      // From a shared endpoint the two meet again only when they run the
+      // same way along one line.
+      if (orient(shared, far, otherFar) !== 0) return false;
+      const along = (far.q - shared.q) * (otherFar.q - shared.q) + (far.r - shared.r) * (otherFar.r - shared.r);
+      return along > 0;
+    }
+  }
+  return meet(a, b, c, d);
+}
+
 // Arrow keys on the drawn board. Up and down step along a column (q
 // fixed). Flat-top cells have no neighbour straight left or right, so left
 // and right zig-zag along a drawn row: from an even column east steps

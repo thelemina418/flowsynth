@@ -1,4 +1,4 @@
-import type { ModuleCategory, ModuleType, OscillatorType } from "./types";
+import type { ModuleCategory, ModuleType, OscillatorType, ReachHolds } from "./types";
 
 // The module catalogue (GLOSSARY: Module, Category): each type's category,
 // its nameplate, and for an oscillator its base rate and resonance pattern
@@ -114,6 +114,12 @@ export function categoryOf(module: ModuleType): ModuleCategory {
 
 export function isOscillator(module: ModuleType): module is OscillatorType {
   return categoryOf(module) === "oscillator";
+}
+
+// Whether a delivery onto a cell holding this charges it: only an
+// oscillator takes anything from charge in chunk 03.
+export function takesCharge(holds: ReachHolds): holds is OscillatorType {
+  return holds !== "empty" && holds !== "wall" && holds !== "dark" && isOscillator(holds);
 }
 
 export function moduleName(module: ModuleType): string {

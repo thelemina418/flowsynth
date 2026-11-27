@@ -21,6 +21,7 @@ export const mul = (a: NumLike, b: NumLike): Num => D(a).mul(b);
 export const div = (a: NumLike, b: NumLike): Num => D(a).div(b);
 export const pow = (a: NumLike, b: NumLike): Num => D(a).pow(b);
 export const log10 = (a: NumLike): Num => D(a).log10();
+export const ln = (a: NumLike): Num => D(a).ln();
 export const neg = (a: NumLike): Num => D(a).neg();
 export const abs = (a: NumLike): Num => D(a).abs();
 export const floor = (a: NumLike): Num => D(a).floor();

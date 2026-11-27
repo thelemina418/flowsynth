@@ -409,21 +409,25 @@ function readPlacements(raw: unknown, owned: Set<string>): Placement[] {
 
 // Cables (issue #33), read in saved order onto the placed board: a cable
 // whose type is unknown, whose source isn't a placed modulator or already
-// carries an earlier cable, whose target is dark, a wall or its own
-// source, that is longer than 3, crosses a cable read before it, or is
-// over the allowance, is unplugged back to the allowance rather than
-// failing the load: the rules a new cable is patched by.
+// carries an earlier cable, whose target is dark or its own source, that is
+// longer than 3, crosses a cable read before it, or is over the allowance,
+// is unplugged back to the allowance rather than failing the load: the
+// rules a new cable is patched by. A wall in the current arc is a target
+// like an open cell (issue #34). Returns the cables kept; `game` is read,
+// never changed.
 function readCables(raw: unknown, game: Pick<Game, "board" | "cableAllowance" | "arrivedCables">): Cable[] {
   if (!Array.isArray(raw)) return [];
+  const cables: Cable[] = [];
+  const reading = { ...game, board: { ...game.board, cables } };
   for (const item of raw) {
     if (!isRecord(item) || !isCableType(item.type)) continue;
     const source = readCell(item.source);
     const target = readCell(item.target);
     if (source === null || target === null) continue;
     const cable: Cable = { type: item.type, source, target };
-    if (newCableRefusal(game, cable) === null) game.board.cables.push(cable);
+    if (newCableRefusal(reading, cable) === null) cables.push(cable);
   }
-  return game.board.cables;
+  return cables;
 }
 
 // The saved cable types, then any the opening holds that the save lacks.

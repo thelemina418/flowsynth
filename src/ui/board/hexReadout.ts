@@ -1,11 +1,10 @@
 import { cellKind } from "../../engine/board";
-import { cableFrom } from "../../engine/cables";
 import { FACING_NAMES, sameCell, type Cell } from "../../engine/hex";
 import { className } from "../../engine/habits";
 import { wallAt } from "../../engine/map";
-import { categoryName, categoryOf, isOscillator, moduleName } from "../../engine/modules";
-import { moduleAt } from "../../engine/placement";
-import { fmtRate } from "../../engine/num";
+import { categoryName, categoryOf, moduleName, takesCharge } from "../../engine/modules";
+import { cableFrom, moduleAt } from "../../engine/placement";
+import { fmtRate, gt } from "../../engine/num";
 import type { Board, BoardRates, ModulatorRate, ModuleType, OscillatorRate, OscillatorType, ReachHolds } from "../../engine/types";
 
 // The Hex detail's readout (issue #27; philosophy.md, Words rule 2): the
@@ -66,18 +65,22 @@ function modulatorLines(board: Board, m: ModulatorRate): DetailLine[] {
   const name = { text: nameLine(m.module) + facing };
   if (cableFrom(board, m.cell)) {
     const { cell, holds } = m.deliveries[0]!;
-    // A wall target goes by its name, a placeholder as Wall (issue #34).
-    const target = holds === "empty" ? "Open cell" : holds === "wall" || holds === "dark" ? (wallAt(cell).name ?? "Wall") : moduleName(holds);
-    return [name, { text: `${fmtRate(m.output)} charge/s · patched → ${target}`, effect: true }];
+    return [name, { text: `${fmtRate(m.output)} charge/s · patched → ${targetName(cell, holds)}`, effect: true }];
   }
-  const charged = m.deliveries.flatMap((d) => (isChargedBy(d.holds) ? [moduleName(d.holds)] : []));
+  const charged = m.deliveries.flatMap((d) => (takesCharge(d.holds) ? [moduleName(d.holds)] : []));
   const reach = charged.length === 0 ? "no module in reach" : `reach → ${charged.join(", ")}`;
   return [name, { text: `${fmtRate(m.output)} charge/s · ${reach}`, effect: true }];
 }
 
-// Only an oscillator takes anything from charge in chunk 03.
-function isChargedBy(holds: ReachHolds): holds is OscillatorType {
-  return holds !== "empty" && holds !== "wall" && holds !== "dark" && isOscillator(holds);
+// A Patch's target: an open cell, a module, or a wall by its name, a
+// placeholder as Wall (issue #34). A dark cell is refused as a target.
+function targetName(cell: Cell, holds: ReachHolds): string {
+  switch (holds) {
+    case "empty": return "Open cell";
+    case "wall": return wallAt(cell).name ?? "Wall";
+    case "dark": throw new Error("a cable never targets a dark cell");
+    default: return moduleName(holds);
+  }
 }
 
 function nameLine(module: ModuleType): string {
@@ -100,7 +103,7 @@ function oscillatorLines(o: OscillatorRate): DetailLine[] {
   // appears only when charge is received (issue #32).
   const legs = [`${fmtRate(o.base)} ν/s base`];
   if (count > 0) legs.push(`×${fmtRate(o.resonance)} resonance`);
-  if (o.chargeReceived.gt(0)) legs.push(`×${fmtRate(o.charge)} charge`);
+  if (gt(o.chargeReceived, 0)) legs.push(`×${fmtRate(o.charge)} charge`);
   if (legs.length > 1) lines.push({ text: legs.join(" · ") });
   lines.push({ text: `${fmtRate(o.rate)} ν/s` });
   return lines;

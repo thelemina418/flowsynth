@@ -1,9 +1,9 @@
 import { cellKind } from "./board";
-import { addCell, cellKey, DIRECTIONS, sameCell, type Cell } from "./hex";
-import { add, D, min, mul, pow, sub, type Num } from "./num";
-import { baseRate, hasFacing, isOscillator, outputOf, patternOf, reachOf } from "./modules";
+import { addCell, cellKey, DIRECTIONS, type Cell } from "./hex";
+import { add, D, div, ln, min, mul, pow, sub, type Num } from "./num";
+import { baseRate, hasFacing, isOscillator, outputOf, patternOf, reachOf, takesCharge } from "./modules";
 import { wallAt } from "./map";
-import { moduleAt } from "./placement";
+import { cableFrom, moduleAt } from "./placement";
 import { instancesOf } from "./resonance";
 import type { Board, BoardRates, ChargeDelivery, ModulatorRate, ModulatorType, OscillatorRate, Placement, ReachHolds, WallRate } from "./types";
 
@@ -21,21 +21,21 @@ export function resonanceFactor(strength: number, instances: number): Num {
 }
 
 // The charge factor (mechanics-sketch.md): 1 + ln(1 + charge/s received).
-export function chargeFactor(received: Num): Num {
-  return add(1, add(1, received).ln());
+function chargeFactor(received: Num): Num {
+  return add(1, ln(add(1, received)));
 }
 
 // A modulator's output in charge/s, from the lifetime Producer class
 // credit (live credited seconds; manual log entries never add to it).
-export function modulatorOutput(module: ModulatorType, producerSeconds: number): Num {
+function modulatorOutput(module: ModulatorType, producerSeconds: number): Num {
   const output = outputOf(module);
-  const grown = add(output.base, mul(output.perProducerHour ?? 0, D(producerSeconds).div(3600)));
+  const grown = add(output.base, mul(output.perProducerHour ?? 0, div(producerSeconds, 3600)));
   return output.max === undefined ? grown : min(grown, output.max);
 }
 
 // The cells a placed modulator's reach covers, in reach order: each path
 // turned by the facing (a faced reach) and walked from the modulator.
-export function reachCells(placement: Placement): Cell[] {
+function reachCells(placement: Placement): Cell[] {
   const reach = reachOf(placement.module);
   const turn = reach.faced ? (placement.facing ?? 0) : 0;
   return reach.paths.map((path) => path.reduce<Cell>((cell, step) => addCell(cell, DIRECTIONS[(step + turn) % 6]!), placement.cell));
@@ -66,7 +66,7 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
     const output = modulatorOutput(module, producerSeconds);
     // A patched modulator delivers to its cable's target alone, in place
     // of its reach (issue #33).
-    const cable = board.cables.find((c) => sameCell(c.source, placement.cell));
+    const cable = cableFrom(board, placement.cell);
     const cells = cable ? [{ q: cable.target.q, r: cable.target.r }] : reachCells(placement);
     const deliveries: ChargeDelivery[] = cells.map((cell) => ({ cell, holds: holdsAt(board, cell) }));
     if (cable && deliveries[0]!.holds === "wall") {
@@ -75,7 +75,7 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
       damage.set(key, { ...wall, damage: add(wall.damage, output) });
     }
     for (const delivery of deliveries) {
-      if (delivery.holds === "empty" || delivery.holds === "wall" || delivery.holds === "dark" || !isOscillator(delivery.holds)) continue;
+      if (!takesCharge(delivery.holds)) continue;
       const key = cellKey(delivery.cell);
       received.set(key, add(received.get(key) ?? 0, output));
     }

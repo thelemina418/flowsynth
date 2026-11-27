@@ -1,7 +1,7 @@
 import { cellKind } from "./board";
-import { distance, sameCell, type Cell } from "./hex";
+import { crosses, distance, sameCell, type Cell } from "./hex";
 import { categoryOf } from "./modules";
-import { moduleAt } from "./placement";
+import { cableFrom, locked, moduleAt } from "./placement";
 import type { Board, Cable, CableType, Game, GameState } from "./types";
 
 // Cables (spec chunk 03, issue #33). Patching, re-aiming and unplugging
@@ -23,7 +23,7 @@ export interface CableResult {
 }
 
 // A cable's longest reach, in hex distance (mechanics-sketch.md).
-export const CABLE_LENGTH = 3;
+const CABLE_LENGTH = 3;
 
 const CABLE_NAMES: Record<CableType, string> = { patch: "Patch" };
 
@@ -33,61 +33,6 @@ export function cableName(type: CableType): string {
 
 export function isCableType(value: unknown): value is CableType {
   return typeof value === "string" && Object.prototype.hasOwnProperty.call(CABLE_NAMES, value);
-}
-
-// The cable plugged into the jack on `source`, if any.
-export function cableFrom(board: Board, source: Cell): Cable | undefined {
-  return board.cables.find((cable) => sameCell(cable.source, source));
-}
-
-// Twice the signed area of the triangle a, b, c. Crossing is an affine
-// property, and axial (q, r) is an affine image of the flat-top pixel
-// layout, so the test runs on the integer cells exactly.
-function orient(a: Cell, b: Cell, c: Cell): number {
-  return (b.q - a.q) * (c.r - a.r) - (b.r - a.r) * (c.q - a.q);
-}
-
-// c lies on segment ab, given the three are collinear.
-function within(a: Cell, b: Cell, c: Cell): boolean {
-  return Math.min(a.q, b.q) <= c.q && c.q <= Math.max(a.q, b.q) && Math.min(a.r, b.r) <= c.r && c.r <= Math.max(a.r, b.r);
-}
-
-function meet(a: Cell, b: Cell, c: Cell, d: Cell): boolean {
-  const d1 = orient(c, d, a);
-  const d2 = orient(c, d, b);
-  const d3 = orient(a, b, c);
-  const d4 = orient(a, b, d);
-  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return true;
-  return (d1 === 0 && within(c, d, a)) || (d2 === 0 && within(c, d, b)) || (d3 === 0 && within(a, b, c)) || (d4 === 0 && within(a, b, d));
-}
-
-// Two cables cross when their straight segments between cell centres meet
-// anywhere but an endpoint they share. Collinear overlap counts, and so
-// does running through the other's endpoint; meeting only at a shared
-// source or target doesn't.
-export function crosses(one: Cable, other: Cable): boolean {
-  const ends: [Cell, Cell][] = [
-    [one.source, one.target],
-    [one.target, one.source],
-  ];
-  for (const [shared, far] of ends) {
-    for (const [otherShared, otherFar] of [
-      [other.source, other.target],
-      [other.target, other.source],
-    ] as [Cell, Cell][]) {
-      if (!sameCell(shared, otherShared)) continue;
-      // From a shared endpoint the two meet again only when they run the
-      // same way along one line.
-      if (orient(shared, far, otherFar) !== 0) return false;
-      const along = (far.q - shared.q) * (otherFar.q - shared.q) + (far.r - shared.r) * (otherFar.r - shared.r);
-      return along > 0;
-    }
-  }
-  return meet(one.source, one.target, other.source, other.target);
-}
-
-function locked(state: GameState): string | null {
-  return state.game.mode === "upgrade" ? null : "The board is locked while a session runs.";
 }
 
 // Why the jack on `source` can't take a new cable, or null when it can:
@@ -109,7 +54,7 @@ function routeRefusal(board: Board, cable: Cable): string | null {
 }
 
 function crossingRefusal(cable: Cable, others: Cable[]): string | null {
-  return others.some((other) => crosses(cable, other)) ? "That cable would cross another." : null;
+  return others.some((other) => crosses(cable.source, cable.target, other.source, other.target)) ? "That cable would cross another." : null;
 }
 
 // Why a new cable can't join the board, whatever the mode: the rules a

@@ -66,7 +66,13 @@ function run(state: GameState, action: Action): Step {
     case "recolorHabit": return setHabitColor(state, action.id, action.color);
     case "archiveHabit": return archiveHabit(state, action.id);
     case "selectHabit": return selectHabit(state, action.id);
-    case "chooseClass": return chooseHabitClass(state, action.habitId, action.habitClass);
+    case "chooseClass": {
+      // Choosing Producer credits the habit's banked live seconds, which
+      // the Flywheel's output reads (issue #32): recompute when it does.
+      const before = state.records.classCredit.producer;
+      const step = chooseHabitClass(state, action.habitId, action.habitClass);
+      return state.records.classCredit.producer === before ? step : relaid(state, step);
+    }
     case "logPractice": return addPracticeLog(state, action.habitId, action.minutes, action.now);
     case "startSession": return startSession(state, action.target, action.now);
     case "pauseSession": return pauseSession(state);
@@ -105,8 +111,8 @@ function run(state: GameState, action: Action): Step {
 }
 
 // A layout, facing or cable change recomputes the board's rates once (issue #26),
-// and so does a session's end, so the Flywheel picks up that session's
-// Producer credit (issue #32); a refusal changed nothing, so it recomputes
+// and so does a session's end or a class choice that credits Producer
+// time, so the Flywheel picks up that Producer credit (issue #32); a refusal changed nothing, so it recomputes
 // nothing.
 function relaid(state: GameState, step: Step): Step {
   if (step.ok) state.game.rates = computeBoardRates(state.game.board, state.records.classCredit.producer);
