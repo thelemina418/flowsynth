@@ -58,12 +58,16 @@ describe("the class choice on screen", () => {
 describe("the recovery choice on screen", () => {
   it("explains before it asks, and the save is replaced only on Recover", () => {
     const file = JSON.parse(V15) as { version: number; state: Record<string, unknown> };
-    file.state.nous = "banana";
+    // A running session whose provisional bucket no longer reads: the one
+    // v15 figure the migration keeps.
+    file.state.mode = "flow";
+    file.state.session = { target: null, elapsed: 60, startedAt: 1, goalSeconds: {}, targetSignaled: false,
+      accounting: { creditedSeconds: 60, poolSeconds: 0, bucketNous: "banana", pendingAwaySeconds: 0, events: [] } };
     const text = JSON.stringify(file);
     const storage = memorySaveStorage();
     storage.setItem(STORAGE_KEY, text);
     mount(storage);
-    expect(host.textContent).toContain("nous");
+    expect(host.textContent).toContain("session.accounting.bucketNous");
     expect(buttons().map((b) => b.textContent)).toEqual(["Recover", "Download original", "Not now"]);
     expect(storage.getItem(STORAGE_KEY)).toBe(text);
     act(() => buttons()[0]!.click());

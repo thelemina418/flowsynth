@@ -5,12 +5,12 @@ import { SAVE_VERSION } from "./constants";
 import { deserialize, serialize, SaveRefusedError } from "./save";
 import type { GameState } from "./types";
 
-// The interim save boundary (issue #15): the real-life records round-trip,
-// a v15 save's records load with its retired economy left behind, older
-// versions start fresh, newer ones are refused.
+// The save boundary: the real-life records round-trip, a v15 save's
+// records load with its retired economy left behind, older versions start
+// fresh, newer ones are refused.
 
 // A synthetic v15 save in the shape the retired build wrote: the records
-// the interim keeps, beside the economy, board and World it leaves behind.
+// the migration keeps, beside the economy, board and World it leaves behind.
 function legacyV15(state: Record<string, unknown> = {}): string {
   return JSON.stringify({
     app: "flowsynth",
@@ -52,7 +52,7 @@ function legacyV15(state: Record<string, unknown> = {}): string {
 }
 
 describe("persistence", () => {
-  it("round-trips the full interim state byte-identical", () => {
+  it("round-trips the full state byte-identical", () => {
     const s = fresh();
     const { habit } = giveHabit(s);
     applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 20, schedule: "daily", now: 1 });
@@ -118,7 +118,7 @@ describe("persistence", () => {
   });
 });
 
-describe("a v15 save's records (issues #15, #19)", () => {
+describe("a v15 save's records (issue #19)", () => {
   it("loads the real-life records and leaves the retired economy behind", () => {
     const result = deserialize(legacyV15());
     expect(result.error).toBeUndefined();
@@ -185,12 +185,6 @@ describe("a v15 save's records (issues #15, #19)", () => {
       ],
     })).state!;
     expect(state.game.legacyLine).toBe("Legacy era · 3 modules · archived");
-  });
-
-  it("a flat save with no collection is the interim shape: no legacy line", () => {
-    const file = JSON.parse(legacyV15());
-    delete file.state.modules;
-    expect(deserialize(JSON.stringify(file)).state!.game.legacyLine).toBeNull();
   });
 
   it("a dismissed summary stays behind with the retired game", () => {

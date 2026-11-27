@@ -6,8 +6,8 @@ import type { GameState } from "./types";
 // Save integrity at the numeric limits (issue #486): an update whose
 // arithmetic leaves the representable range is refused whole — no invalid
 // figure, no half-applied span — and the state it leaves behind still saves
-// and loads. Interim (issue #15): with the board retired, the figures at the
-// limit are the session's clock, credited time and provisional pool.
+// and loads. The plain-number figures at the limit are the session's clock,
+// credited time and provisional pool.
 
 // Near the top of the double range: one more large span overflows.
 const EDGE = 1.7e308;

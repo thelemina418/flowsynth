@@ -3,22 +3,23 @@ import { applyIn } from "./fixtures";
 import { D } from "./num";
 import { deserialize, recoverLostSave, serialize } from "./save";
 
-// The lost-money recovery (ADR-0082, issue #494) at the interim boundary
-// (issue #15). A v15 save whose monetary figures serialized to null is a
-// distinct class: ordinary loading refuses it with the paths named and
-// repairs nothing; the explicit recovery loads the real-life records and
-// reports what was unreadable. The interim state carries no economy, so
-// nothing is reconstructed and nothing is invented.
+// The lost-money recovery (ADR-0082, issue #494) at the v15 migration. A
+// v15 save whose surviving monetary figure — a running session's
+// provisional bucket — serialized to null is a distinct class: ordinary
+// loading refuses it with the path named and repairs nothing; the explicit
+// recovery loads the real-life records and reports what was unreadable.
+// Nothing is reconstructed and nothing is invented.
 
-// A v15 save in the retired build's shape, its money lost to null the way
-// the pre-integrity serializer wrote nonfinite figures.
+// A mid-flow v15 save in the retired build's shape, its money lost to null
+// the way the pre-integrity serializer wrote nonfinite figures: the
+// provisional bucket the migration keeps, and the figures it discards.
 function lostMoneyV15(state: Record<string, unknown> = {}): string {
   return JSON.stringify({
     app: "flowsynth",
     version: 15,
     savedAt: 1_000,
     state: {
-      mode: "upgrade",
+      mode: "flow",
       sessionIndex: 1,
       sessionsCompleted: 1,
       nous: null,
@@ -34,7 +35,8 @@ function lostMoneyV15(state: Record<string, unknown> = {}): string {
       notes: [{ id: "n3", text: "kept", sessionId: 0, atElapsed: 60, habitId: "h1", at: 600 }],
       goals: [],
       sessionRecords: [],
-      session: null,
+      session: { target: null, elapsed: 900, startedAt: 1, goalSeconds: {}, targetSignaled: false,
+        accounting: { creditedSeconds: 300, poolSeconds: 600, bucketNous: null, pendingAwaySeconds: 0, events: [] } },
       summary: null,
       nextId: 4,
       ...state,
@@ -42,9 +44,27 @@ function lostMoneyV15(state: Record<string, unknown> = {}): string {
   });
 }
 
-const LOST = ["nous", "totalEarned", "modules[0].invested", "modules[0].reserve", "world.frontier", "world.weapons[0].store", "forge.progress"];
+const LOST = ["session.accounting.bucketNous"];
 
 describe("the lost-money recovery (ADR-0082)", () => {
+  it("figures the migration discards never force the choice: the save loads ordinarily", () => {
+    const loaded = deserialize(lostMoneyV15({
+      mode: "flow",
+      session: { target: null, elapsed: 900, startedAt: 1, goalSeconds: {}, targetSignaled: false,
+        accounting: { creditedSeconds: 900, poolSeconds: 0, bucketNous: 0, pendingAwaySeconds: 0, events: [] } },
+    }));
+    expect(loaded.error).toBeUndefined();
+    expect(loaded.recoveryRequired).toBeUndefined();
+    expect(loaded.state!.records.habits[0]!.seconds).toBe(7_200);
+    expect(loaded.state!.game.session!.accounting.creditedSeconds).toBe(900);
+  });
+
+  it("a leftover session outside flow is discarded, so its lost bucket never forces the choice", () => {
+    const loaded = deserialize(lostMoneyV15({ mode: "upgrade" }));
+    expect(loaded.recoveryRequired).toBeUndefined();
+    expect(loaded.state!.game.session).toBeNull();
+  });
+
   it("ordinary loading refuses with the lost paths named and repairs nothing", () => {
     const loaded = deserialize(lostMoneyV15());
     expect(loaded.recoveryRequired).toBe(true);
@@ -73,16 +93,12 @@ describe("the lost-money recovery (ADR-0082)", () => {
   });
 
   it("bytes that need no repair read through the recovery door exactly as an ordinary load", () => {
-    const text = lostMoneyV15({ nous: 5, totalEarned: 5, modules: [], world: {}, forge: {} });
+    const text = lostMoneyV15({ mode: "upgrade", session: null });
     expect(recoverLostSave(text)).toEqual(deserialize(text));
   });
 
   it("a lost provisional bucket in a mid-flow save recovers without rewriting practice credit", () => {
-    const source = lostMoneyV15({
-      mode: "flow",
-      session: { target: null, elapsed: 900, startedAt: 1, goalSeconds: {}, targetSignaled: false,
-        accounting: { creditedSeconds: 300, poolSeconds: 600, bucketNous: null, pendingAwaySeconds: 0, events: [] } },
-    });
+    const source = lostMoneyV15();
     expect(deserialize(source).lost).toContain("session.accounting.bucketNous");
     const state = recoverLostSave(source).state!;
     expect(state.game.mode).toBe("flow");
@@ -94,7 +110,7 @@ describe("the lost-money recovery (ADR-0082)", () => {
   });
 
   it("missing session accounting refuses ordinary loading and fails recovery without inventing practice", () => {
-    const source = lostMoneyV15({ mode: "flow", session: {} });
+    const source = lostMoneyV15({ session: {} });
     const ordinary = deserialize(source);
     expect(ordinary.recoveryRequired).toBe(true);
     expect(ordinary.lost).toContain("session.accounting");

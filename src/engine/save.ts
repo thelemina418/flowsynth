@@ -110,43 +110,20 @@ function finiteOr(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-// The legacy economy's monetary figures (ADR-0082): a v15 save written by a
-// pre-integrity build can carry them as null. A figure that is present but
-// unreadable is lost money, and loading refuses until the player chooses the
-// recovery. Absent figures are not loss: the interim shape never writes them.
-function lostMonetaryFigures(raw: Record<string, unknown>): string[] {
-  const lost: string[] = [];
-  const check = (value: unknown, path: string): void => {
-    if (value === undefined) return;
-    if (typeof value === "number" && Number.isFinite(value)) return;
-    lost.push(path);
-  };
-  for (const field of ["nous", "totalEarned", "eraEarned", "arete", "scrap", "capacityBought"]) {
-    check(raw[field], field);
-  }
-  if (Array.isArray(raw.modules)) {
-    raw.modules.forEach((module, index) => {
-      if (!isRecord(module) || module.type === "mutatorForge") return;
-      check(module.invested, `modules[${index}].invested`);
-      check(module.reserve, `modules[${index}].reserve`);
-    });
-  }
-  if (isRecord(raw.world)) {
-    check(raw.world.frontier, "world.frontier");
-    if (Array.isArray(raw.world.weapons)) {
-      raw.world.weapons.forEach((weapon, index) => {
-        if (isRecord(weapon)) check(weapon.store, `world.weapons[${index}].store`);
-      });
-    }
-  }
-  if (isRecord(raw.session)) {
-    // A session without its accounting lost its practice facts too: it
-    // never loads as zeros.
-    if (!isRecord(raw.session.accounting)) lost.push("session.accounting");
-    else check(raw.session.accounting.bucketNous, "session.accounting.bucketNous");
-  }
-  if (isRecord(raw.forge)) check(raw.forge.progress, "forge.progress");
-  return lost;
+// The v15 figures that survive the migration (ADR-0082): a running
+// session's practice accounting and its provisional bucket nous. Every
+// other v15 monetary figure stays behind with the retired game, so its loss
+// costs the player nothing and never asks for the recovery. A pre-integrity
+// build could write a nonfinite figure as null: a surviving figure that is
+// present but unreadable is lost money, and loading refuses until the
+// player chooses the recovery.
+function lostV15Figures(session: Record<string, unknown>): string[] {
+  // A session without its accounting lost its practice facts too: it
+  // never loads as zeros.
+  if (!isRecord(session.accounting)) return ["session.accounting"];
+  const bucket = session.accounting.bucketNous;
+  if (bucket === undefined || (typeof bucket === "number" && Number.isFinite(bucket))) return [];
+  return ["session.accounting.bucketNous"];
 }
 
 export function deserialize(text: string): LoadResult {
@@ -166,16 +143,15 @@ function readClass(value: unknown): HabitClass | null {
   return typeof value === "string" && (HABIT_CLASSES as readonly string[]).includes(value) ? (value as HabitClass) : null;
 }
 
-// A saved Decimal: the nested shape writes num's save string; a flat v15
-// save wrote a plain number. Anything else reads as the fallback.
+// A saved Decimal: v16 writes num's save string; v15 wrote a plain number. Anything else reads as the fallback.
 function readNum(value: unknown, fallback: Num): Num {
   if (typeof value === "string") return fromSave(value);
   if (typeof value === "number" && Number.isFinite(value)) return D(value);
   return fallback;
 }
 
-// A flat v15 habit carries a retired `classId`: every v15 habit awaits its
-// class (story 9). The nested shape carries `habitClass`.
+// A v15 habit carries a retired `classId`: every v15 habit awaits its
+// class (story 9). A v16 habit carries `habitClass`.
 function readHabit(raw: Habit): Habit {
   return {
     id: raw.id,
@@ -187,7 +163,7 @@ function readHabit(raw: Habit): Habit {
   };
 }
 
-// A flat v15 session holds its provisional nous as `bucketNous`.
+// A v15 session holds its provisional nous as `bucketNous`.
 function readAccounting(raw: Partial<SessionAccounting> & { bucketNous?: unknown }): SessionAccounting {
   return {
     creditedSeconds: finiteOr(raw.creditedSeconds, 0),
@@ -270,14 +246,6 @@ function readSave(text: string, recovery: boolean): LoadResult {
 
 // The one earlier version this build reads (issue #19 migrates it).
 const LEGACY_VERSION = 15;
-
-// The one-time v15 → v16 migration (issue #19). A flat v15 save — the
-// retired build's — migrates; the nested shape issue #17's interim wrote
-// under v15 reads as v16 does.
-function readV15(raw: Record<string, unknown>, recovery: boolean): LoadResult {
-  if (isRecord(raw.records) && isRecord(raw.game)) return readNested(raw.records, raw.game, LEGACY_VERSION, recovery);
-  return readFlat(raw, LEGACY_VERSION, recovery);
-}
 
 const MODES = ["upgrade", "flow", "paused"];
 
@@ -380,28 +348,28 @@ function needsRecovery(lost: string[]): LoadResult {
   };
 }
 
-// A flat v15 save: the retired build's, or issue #15's interim. The
-// real-life records come across; every habit awaits its class; the game
-// starts fresh apart from a running session's trust ledger and its
+// The one-time v15 → v16 migration (issue #19): the retired build's save.
+// The real-life records come across; every habit awaits its class; the
+// game starts fresh apart from a running session's trust ledger and its
 // provisional nous. The collection becomes the Almanac's legacy line.
-function readFlat(raw: Record<string, unknown>, version: number, recovery: boolean): LoadResult {
+function readV15(raw: Record<string, unknown>, recovery: boolean): LoadResult {
   if (typeof raw.mode !== "string" || !["upgrade", "flow", "paused", "breather"].includes(raw.mode)) {
     return { error: "The save data has an unknown session mode." };
   }
   for (const field of ["notes", "habits", "practiceLog", "sessionRecords", "goals"]) {
     if (!Array.isArray(raw[field])) return { error: "The save data is incomplete." };
   }
-  // A missing accounting object also lost practice-time facts; recovery
-  // must not invent the minutes needed to rebuild it.
-  if (recovery && isRecord(raw.session) && !isRecord(raw.session.accounting)) {
-    return { error: "The session's practice accounting is incomplete; recovery cannot reconstruct it. The original save is unchanged." };
-  }
-  const lost = lostMonetaryFigures(raw);
-  if (lost.length && !recovery) return needsRecovery(lost);
-  const fresh = createInitialState();
   // A legacy breather has nothing to resume in this build: it lands
   // between sessions, where a finished breather sits.
   const flowing = (raw.mode === "flow" || raw.mode === "paused") && isRecord(raw.session);
+  const lost = flowing ? lostV15Figures(raw.session as Record<string, unknown>) : [];
+  // A missing accounting object also lost practice-time facts; recovery
+  // must not invent the minutes needed to rebuild it.
+  if (recovery && lost.includes("session.accounting")) {
+    return { error: "The session's practice accounting is incomplete; recovery cannot reconstruct it. The original save is unchanged." };
+  }
+  if (lost.length && !recovery) return needsRecovery(lost);
+  const fresh = createInitialState();
   const intentions = raw.goals as GameState["records"]["intentions"];
   normalizeGoals(intentions);
   const state: GameState = {
@@ -427,15 +395,13 @@ function readFlat(raw: Record<string, unknown>, version: number, recovery: boole
       summary: isRecord(raw.summary) && raw.summary.seen !== true ? readSummary(raw.summary as Partial<SessionSummary>) : null,
     },
   };
-  const recovered = recovery && lost.length > 0 ? { fromVersion: version, lost } : undefined;
+  const recovered = recovery && lost.length > 0 ? { fromVersion: LEGACY_VERSION, lost } : undefined;
   return { state, ...(recovered && { recovered }) };
 }
 
 // The Almanac's one line from the retired game (issue #19): the v15
 // collection's size, placed and unplaced alike. A retired Mutator Forge is
-// not a collection module (the v15 build itself dropped it at load). A
-// flat save with no collection at all is issue #15's interim shape, never
-// a played v15 game: it gets no line.
+// not a collection module (the v15 build itself dropped it at load).
 function legacyLineOf(modules: unknown): string | null {
   if (!Array.isArray(modules)) return null;
   const n = modules.filter((module) => !(isRecord(module) && module.type === "mutatorForge")).length;

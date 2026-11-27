@@ -318,16 +318,18 @@ describe("review regressions: retain before replacement (#486)", () => {
 // the explicit adoption retains those bytes as the new lineage's
 // original before anything replaces the slot.
 describe("the lost-money recovery's adoption (issue #494)", () => {
-  // A v15 save whose legacy monetary figures serialized to null — the recovery
-  // class's own shape.
+  // A mid-flow v15 save whose provisional bucket serialized to null — the
+  // recovery class's own shape.
   function lostMoneyText(): string {
     return JSON.stringify({
       app: "flowsynth",
       version: 15,
       savedAt: 750,
       state: {
-        mode: "upgrade", habits: [], practiceLog: [], sessionRecords: [], notes: [], goals: [],
-        session: null, summary: null, nextId: 1, nous: null, arete: null,
+        mode: "flow", habits: [], practiceLog: [], sessionRecords: [], notes: [], goals: [], modules: [],
+        session: { target: null, elapsed: 60, startedAt: 1, goalSeconds: {}, targetSignaled: false,
+          accounting: { creditedSeconds: 60, poolSeconds: 0, bucketNous: null, pendingAwaySeconds: 0, events: [] } },
+        summary: null, nextId: 1,
       },
     });
   }
@@ -339,7 +341,7 @@ describe("the lost-money recovery's adoption (issue #494)", () => {
     const owner = new SharedSave(storage, () => 1000);
     const parsed = owner.load();
     expect(parsed).toHaveProperty("recoveryRequired", true);
-    expect((parsed as { lost?: string[] }).lost).toEqual(["nous", "arete"]);
+    expect((parsed as { lost?: string[] }).lost).toEqual(["session.accounting.bucketNous"]);
     expect((parsed as { raw?: string }).raw).toBe(raw);
     // The protection stands: the owner cannot replace the source until
     // the explicit adoption succeeds.
@@ -526,8 +528,10 @@ describe("the pre-v16 original (issue #19)", () => {
 
   it("a lost-money v15 save adopted through recovery is kept under the pre-v16 key", () => {
     const lost = JSON.stringify({ app: "flowsynth", version: 15, savedAt: 750, state: {
-      mode: "upgrade", habits: [], practiceLog: [], sessionRecords: [], notes: [], goals: [], modules: [],
-      session: null, summary: null, nextId: 1, nous: null } });
+      mode: "flow", habits: [], practiceLog: [], sessionRecords: [], notes: [], goals: [], modules: [],
+      session: { target: null, elapsed: 60, startedAt: 1, goalSeconds: {}, targetSignaled: false,
+        accounting: { creditedSeconds: 60, poolSeconds: 0, bucketNous: null, pendingAwaySeconds: 0, events: [] } },
+      summary: null, nextId: 1 } });
     const storage = memoryStorage();
     storage.setItem(STORAGE_KEY, lost);
     const owner = new SharedSave(storage, () => 1000);
