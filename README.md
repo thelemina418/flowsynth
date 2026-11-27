@@ -1,17 +1,8 @@
 # flowsynth
 
-FlowSynth is an incremental focus game whose configurable hex grid runs during real-life practice.
+Flowsynth is an incremental game played during real-life focus sessions. Modules on a single hex board resonate in patterns while the player practises.
 
-- [First-playable design brief](docs/first-playable-brief.md): accepted scope, provisional balance, and unresolved implementation decisions.
-- [Economy experiment report](docs/economy-report.md): deterministic route comparisons, upgrade sensitivity, and combination tradeoffs.
-- [Run the economy experiment](tools/economy/README.md): standard-library Python commands and assumptions.
-- [Validated prototype UX](docs/validated-prototype-ux.md): approved layout, interactions, and prototype source reference.
-- [Instrument standards](docs/instrument-standards.md): the approved presentation language for UI surfaces, with the pinned prototype, review criteria, and evidence requirements.
-- [Domain glossary](CONTEXT.md) and [design decisions](docs/adr/).
-
-## First playable (issue #1)
-
-A browser application implementing the redesign's opening (ADR-0013): the granted Carrier on a tiny discretionary board, the console, the starter-shelf catalog, cells bought with nous on a geometric scaler, forge rolls, combination, local saves, export/import, and interruption reconciliation. Stack and implementation decisions are in [ADR-0010](docs/adr/0010-build-the-first-playable-on-vite-typescript-and-a-tested-engine.md); the redesign decisions are in the [redesign spec](docs/redesign-spec.md).
+The game is being rebuilt from [the spec](docs/spec/00-overview.md), one chunk at a time. The binding design is [`GLOSSARY.md`](GLOSSARY.md), [`docs/design/`](docs/design/), [`PRODUCT.md`](PRODUCT.md), [`DESIGN.md`](DESIGN.md) and the [decisions](docs/adr/) that [`docs/adr/README.md`](docs/adr/README.md) says still bind. Records of the game before the reset are in [`docs/archive/`](docs/archive/README.md).
 
 ```sh
 # Select the supported runtime first: the checkout pins it in .node-version,
@@ -19,19 +10,14 @@ A browser application implementing the redesign's opening (ADR-0013): the grante
 mise install            # or: fnm install; nvm users: nvm install $(cat .node-version)
 npm install
 npm run preflight      # runtime, timezone, and UI-storage gate — cheap, fails with the fix
-npm run dev            # play at the printed local URL (append ?dev=1 for the dev clock panel)
+npm run dev            # serve the checkout at the printed local URL
+npm run check          # typecheck
 npm test               # full test suite (engine and UI projects in one run)
-npm run build          # typecheck + static bundle in dist/ for offline use
+npm run test:calendar  # calendar regressions under UTC and a DST-observing zone
+npm run build          # typecheck + static bundle in dist/
 npm run preview        # serve the built bundle
-npm run deploy:vercel  # deploy to production at flowsynth.vercel.app
 ```
 
-The supported Node runtime is declared once, in `.node-version` — CI installs exactly it (`actions/setup-node` with `node-version-file`), version managers select it from the same file, and the npm scripts (`npm test`, `npm run check`, `npm run dev`, `npm run build`) select it automatically through `tools/run-supported.mjs`, so checks never depend on which node happened to start them. `npm run preflight` reports the effective runtime, the host's calendar zone (gameplay's goal and schedule days follow the host's local calendar), and the storage capability the UI harness needs — it fails fast with per-manager fix lines, and the suite's own guard repeats the check before any test file loads. Calendar-sensitive regressions run targeted under UTC and a DST-observing zone with `npm run test:calendar`.
+The supported Node runtime is declared once, in `.node-version` — CI installs exactly it, version managers select it from the same file, and the npm scripts select it automatically through `tools/run-supported.mjs` (ADR-0080).
 
-For targeted iteration, final verification, and result invalidation, see [check selection](docs/agents/checks.md).
-
-Deploys typecheck and build locally, then push the exact artifact to Vercel. First-time setup on a new machine: `vercel login`, then `vercel link --yes --project flowsynth && vercel pull --yes`.
-
-Saves live in your browser's local storage. Use Export/Import in the console's settings menu for backups or moving between machines; Reset starts a fresh instrument.
-
-The engine in `src/engine/` is a pure library whose arithmetic mirrors the accepted economy experiment; the UI in `src/ui/` follows the approved prototype UX. Economy numbers are provisional balance pending playtesting.
+Saves live in your browser's local storage. The engine in `src/engine/` is a pure library: no DOM, no clock, no unseeded randomness.
