@@ -236,3 +236,11 @@
 @media (max-width: 420px) {
   .summary-line { font-size: 15px; }
 }
+
+/* The Almanac and Encyclopedia doors (issues #43, #44) sit at the start of
+   the transport row, from the first completed session on (issue #42). */
+.shell-doors {
+  display: flex;
+  gap: 8px;
+  margin-right: auto;
+}

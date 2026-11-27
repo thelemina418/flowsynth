@@ -31,9 +31,11 @@ interface StageProps {
   // ν among them, under the board.
   tray?: boolean;
   readouts?: ComponentChildren;
+  // The Goal line on the board (issue #42), in upgrade mode only.
+  goal?: string | null;
 }
 
-export function Stage({ nous, board, rates, flowing, arrived, arrivedCables, unplaced, chips, placing, inspected, tray = true, readouts }: StageProps) {
+export function Stage({ nous, board, rates, flowing, arrived, arrivedCables, unplaced, chips, placing, inspected, tray = true, readouts, goal = null }: StageProps) {
   useEffect(() => {
     const dismiss = () => {
       placing.clear();
@@ -89,6 +91,11 @@ export function Stage({ nous, board, rates, flowing, arrived, arrivedCables, unp
   return (
     <section class="stage">
       {readouts === undefined && <NousReadout nous={nous} />}
+      {goal !== null && (
+        <p class="goal-line mono" data-goal="">
+          {goal}
+        </p>
+      )}
       <div class={tray ? "stage-board" : "stage-board stage-board-alone"}>
         <Board board={board} rates={rates} flowing={flowing} placing={placing} inspected={open} onCell={onCell} onPlug={onPlug} onDrop={onDrop} />
         {tray && <Tray arrived={arrived} cables={arrivedCables} unplaced={unplaced} chips={chips} placing={placing} onDrop={onDrop} />}
