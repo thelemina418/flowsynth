@@ -74,14 +74,12 @@ describe("the habit's palette (issue #445, ADR-0075)", () => {
     expect(normalizeHabitColor("violet")).toBe("violet");
   });
 
-  it("persists the color across saves, independent of the class wear", () => {
+  it("persists the color across saves", () => {
     const s = fresh();
     const habit = createHabit(s, "Piano")!.habit!;
     setHabitColor(s, habit.id, "indigo");
-    habit.classId = "engineer";
     const loaded = deserialize(serialize(s)).state!;
     expect(loaded.habits[0]!.color).toBe("indigo");
-    expect(loaded.habits[0]!.classId).toBe("engineer");
   });
 });
 
@@ -117,13 +115,11 @@ describe("habit development", () => {
     expect(piano.seconds).toBeCloseTo(120, 6);
   });
 
-  it("manual logs advance development without nous or charge", () => {
+  it("manual logs advance the habit's credited time", () => {
     const s = fresh();
     const piano = createHabit(s, "Piano")!.habit!;
-    const startingNous = s.nous; // the opening grant (issue #43) sits in the balance
     addPracticeLog(s, piano.id, 15, 2_000);
     expect(piano.seconds).toBeCloseTo(900, 6);
-    expect(s.nous).toBe(startingNous);
     expect(s.practiceLog).toHaveLength(1);
     expect(s.practiceLog[0]!.source).toBe("manual");
     expect(s.practiceLog[0]!.at).toBe(2_000);

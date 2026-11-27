@@ -1,65 +1,70 @@
 import { describe, expect, it } from "vitest";
 import { advance } from "./advance";
 import { endSession, startSession } from "./actions";
-import { fresh, give, giveHabit, stubRng } from "./fixtures";
-import { createHabit, selectHabit, addPracticeLog } from "./habits";
-import { BALANCE, SAVE_VERSION } from "./constants";
-import { longGoalCost, mutatorSlotCost } from "./economy";
-import { activeGoals, accrueGoalProgress, createGoal, deleteGoal, editGoal, retainGoalChoice, rollGoalOccurrences } from "./goals";
-import { deserialize, serialize, SaveRefusedError, GOAL_CAPACITY_REFUND_CAP, type MigrationReport } from "./save";
-import { freshEnemyStates, freshWorld, openingGrant } from "./state";
+import { fresh, giveHabit } from "./fixtures";
+import { addPracticeLog } from "./habits";
+import { SAVE_VERSION } from "./constants";
+import { createGoal } from "./goals";
+import { deserialize, serialize, SaveRefusedError } from "./save";
 import { applyGap, flushPendingAway, resolveHonestyReport } from "./trust";
-import { ARETE_HORIZON, bankableClaimOf, frontierEntitlement, pendingClaimOf } from "./accumulator";
 import { writeNote } from "./notes";
-import { hex } from "./hex";
-import type { GameState, Habit } from "./types";
-import v10MigrationFixture from "./fixtures/saves/v10-migration.json";
+import type { GameState } from "./types";
 
-// The version boundaries (issues #423, #445): the habit-class cut and the
-// one-goal cut. Each explicit migration is the one step at its boundary;
-// every version older than v10 rejects with the start-fresh message, and
-// there is no chain past the steps this build carries.
+// The interim save boundary (issue #15): the real-life records round-trip,
+// a v15 save's records load with its retired economy left behind, older
+// versions start fresh, newer ones are refused.
 
-// Fabricate a v8 save from a live state: force the version. Rejected —
-// the v10 step is the current chain's floor, and the chain does not grow.
-function asV7(state: GameState, savedAt = 1_000): string {
-  const file = JSON.parse(serialize(state, savedAt));
-  file.version = 7;
-  return JSON.stringify(file);
-}
-
-// Fabricate a v10 save from a live v11 state: force the version. The
-// migration reads the same lenient shapes a real pre-class save wrote;
-// the acceptance oracle for known histories is the versioned fixture
-// under fixtures/saves/.
-function asV10(state: GameState, savedAt = 1_000): string {
-  const file = JSON.parse(serialize(state, savedAt));
-  file.version = 10;
-  return JSON.stringify(file);
-}
-
-// Fabricate a v11 save from a live v12 state: rewind the one-goal
-// schema — habits wore no palette key, goals carried one — and force the
-// version, so `migrateV11ToV12` runs over a real shape.
-function asV11(state: GameState, savedAt = 1_000, goalColor = "amber"): string {
-  const file = JSON.parse(serialize(state, savedAt));
-  for (const habit of file.state.habits) delete habit.color;
-  for (const goal of file.state.goals) goal.color = goalColor;
-  file.version = 11;
-  return JSON.stringify(file);
+// A synthetic v15 save in the shape the retired build wrote: the records
+// the interim keeps, beside the economy, board and World it leaves behind.
+function legacyV15(state: Record<string, unknown> = {}): string {
+  return JSON.stringify({
+    app: "flowsynth",
+    version: 15,
+    savedAt: 1_000,
+    state: {
+      mode: "upgrade",
+      sessionIndex: 3,
+      sessionsCompleted: 3,
+      nous: 812.5,
+      totalEarned: 9_000,
+      eraEarned: 4_000,
+      arete: 2,
+      prestiges: 1,
+      scrap: 40,
+      modules: [{ id: "m1", type: "additive", pos: { q: 0, r: 0 }, level: 12, invested: 300, reserve: 0 }],
+      cells: [{ q: 0, r: 0 }],
+      world: { frontier: 3, weapons: [{ id: "w1", store: 2 }] },
+      forge: { progress: 5, earned: 1 },
+      achievements: { "first-light": 1 },
+      muted: true,
+      notificationAsked: true,
+      habits: [{ id: "h1", name: "Piano", seconds: 5_400.5, archived: false, color: "cyan", classId: "engineer", classes: { engineer: { xp: 5_400 } } },
+        { id: "h2", name: "Cello", seconds: 60, archived: true, color: "amber", classId: "blacksmith", classes: {} }],
+      activeHabitId: "h1",
+      practiceLog: [{ id: "p4", habitId: "h1", seconds: 5_400.5, source: "live", at: 9_000 }],
+      notes: [{ id: "n5", sessionId: 2, atElapsed: 30, text: "kept", habitId: "h1", at: 8_000 }],
+      goals: [{ id: "g6", condition: { kind: "habit-minutes", habitId: "h1", minutes: 20 }, schedule: { kind: "daily" }, occurrenceKey: "2026-11-01",
+        progressSeconds: 600, liveSeconds: 600, completed: false, completedCount: 4, createdAt: 1 }],
+      sessionRecords: [{ sessionNumber: 3, startedAt: 7_000, endedAt: 9_000, habitId: "h1", mode: "planned", plannedTarget: 1_500, creditedSeconds: 1_500,
+        earned: 150, honestyEvents: [{ awaySeconds: 300, outcome: "planned" }], reflection: { text: "good", slider: 4 },
+        goalsAdvanced: [{ goalId: "g6", seconds: 600 }], achievements: ["first-light"], breather: { seconds: 300, completed: true } }],
+      session: null,
+      summary: null,
+      nextId: 7,
+      ...state,
+    },
+  });
 }
 
 describe("persistence", () => {
-  it("round-trips the full game state", () => {
+  it("round-trips the full interim state byte-identical", () => {
     const s = fresh();
-    give(s, "additive", hex(1, 0));
-    give(s, "forge", hex(0, 1));
-    s.nous = 123.456;
-    s.forge.progress = 42.5;
-    s.prestiges = 2;
-    s.eraEarned = 555;
-    startSession(s, 600);
-    advance(s, 123, stubRng(new Array(6).fill(0.4)));
+    const { habit } = giveHabit(s);
+    createGoal(s, { habitId: habit.id, minutes: 20, schedule: "daily", now: 1 });
+    writeNote(s, "between sessions", 500);
+    startSession(s, 600, 1_000);
+    advance(s, 123.25);
+    writeNote(s, "in flow", 1_200);
     const text = serialize(s, 1_000);
     const loaded = deserialize(text);
     expect(loaded.error).toBeUndefined();
@@ -67,172 +72,24 @@ describe("persistence", () => {
   });
 
   it("saves carry the current version", () => {
-    const parsed = JSON.parse(serialize(fresh()));
-    expect(parsed.version).toBe(SAVE_VERSION);
-    expect(parsed.version).toBe(15);
+    expect(JSON.parse(serialize(fresh())).version).toBe(SAVE_VERSION);
   });
 
-  it("the load boundary strips a run-candidates key — an ordinary save never reads a comparison curve (issue #487)", () => {
-    // A candidate tuning rode the playthrough walk that produced an
-    // experiment state, never a save; a stray candidates key in a save
-    // file drops wholesale instead of making shipped play read a curve.
-    const file = JSON.parse(serialize(fresh()));
-    file.state.candidates = { responseCurve: "bounded" };
-    const loaded = deserialize(JSON.stringify(file));
-    expect(loaded.error).toBeUndefined();
-    expect(loaded.state!.candidates).toBeUndefined();
-  });
-
-  it("drops malformed row ledgers without a payout", () => {
-    const file = JSON.parse(serialize(fresh()));
-    file.version = 13;
-    file.state.gatedRows = null;
-    file.state.unlockedRows = "3";
-    const loaded = deserialize(JSON.stringify(file));
-    expect(loaded.error).toBeUndefined();
-    expect(loaded.state?.arete).toBe(0);
-    expect(loaded.state).not.toHaveProperty("gatedRows");
-    expect(loaded.state).not.toHaveProperty("unlockedRows");
-  });
-
-  it("saves lenient-default a module's corrupt position to the tray", () => {
-    // A module whose saved position is not a full hex reads as
-    // undeployed — every pass guards `pos === null`, so a corrupt figure
-    // must degrade to the tray, never poison the boot.
-    const file = JSON.parse(serialize(fresh()));
-    delete file.state.modules[0]!.pos;
-    const absent = deserialize(JSON.stringify(file));
-    expect(absent.error).toBeUndefined();
-    expect(absent.state!.modules[0]!.pos).toBeNull();
-    file.state.modules[0]!.pos = { q: 0 };
-    const half = deserialize(JSON.stringify(file));
-    expect(half.error).toBeUndefined();
-    expect(half.state!.modules[0]!.pos).toBeNull();
-  });
-
-  it("saves lenient-default the Catalog unlocks (issue #197)", () => {
-    // A save written before the Arete Catalog existed owes no unlocks it
-    // can't know about: absent fields read as never unlocked, never bought.
-    const file = JSON.parse(serialize(fresh()));
-    delete file.state.catalogEntryOwned;
-    delete file.state.rollPoolJoined;
-    const absent = deserialize(JSON.stringify(file));
-    expect(absent.error).toBeUndefined();
-    expect(absent.state!.catalogEntryOwned).toBe(false);
-    expect(absent.state!.rollPoolJoined).toBe(false);
-    file.state.catalogEntryOwned = null;
-    file.state.rollPoolJoined = null;
-    const corrupt = deserialize(JSON.stringify(file));
-    expect(corrupt.error).toBeUndefined();
-    expect(corrupt.state!.catalogEntryOwned).toBe(false);
-    expect(corrupt.state!.rollPoolJoined).toBe(false);
-  });
-
-  it("retired Mutator flags do not return on a current save round trip", () => {
-    const s = fresh();
-    s.arete = 3;
-    s.catalogEntryOwned = true;
-    s.rollPoolJoined = true;
-    const loaded = deserialize(serialize(s, 5_000));
-    expect(loaded.error).toBeUndefined();
-    expect(loaded.state!.catalogEntryOwned).toBe(false);
-    expect(loaded.state!.rollPoolJoined).toBe(false);
-    expect(loaded.state!.arete).toBe(3);
-  });
-
-  it("saves lenient-default the Mutator layer (issue #198)", () => {
-    // A save written before the mutator layer existed owes no slots, no
-    // mutators, no branch meter, no pending mutator rolls — absent fields
-    // read as the entry never bought. Corrupt fields fall back the same.
-    const file = JSON.parse(serialize(fresh()));
-    delete file.state.mutatorSlots;
-    delete file.state.mutators;
-    delete file.state.mutatorForge;
-    delete file.state.bankedMutatorRolls;
-    const absent = deserialize(JSON.stringify(file));
-    expect(absent.error).toBeUndefined();
-    expect(absent.state!.mutatorSlots).toEqual([]);
-    expect(absent.state!.mutators).toEqual([]);
-    expect(absent.state!.mutatorForge).toEqual({ progress: 0, earned: 0 });
-    expect(absent.state!.bankedMutatorRolls).toEqual([]);
-    file.state.mutatorSlots = null;
-    file.state.mutators = 42;
-    file.state.mutatorForge = "gone";
-    file.state.bankedMutatorRolls = {};
-    const corrupt = deserialize(JSON.stringify(file));
-    expect(corrupt.error).toBeUndefined();
-    expect(corrupt.state!.mutatorSlots).toEqual([]);
-    expect(corrupt.state!.mutators).toEqual([]);
-    expect(corrupt.state!.mutatorForge).toEqual({ progress: 0, earned: 0 });
-    expect(corrupt.state!.bankedMutatorRolls).toEqual([]);
-  });
-
-  it("the retired Mutator layer is removed on load (#530)", () => {
-    const s = fresh();
-    s.mutatorSlots = [hex(0, 1), hex(1, 0)];
-    s.mutators = [
-      { id: "mu1", family: "power", rarity: "uncommon", pos: hex(0, 1) },
-      { id: "mu2", family: "charge", rarity: "rare", pos: null },
-    ];
-    s.mutatorForge = { progress: 33, earned: 2 };
-    s.bankedMutatorRolls = [
-      {
-        id: "mo1",
-        candidates: [
-          { id: "mc1", family: "resonance", rarity: "common" },
-          { id: "mc2", family: "power", rarity: "rare" },
-        ],
-      },
-    ];
-    const loaded = deserialize(serialize(s, 6_000));
-    expect(loaded.error).toBeUndefined();
-    expect(loaded.state!.mutatorSlots).toEqual([]);
-    expect(loaded.state!.mutators).toEqual([]);
-    expect(loaded.state!.mutatorForge).toEqual({ progress: 0, earned: 0 });
-    expect(loaded.state!.bankedMutatorRolls).toEqual([]);
-  });
-
-  it("legacy entry ownership never backfills or preserves a retired Forge (#530)", () => {
-    // The historical flag cannot backfill the retired grant.
-    const file = JSON.parse(serialize(fresh()));
-    file.state.catalogEntryOwned = true;
-    const loaded = deserialize(JSON.stringify(file));
-    expect(loaded.error).toBeUndefined();
-    const forge = loaded.state!.modules.filter((m) => m.type === "mutatorForge");
-    expect(forge).toHaveLength(0);
-    // Idempotent: reloading retirement grants nothing.
-    const reloaded = deserialize(serialize(loaded.state!, 6_000));
-    expect(reloaded.state!.modules.filter((m) => m.type === "mutatorForge")).toHaveLength(0);
-    // Already-owned retired modules are removed too, never refunded.
-    file.state.modules.push({ id: "m9", type: "mutatorForge", tier: 1, level: 0, invested: 0, pos: null });
-    const owning = deserialize(JSON.stringify(file));
-    expect(owning.state!.modules.filter((m) => m.type === "mutatorForge")).toHaveLength(0);
-    // No retro-sequence, no retro roll, no restored slots.
-    expect(loaded.state!.bankedMutatorRolls).toEqual([]);
-    expect(loaded.state!.mutatorSlots).toEqual([]);
-  });
-
-  it("resuming from a mid-flow save does not duplicate rewards", () => {
+  it("resuming from a mid-flow save does not duplicate credit", () => {
     const build = () => {
       const s = fresh();
-      give(s, "forge", hex(1, 0));
-      const gen = give(s, "focusKeyed", hex(2, 0));
-      gen.reserve = 600;
+      giveHabit(s);
       startSession(s, 600);
       return s;
     };
-
     const straight = build();
     advance(straight, 400);
-
     const split = build();
     advance(split, 150);
-    const reloaded = deserialize(serialize(split))!;
-    const restored = reloaded.state!;
+    const restored = deserialize(serialize(split)).state!;
     advance(restored, 250);
-
-    expect(restored.nous).toBeCloseTo(straight.nous, 6);
-    expect(restored.forge.progress).toBeCloseTo(straight.forge.progress, 6);
+    expect(restored.session!.accounting).toEqual(straight.session!.accounting);
+    expect(restored.habits).toEqual(straight.habits);
   });
 
   it("an unseen summary, its events, and its reflection survive a reload together (§8)", () => {
@@ -244,7 +101,6 @@ describe("persistence", () => {
     resolveHonestyReport(s, "missed");
     endSession(s, 5_000);
     s.summary!.reflection = { text: "drifted", slider: 3 };
-    expect(s.summary!.seen).toBe(false);
     const loaded = deserialize(serialize(s, 1_000));
     expect(loaded.error).toBeUndefined();
     const summary = loaded.state!.summary!;
@@ -253,36 +109,83 @@ describe("persistence", () => {
     expect(summary.reflection).toEqual({ text: "drifted", slider: 3 });
   });
 
-  it("the retired reconcile dialog's frozen gap is dropped at load (ADR-0019)", () => {
+  it("habits, the practice log, and session history survive a reload", () => {
     const s = fresh();
-    startSession(s, 600);
-    advance(s, 30);
-    const file = JSON.parse(serialize(s, 1_000));
-    file.state.pendingGap = { seconds: 600, detectedAt: 1_000 };
-    const loaded = deserialize(JSON.stringify(file));
-    expect(loaded.error).toBeUndefined();
-    expect((loaded.state as unknown as Record<string, unknown>).pendingGap).toBeUndefined();
-  });
-
-  it("the prestige state round-trips: the count, the balance, and both earned measures", () => {
-    const s = fresh();
-    s.prestiges = 3;
-    s.arete = 6;
-    s.eraEarned = 1_234;
-    s.totalEarned = ARETE_HORIZON * 3 + 1_234;
-    const loaded = deserialize(serialize(s, 2_000));
-    expect(loaded.error).toBeUndefined();
-    const m = loaded.state!;
-    expect(m.prestiges).toBe(3);
-    expect(m.arete).toBe(6);
-    expect(m.eraEarned).toBe(1_234);
-    expect(m.totalEarned).toBe(ARETE_HORIZON * 3 + 1_234);
+    const { habit } = giveHabit(s);
+    startSession(s, 600, 1_000);
+    advance(s, 600);
+    endSession(s, 601_000);
+    addPracticeLog(s, habit.id, 5, 700_000);
+    const loaded = deserialize(serialize(s)).state!;
+    expect(loaded.habits).toEqual(s.habits);
+    expect(loaded.practiceLog).toEqual(s.practiceLog);
+    expect(loaded.sessionRecords).toEqual(s.sessionRecords);
   });
 });
 
-describe("the version gate (ADR-0017's pattern)", () => {
-  it("rejects v9 and every older version; there is no chain past one step", () => {
-    for (const version of [1, 4, 5, 6, 7, 8, 9]) {
+describe("a v15 save's records (issue #15)", () => {
+  it("loads the real-life records and leaves the retired economy behind", () => {
+    const result = deserialize(legacyV15());
+    expect(result.error).toBeUndefined();
+    const state = result.state!;
+    expect(state.habits).toEqual([
+      { id: "h1", name: "Piano", seconds: 5_400.5, archived: false, color: "cyan" },
+      { id: "h2", name: "Cello", seconds: 60, archived: true, color: "amber" },
+    ]);
+    expect(state.activeHabitId).toBe("h1");
+    expect(state.notes).toEqual([{ id: "n5", sessionId: 2, atElapsed: 30, text: "kept", habitId: "h1", at: 8_000 }]);
+    expect(state.practiceLog).toHaveLength(1);
+    expect(state.goals[0]).not.toHaveProperty("liveSeconds");
+    expect(state.goals[0]).toMatchObject({ id: "g6", progressSeconds: 600, completedCount: 4 });
+    expect(state.sessionRecords).toEqual([{
+      sessionNumber: 3, startedAt: 7_000, endedAt: 9_000, habitId: "h1", mode: "planned", plannedTarget: 1_500, creditedSeconds: 1_500,
+      honestyEvents: [{ awaySeconds: 300, outcome: "planned" }], reflection: { text: "good", slider: 4 },
+      goalsAdvanced: [{ goalId: "g6", seconds: 600 }],
+    }]);
+    expect(state).toMatchObject({ sessionIndex: 3, sessionsCompleted: 3, muted: true, notificationAsked: true, nextId: 7 });
+    for (const retired of ["nous", "modules", "cells", "world", "forge", "achievements", "arete", "prestiges", "scrap"]) {
+      expect(state, retired).not.toHaveProperty(retired);
+    }
+  });
+
+  it("a running session keeps its trust ledger; the provisional nous stays behind", () => {
+    const result = deserialize(legacyV15({
+      mode: "flow",
+      session: {
+        target: 1_500, elapsed: 900, earned: 90, unlocked: [], targetSignaled: false, startedAt: 5_000, goalSeconds: { g6: 300 },
+        accounting: { creditedSeconds: 600, poolSeconds: 300, bucketNous: 30, pendingAwaySeconds: 12, events: [] },
+        rolls: { flow: 0, forge: 0, mutator: 0 },
+      },
+    }));
+    expect(result.error).toBeUndefined();
+    expect(result.state!.mode).toBe("flow");
+    expect(result.state!.session).toEqual({
+      target: 1_500, elapsed: 900, targetSignaled: false, startedAt: 5_000, goalSeconds: { g6: 300 },
+      accounting: { creditedSeconds: 600, poolSeconds: 300, pendingAwaySeconds: 12, events: [] },
+    });
+    // The pool still settles through the honesty report.
+    expect(resolveHonestyReport(result.state!, "full").ok).toBe(true);
+    expect(result.state!.session!.accounting.creditedSeconds).toBe(900);
+  });
+
+  it("a breather in progress lands between sessions", () => {
+    const state = deserialize(legacyV15({ mode: "breather", breather: { startedAt: 1, allowanceSeconds: 300, elapsed: 10 } })).state!;
+    expect(state.mode).toBe("upgrade");
+    expect(state.session).toBeNull();
+  });
+
+  it("an unseen summary keeps its practice facts", () => {
+    const state = deserialize(legacyV15({
+      summary: { sessionNumber: 3, earned: 150, seconds: 1_500, ratePerMinute: 6, plannedTarget: 1_500, honestyEvents: [],
+        reflection: null, achievements: [], breatherAllowance: 300, seen: false },
+    })).state!;
+    expect(state.summary).toEqual({ sessionNumber: 3, seconds: 1_500, plannedTarget: 1_500, honestyEvents: [], reflection: null, seen: false });
+  });
+});
+
+describe("the version gate", () => {
+  it("rejects every version older than v15 with the start-fresh message", () => {
+    for (const version of [1, 7, 10, 12, 13, 14]) {
       const text = serialize(fresh()).replace(`"version": ${SAVE_VERSION}`, `"version": ${version}`);
       const result = deserialize(text);
       expect(result.error, `v${version}`).toMatch(/older version/i);
@@ -290,23 +193,12 @@ describe("the version gate (ADR-0017's pattern)", () => {
     }
   });
 
-  it("a v8 save starts fresh with the standard version error, never a crash", () => {
-    const s = fresh();
-    s.arete = 1;
-    s.totalEarned = ARETE_HORIZON;
-    const result = deserialize(asV7(s));
-    expect(result.error).toMatch(/older version/i);
-    expect(result.state).toBeUndefined();
-    // The fresh state the boot builds instead carries none of it.
-    expect(fresh().arete).toBe(0);
-  });
-
-  it("rejects corrupt, foreign, and future-version saves", () => {
+  it("rejects corrupt, foreign, incomplete, and future-version saves", () => {
     expect(deserialize("{nope").error).toBeDefined();
-    expect(deserialize('{"app":"other","version":7}').error).toBeDefined();
-    expect(deserialize('{"app":"flowsynth","version":99,"state":{}}').error).toBeDefined();
-    expect(deserialize('{"app":"flowsynth","version":9,"state":{"mode":"weird"}}').error).toBeDefined();
-    expect(deserialize('{"app":"flowsynth","version":9}').error).toBeDefined();
+    expect(deserialize('{"app":"other","version":15}').error).toBeDefined();
+    expect(deserialize('{"app":"flowsynth","version":15}').error).toMatch(/incomplete/);
+    expect(deserialize('{"app":"flowsynth","version":15,"state":{"mode":"weird"}}').error).toMatch(/unknown session mode/);
+    expect(deserialize('{"app":"flowsynth","version":15,"state":{"mode":"upgrade","habits":[]}}').error).toMatch(/incomplete/);
     expect(deserialize(JSON.stringify({ app: "flowsynth", version: SAVE_VERSION + 1, state: {} })).error).toMatch(/newer than this build/i);
   });
 
@@ -322,716 +214,23 @@ describe("the version gate (ADR-0017's pattern)", () => {
 describe("serialization refuses what it cannot write (issue #486)", () => {
   it("a state carrying a nonfinite number refuses the save instead of writing null", () => {
     for (const figure of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN]) {
-      const s = fresh();
-      s.nous = figure;
+      const s: GameState = fresh();
+      s.sessionsCompleted = figure;
       expect(() => serialize(s)).toThrow(SaveRefusedError);
     }
   });
 
   it("the refusal names where the figure lives, however deep it hides", () => {
     const s = fresh();
-    give(s, "additive", null);
-    s.modules[s.modules.length - 1]!.reserve = NaN;
-    try {
-      serialize(s);
-      expect.unreachable("serialize should have refused");
-    } catch (error) {
-      expect(error).toBeInstanceOf(SaveRefusedError);
-      expect((error as Error).message).toMatch(/modules.*reserve/);
-    }
+    giveHabit(s);
+    s.habits[0]!.seconds = NaN;
+    expect(() => serialize(s)).toThrow(/habits\[0\]\.seconds/);
   });
 
-  it("a session's unrepresentable accounting refuses the save, not a null bucket", () => {
+  it("a session's unrepresentable accounting refuses the save", () => {
     const s = fresh();
     startSession(s, null);
-    s.session!.accounting.bucketNous = Infinity;
-    expect(() => serialize(s)).toThrow(/bucketNous/);
-  });
-});
-
-describe("the v10 boundary (issue #423)", () => {
-  it("a v10 save with none of the retired state migrates to an untouched fresh shape", () => {
-    const s = fresh();
-    giveHabit(s);
-    const gen = give(s, "focusKeyed", hex(1, 0));
-    gen.reserve = 60;
-    const file = JSON.parse(asV10(s));
-    // The pre-class shape: no class wear on the habit, the player-wide
-    // flow meter still on it — with nothing to refund or pay out.
-    delete file.state.habits[0].classId;
-    delete file.state.habits[0].classes;
-    file.state.flow = { progress: 0, earned: 0 };
-    const loaded = deserialize(JSON.stringify(file));
-    expect(loaded.error).toBeUndefined();
-    const state = loaded.state!;
-    // The habit reads as an Engineer from zero — exactly what a fresh
-    // shape writes; the reserve stands as stored.
-    expect(state.habits[0]!.classId).toBe("engineer");
-    expect(state.habits[0]!.classes.engineer).toMatchObject({ experience: 0, level: 0, points: 0 });
-    expect(state.habits[0]!.classes.engineer!.rollMeter).toEqual({ progress: 0, earned: 0 });
-    expect(state.goalFuel).toBe(0);
-    // The reserve stood as stored through the v10 boundary; the chained
-    // v13 translation then took it with the era reset (issue #493) — the
-    // reserve is era charge state, and the calibrated economy opens with
-    // none banked.
-    expect(state.modules.find((m) => m.id === gen.id)!.reserve).toBe(0);
-    // Nothing retired, nothing paid: the balances stand.
-    expect(state.arete).toBe(0);
-    expect(state.nous).toBe(fresh().nous);
-    expect("flow" in state).toBe(false);
-    expect(state.bankedRolls).toHaveLength(0);
-  });
-
-  it("a loaded v10 save round-trips byte-identical", () => {
-    const s = fresh();
-    giveHabit(s);
-    const first = deserialize(asV10(s)).state!;
-    const text = serialize(first, 1_000);
-    const second = deserialize(text);
-    expect(second.error).toBeUndefined();
-    expect(serialize(second.state!, 1_000)).toBe(text);
-  });
-
-  it("retires mutators while tiers and banked module rolls are untouched at the boundary", () => {
-    const s = fresh();
-    s.mutators.push({ id: "mu1", family: "power", rarity: "uncommon", pos: null });
-    const merged = give(s, "harmonizer", hex(0, 1));
-    merged.tier = 2;
-    s.bankedRolls.push({
-      id: "offer",
-      candidates: [
-        { id: "c1", type: "additive", tier: 0 },
-        { id: "c2", type: "spacer", tier: 2 },
-        { id: "c3", type: "infusor", tier: 0 },
-      ],
-    });
-    const loaded = deserialize(asV10(s));
-    expect(loaded.error).toBeUndefined();
-    expect(loaded.state!.mutators).toEqual([]);
-    expect(loaded.state!.modules.find((m) => m.id === merged.id)!.tier).toBe(2);
-    expect(loaded.state!.bankedRolls[0]!.candidates[1]).toMatchObject({ tier: 2 });
-  });
-});
-
-// The migration's acceptance oracle: the versioned v10 fixture save under
-// the test tree (issue #427) — known purchase histories, partial flow
-// progress, per-habit seconds, and a multi-habit goal — never a hand-built
-// object in test code. Refund arithmetic asserts against the price
-// functions' own outputs, never literals.
-describe("the v10 → v11 migration (issue #427)", () => {
-  const fixtureText = JSON.stringify(v10MigrationFixture);
-  const loadFixture = (text = fixtureText) => {
-    const result = deserialize(text, stubRng(new Array(32).fill(0.4)));
-    expect(result.error).toBeUndefined();
-    return result.state!;
-  };
-  // The full load result — the chained translation's report included.
-  const loadResult = (text = fixtureText) => {
-    const result = deserialize(text, stubRng(new Array(32).fill(0.4)));
-    expect(result.error).toBeUndefined();
-    return { state: result.state!, migration: result.migration! };
-  };
-  // A fixture variant with named JSON edits — the file stays the oracle,
-  // the edit names the difference.
-  const withEdits = (edit: (state: Record<string, unknown>) => void): string => {
-    const file = JSON.parse(fixtureText) as { state: Record<string, unknown> };
-    edit(file.state);
-    return JSON.stringify(file);
-  };
-
-  it("refunds every retired Mutator purchase exactly, in original currency, off the price functions", () => {
-    const state = loadFixture();
-    // The fixture owned the full tree: the entry, three slots (two paid),
-    // the pool join — and broke the horizon. The refund sums the same
-    // functions the purchases charged, on top of the carried balance.
-    const expected =
-      v10MigrationFixture.state.arete +
-      BALANCE.catalogEntryCost +
-      (mutatorSlotCost(1) + mutatorSlotCost(2)) +
-      BALANCE.rollPoolJoinCost +
-      BALANCE.horizonBreakCost;
-    expect(state.arete).toBe(expected);
-    // Historical refund arithmetic stands; terminal retirement clears flags.
-    expect(state.catalogEntryOwned).toBe(false);
-    expect(state.rollPoolJoined).toBe(false);
-  });
-
-  it("refunds the retired goal-slot economy exactly through the long-goal ladder, one whole-nous refund", () => {
-    const { state, migration } = loadResult();
-    // The chained contract (issue #493): the refund lands, then the era
-    // reset takes the whole balance onto the calibrated opening. The
-    // translation's cleared figure is what remains observable — and it
-    // carries the refund ladder exactly: the stored 150 plus the two
-    // rungs' long-goal costs.
-    const expected = 150 + longGoalCost(0) + longGoalCost(1);
-    expect(migration!.nousCleared).toBe(expected);
-    expect(Number.isInteger(migration!.nousCleared)).toBe(true);
-    expect(state.nous).toBe(openingGrant());
-    // The retired count retires with its economy.
-    expect(state.goalCapacityBought).toBe(0);
-  });
-
-  it("a corrupt goal-capacity figure refunds the ladder's plausible head and never spins", () => {
-    const { state, migration } = loadResult(
-      withEdits((s) => {
-        s.goalCapacityBought = 1e9;
-      }),
-    );
-    let expected = 150;
-    for (let bought = 0; bought < GOAL_CAPACITY_REFUND_CAP; bought++) expected += longGoalCost(bought);
-    // The clamp bounds the walk (a corrupt figure can never spin the
-    // chained migration) and the cleared figure carries the clamped sum.
-    expect(migration.nousCleared).toBe(expected);
-    expect(state.nous).toBe(openingGrant());
-    expect(state.goalCapacityBought).toBe(0);
-  });
-
-  it("a retired purchase never owned refunds nothing, and zero flow progress pays nothing", () => {
-    const baseline = loadResult();
-    const { state, migration } = loadResult(
-      withEdits((s) => {
-        s.catalogEntryOwned = false;
-        s.rollPoolJoined = false;
-        s.horizonBroken = false;
-        s.goalCapacityBought = 0;
-        (s.flow as { progress: number }).progress = 0;
-      }),
-    );
-    expect(state.arete).toBe(
-      baseline.state.arete - BALANCE.catalogEntryCost - (mutatorSlotCost(1) + mutatorSlotCost(2)) - BALANCE.rollPoolJoinCost - BALANCE.horizonBreakCost,
-    );
-    // Owning none of the retired economy, the chained translation clears
-    // exactly the stored balance — no goal-slot refund rides the report.
-    expect(migration.nousCleared).toBe(baseline.migration.nousCleared! - longGoalCost(0) - longGoalCost(1));
-    expect(state.nous).toBe(openingGrant());
-    expect(state.bankedRolls).toHaveLength(1);
-  });
-
-  it("converts recorded habit seconds to Engineer experience once at one XP per second, levels deriving through the authored thresholds", () => {
-    const state = loadFixture();
-    // h1 recorded 36 000 s: 1 XP/s lands past the second threshold
-    // (36 000 ≥ 21 600), two levels and two points derived, allocations
-    // unspent, the pair's meter empty.
-    const [h1, h2] = state.habits as Habit[];
-    expect(h1!.seconds).toBe(36_000);
-    expect(h1!.classes.engineer).toMatchObject({ experience: 36_000, level: 2, points: 2, spent: {} });
-    expect(h1!.classes.engineer!.rollMeter).toEqual({ progress: 0, earned: 0 });
-    // h2 recorded 8 000 s: past the first threshold alone.
-    expect(h2!.seconds).toBe(8_000);
-    expect(h2!.classes.engineer).toMatchObject({ experience: 8_000, level: 1, points: 1, spent: {} });
-  });
-
-  it("pays the flow meter's final payout: partial progress banks exactly one roll into the shared queue", () => {
-    const state = loadFixture();
-    // The fixture's own banked roll stands first; the payout appends one.
-    expect(state.bankedRolls).toHaveLength(2);
-    expect(state.bankedRolls[0]!.id).toBe("offer1");
-    expect(state.bankedRolls[1]!.candidates).toHaveLength(3);
-    // The retired meter is gone from the shape; nothing else was paid.
-    expect("flow" in state).toBe(false);
-  });
-
-  it("retires overflow goals to history oldest-active-first and keeps within-capacity goals untouched", () => {
-    const state = loadFixture();
-    const byId = new Map(state.goals.map((goal) => [goal.id, goal]));
-    // h1 carried four goals past the fixed capacity of three; the oldest
-    // retires. h2 carried two — nothing retires. The retired per-goal
-    // palette key dropped with the one-goal cut (issue #445).
-    const fixtureGoal = (id: string) => {
-      const { color: _color, ...rest } = v10MigrationFixture.state.goals.find((g) => g.id === id)!;
-      return rest;
-    };
-    expect(byId.get("g1")).toEqual({ ...fixtureGoal("g1"), liveSeconds: 0, retired: true });
-    expect(activeGoals(state).some((g) => g.id === "g1")).toBe(false);
-    expect(byId.get("g2")).toMatchObject({ progressSeconds: 900, condition: { minutes: 45 } });
-    expect(byId.get("g3")).toMatchObject({ progressSeconds: 300, schedule: { kind: "weekly" } });
-    expect(byId.get("g5")).toMatchObject({ progressSeconds: 0 });
-    expect(byId.get("g6")).toMatchObject({ progressSeconds: 120 });
-    expect(byId.get("g7")).toMatchObject({ progressSeconds: 0 });
-    // Session history still resolves the preserved goal by ID.
-    expect(state.sessionRecords[0]!.goalsAdvanced[0]).toMatchObject({ goalId: "g1" });
-  });
-
-  it("cross-habit goals retire to history in full and are never re-read as single-habit goals", () => {
-    const state = loadFixture();
-    const cross = state.goals.find((goal) => goal.id === "g4");
-    // Kept, inert: the row rests with its condition exactly as carried.
-    expect(cross).toMatchObject({ progressSeconds: 1_200, condition: { kind: "habit-minutes", habitId: null, minutes: 60 } });
-    // The production read refuses it: credited practice for a habit never
-    // advances the cross-habit row again.
-    const before = cross!.progressSeconds;
-    accrueGoalProgress(state, "h1", 3_600, "live");
-    expect(cross!.progressSeconds).toBe(before);
-    // And it never occupies the one active goal: the narrowing's pending
-    // rows hold the habit's carried records instead (issue #445).
-    expect(activeGoals(state).filter((goal) => goal.condition.habitId === "h1")).toHaveLength(0);
-  });
-
-  it("preserves fractional recorded seconds and pays even subsecond flow progress", () => {
-    const state = loadFixture(withEdits((s) => {
-      (s.habits as Habit[])[0]!.seconds = 36_000.75;
-      (s.flow as { progress: number }).progress = 0.25;
-    }));
-    expect(state.habits[0]!.classes.engineer!.experience).toBe(36_000.75);
-    expect(state.bankedRolls).toHaveLength(2);
-    const reloaded = deserialize(serialize(state)).state!;
-    expect(reloaded.habits[0]!.classes.engineer!.experience).toBe(36_000.75);
-    expect(reloaded.bankedRolls).toHaveLength(2);
-  });
-
-  it("keeps retired goal facts unchanged across rollover, practice, edits, and reload", () => {
-    const state = loadFixture();
-    const retired = state.goals.filter((g) => g.retired);
-    expect(retired.map((g) => g.id)).toEqual(["g1", "g4"]);
-    const before = structuredClone(retired);
-    rollGoalOccurrences(state, Date.UTC(2030, 0, 1));
-    accrueGoalProgress(state, "h1", 3_600);
-    state.mode = "upgrade";
-    expect(deleteGoal(state, "g1").ok).toBe(false);
-    expect(retainGoalChoice(state, "g1").ok).toBe(false);
-    expect(retired).toEqual(before);
-    expect(deserialize(serialize(state)).state!.goals.filter((g) => g.retired)).toEqual(before);
-    // The carried rows resolve through the one-goal editor: retaining one
-    // retires its pending siblings, and the retained row can then be
-    // replaced by a fresh goal even though the records remain present.
-    expect(retainGoalChoice(state, "g2").ok).toBe(true);
-    expect(state.goals.filter((g) => g.retired).map((g) => g.id)).toEqual(["g1", "g3", "g4", "g5"]);
-    expect(deleteGoal(state, "g2").ok).toBe(true);
-    expect(createGoal(state, { habitId: "h1", minutes: 10, schedule: "daily", now: 1 }).ok).toBe(true);
-  });
-
-  it("preserves overflow goals even when no session ever referenced them", () => {
-    const state = loadFixture(withEdits((s) => { s.sessionRecords = []; }));
-    const { color: _color, ...expected } = v10MigrationFixture.state.goals.find((g) => g.id === "g1")!;
-    expect(state.goals.find((g) => g.id === "g1")).toEqual({ ...expected, liveSeconds: 0, retired: true });
-  });
-
-  it("terminal retirement removes Mutator remnants after historical conversion without a second grant", () => {
-    const state = loadFixture();
-    expect(state.mutatorSlots).toEqual([]);
-    expect(state.mutators).toEqual([]);
-    expect(state.mutatorForge).toEqual({ progress: 0, earned: 0 });
-    expect(state.bankedMutatorRolls).toEqual([]);
-    expect(state.modules.filter((module) => module.type === "mutatorForge")).toHaveLength(0);
-  });
-
-  it("keeps everything the prestige boundary kept: the life record, the collection, and the earned feats", () => {
-    const state = loadFixture();
-    // Habits and their practice seconds; the life record.
-    expect(state.habits.map((h) => h.seconds)).toEqual([36_000, 8_000]);
-    expect(state.practiceLog).toEqual(v10MigrationFixture.state.practiceLog);
-    expect(state.notes).toEqual(v10MigrationFixture.state.notes);
-    expect(state.sessionRecords).toEqual(v10MigrationFixture.state.sessionRecords);
-    // The collection and the board.
-    expect(state.cellsBought).toBe(2);
-    expect(state).not.toHaveProperty("gatedRows");
-    expect(state).not.toHaveProperty("unlockedRows");
-    expect(state.capacityCeilings).toBe(1);
-    expect(state.capacityDiscounts).toBe(1);
-    expect(state.mergeCapPurchases).toBe(1);
-    expect(state.scrap).toBe(25);
-    expect(state.draftTierBonus).toBe(1);
-    expect(state.bankedRolls[0]!.candidates[1]).toMatchObject({ tier: 2 });
-    // Already-earned feats stay earned — the retired horizon-break stamp
-    // included.
-    expect(state.achievements["breaking-the-horizon"]).toBe(1_700_000_000_001);
-    expect(state.achievements["roll-credit"]).toBe(1_700_000_000_004);
-    // A v10 save predates the World layer: it opens unclaimed.
-    expect(state.world).toEqual(freshWorld());
-  });
-
-  it("a migration round-trips the save cleanly", () => {
-    const migrated = loadFixture();
-    const text = serialize(migrated, 1_000);
-    const reloaded = deserialize(text, stubRng(new Array(32).fill(0.4)));
-    expect(reloaded.error).toBeUndefined();
-    expect(serialize(reloaded.state!, 1_000)).toBe(text);
-  });
-
-  it("a re-migration cannot exist: the migrated save reloads as v11 and pays nothing again", () => {
-    const migrated = loadFixture();
-    const text = serialize(migrated, 1_000);
-    const reloaded = deserialize(text, stubRng(new Array(32).fill(0.4))).state!;
-    expect(reloaded.arete).toBe(migrated.arete);
-    expect(reloaded.nous).toBe(migrated.nous);
-    expect(reloaded.bankedRolls).toHaveLength(2);
-    expect(reloaded.habits.map((h) => h.classes.engineer!.experience)).toEqual([36_000, 8_000]);
-  });
-});
-
-// The one-goal narrowing's own boundary (issue #445): the v11 save built
-// from a live state — habits without palette keys, goals carrying them —
-// passes through `migrateV11ToV12` alone. The color transfer and the
-// pending multi-goal choice are the conversion's whole subject.
-describe("the v11 → v12 migration (issue #445)", () => {
-  function singleGoalSave(): string {
-    const s = fresh();
-    const habit = createHabit(s, "Piano").habit!;
-    selectHabit(s, habit.id);
-    const goal = createGoal(s, { habitId: habit.id, minutes: 20, schedule: "daily", now: 5_000 }).goal!;
-    goal.progressSeconds = 600;
-    goal.completedCount = 2;
-    return asV11(s);
-  }
-
-  it("a single-goal habit adopts its goal's color and the row transfers unchanged", () => {
-    const loaded = deserialize(singleGoalSave()).state!;
-    const [habit] = loaded.habits as Habit[];
-    expect(habit!.color).toBe("amber");
-    const goal = loaded.goals[0]!;
-    expect(goal.pendingChoice).toBeUndefined();
-    expect(goal.retired).toBeUndefined();
-    expect(goal.progressSeconds).toBe(600);
-    expect(goal.completedCount).toBe(2);
-    expect("color" in goal).toBe(false);
-  });
-
-  it("a zero-goal habit wears the palette default and stays usable", () => {
-    const s = fresh();
-    createHabit(s, "Piano");
-    const loaded = deserialize(asV11(s)).state!;
-    expect(loaded.habits[0]!.color).toBe("vermillion");
-    expect(loaded.goals).toHaveLength(0);
-  });
-
-  it("a multi-goal habit holds every row pending and wears the default until the choice lands", () => {
-    const s = fresh();
-    const habit = createHabit(s, "Piano").habit!;
-    selectHabit(s, habit.id);
-    const first = createGoal(s, { habitId: habit.id, minutes: 20, schedule: "daily", now: 5_000 }).goal!;
-    // The v11 save's second row — the create path refuses it today, so
-    // the test writes the shape the old schema carried.
-    s.goals.push({ ...structuredClone(first), id: `${first.id}b`, condition: { kind: "habit-minutes", habitId: habit.id, minutes: 45 }, schedule: { kind: "once" }, progressSeconds: 0, createdAt: 6_000 });
-    const loaded = deserialize(asV11(s, 1_000, "cyan")).state!;
-    expect(loaded.habits[0]!.color).toBe("vermillion");
-    expect(loaded.goals.map((g) => g.pendingChoice)).toEqual([true, true]);
-    // Unresolved: the active reads refuse the rows, and practice cannot
-    // complete or pay either one.
-    expect(activeGoals(loaded)).toHaveLength(0);
-    accrueGoalProgress(loaded, habit.id, 3_600, "live");
-    expect(loaded.goals.every((g) => !g.completed)).toBe(true);
-    expect(loaded.goalFuel).toBe(0);
-  });
-
-  it("the chain runs once: a v10 fixture save lands on the same narrowing (both steps, in order)", () => {
-    const state = deserialize(JSON.stringify(v10MigrationFixture), stubRng(new Array(32).fill(0.4))).state!;
-    // h1's three surviving rows and h2's two all pend; the colors stay the
-    // default — nothing was silently chosen.
-    expect(state.habits.map((h) => h.color)).toEqual(["vermillion", "vermillion"]);
-    expect(state.goals.filter((g) => g.pendingChoice).map((g) => g.id)).toEqual(["g2", "g3", "g5", "g6", "g7"]);
-  });
-
-  it("retaining a carried row after the migration keeps its record and pays one completion, once", () => {
-    const loaded = deserialize(singleGoalSave()).state!;
-    const goal = loaded.goals[0]!;
-    // The transferred row is already active: credited practice rides
-    // toward the raised target, and the completion draws the bounded pool.
-    editGoal(loaded, goal.id, { minutes: 30, schedule: "daily" }, 9_000);
-    expect(goal.completed).toBe(false);
-    expect(goal.progressSeconds).toBe(600);
-  });
-
-  it("a v12 save reloads untouched: no re-defaulting, no re-flagging", () => {
-    const once = deserialize(singleGoalSave()).state!;
-    const text = serialize(once, 1_000);
-    const twice = deserialize(text).state!;
-    expect(serialize(twice, 1_000)).toBe(text);
-    expect(twice.habits[0]!.color).toBe("amber");
-    expect(twice.goals[0]!.pendingChoice).toBeUndefined();
-  });
-});
-
-// ── The v12 → v13 migration (issue #493, the calibrated economy) ───────
-//
-// One version-gated translation at the save boundary: every save written
-// before the calibrated economy converts exactly once. The era side takes
-// the shipped prestige rule's own reset (the collection-reset grounding in
-// the century record); the retention side keeps everything the calibration
-// never re-prices. The published table lives in docs/save-migration.md —
-// these cases assert the behavior, not the prose.
-
-// Fabricate a v12 save from a live state: force the version. The v13
-// transition changes no field shapes — the calibrated economy reads the
-// same state schema — so the bytes a v12 writer produced for this state
-// are exactly what this helper writes.
-function asV12(state: GameState, savedAt = 1_000): string {
-  const file = JSON.parse(serialize(state, savedAt));
-  file.version = 12;
-  return JSON.stringify(file);
-}
-
-describe("the v12 → v13 migration (issue #493)", () => {
-  // A finite overpowered save in the parent's shape: runaway levels, a
-  // deep era, purchased capacity, live charge, enemies mid-era, one banked
-  // frontier step — every figure representable.
-  function overpowered(): GameState {
-    const s = fresh();
-    const runaway = give(s, "additive", hex(1, 0));
-    runaway.level = 1504;
-    runaway.invested = 1.6e308;
-    runaway.reserve = 40;
-    const tiered = give(s, "blaster", hex(0, 1));
-    tiered.tier = 3;
-    tiered.level = 900;
-    s.nous = 8.2e9;
-    s.totalEarned = 4.5e11;
-    s.eraEarned = 4e14;
-    s.capacityBought = 3;
-    s.prestiges = 1;
-    s.arete = 4;
-    s.world.frontier = 1;
-    s.world.starterWeaponGranted = true;
-    s.world.columns.push({ id: "col1", pos: null });
-    s.world.weapons.push({ id: "w1", type: "chargeBlade", pos: null, store: 25, cooldown: 2, bearer: null });
-    s.world.hone.chargeBlade = 2;
-    const enemies = freshEnemyStates();
-    const first = Object.keys(enemies)[0]!;
-    enemies[first] = { discovered: true, hp: 0 };
-    s.world.enemies = enemies;
-    return s;
-  }
-
-  it("a finite overpowered save lands on the calibrated economy: the era resets, the collection and its board stand", () => {
-    const before = overpowered();
-    const loaded = deserialize(asV12(before));
-    expect(loaded.error).toBeUndefined();
-    const state = loaded.state!;
-    // The era reset (the shipped prestige rule's own list): levels and
-    // investment to base, nous to the opening grant, the era measure
-    // rebased, purchased capacity returned to one voice, reserves and
-    // stored combat charge emptied, every enemy restored, the claimed
-    // frontier translated onto the calibrated curve's ledger.
-    const runaway = state.modules.find((m) => m.type === "additive")!;
-    expect(runaway.level).toBe(0);
-    expect(runaway.invested).toBe(0);
-    expect(runaway.reserve).toBe(0);
-    expect(state.nous).toBe(openingGrant());
-    expect(state.eraEarned).toBe(0);
-    expect(state.capacityBought).toBe(0);
-    expect(state.world.enemies).toEqual(freshEnemyStates());
-    expect(state.world.weapons[0]).toMatchObject({ store: 0, cooldown: 0 });
-    expect(state.world.frontier).toBe(0);
-    // The retention side: lifetime truths, the collection with its tiers
-    // and placement, earned rolls, purchases, and the life record stand.
-    expect(state.totalEarned).toBe(4.5e11);
-    expect(state.modules.find((m) => m.type === "blaster")!.tier).toBe(3);
-    expect(state.cells).toEqual(before.cells);
-    expect(state.cellsBought).toBe(before.cellsBought);
-    expect(state.arete).toBe(4);
-    expect(state.prestiges).toBe(1);
-    expect(state.capacityCeilings).toBe(before.capacityCeilings);
-    expect(state.capacityDiscounts).toBe(before.capacityDiscounts);
-    expect(state.world.starterWeaponGranted).toBe(true);
-    expect(state.world.columns.map((c) => c.id)).toEqual(["col1"]);
-    expect(state.world.hone.chargeBlade).toBe(2);
-    expect(loaded.migration).toBeDefined();
-  });
-
-  it("the whole stands list rides the boundary untouched", () => {
-    // The ticket's retention list, field for field, at the boundary: the
-    // life record, practice history, goals, notes, feats, the discovery
-    // ledger, every memorized meter, and every purchase — built through
-    // the engine's own seams, then each asserted as carried.
-    const before = overpowered();
-    before.unstructuredSessions = 3;
-    before.plannedSessionsCompleted = 9;
-    before.combinations = 7;
-    before.breathersCompleted = 4;
-    before.breatherSeconds = 1_800;
-    before.goalFuel = 3.5;
-    before.forge = { progress: 41, earned: 2 };
-    before.mutatorForge = { progress: 33, earned: 2 };
-    before.mutatorSlots.push(hex(0, 1));
-    before.mutators.push({ id: "mu1", family: "power", rarity: "uncommon", pos: null });
-    before.bankedMutatorRolls.push({
-      id: "mo1",
-      candidates: [
-        { id: "mc1", family: "power", rarity: "common" },
-        { id: "mc2", family: "charge", rarity: "rare" },
-      ],
-    });
-    before.scrap = 15;
-    before.draftTierBonus = 1;
-    before.specialDrafts.rare = 1;
-    before.mergeCapPurchases = 1;
-    before.capacityCeilings = 1;
-    before.capacityDiscounts = 2;
-    before.catalogEntryOwned = true;
-    before.rollPoolJoined = true;
-    const { habit } = giveHabit(before, "Piano");
-    selectHabit(before, habit.id);
-    addPracticeLog(before, habit.id, 10, 5_000);
-    createGoal(before, { habitId: habit.id, minutes: 25, schedule: "daily", now: 500 });
-    writeNote(before, "keep the fifth", 4_000);
-    startSession(before, 600);
-    endSession(before, 6_000);
-    before.achievements["first-prestige"] = 900;
-    before.chordDiscovery["octave"] = { formed: true, firstFormedAt: 800, rootsHeard: 2, roots: [0, 7] };
-
-    const state = deserialize(asV12(before)).state!;
-    expect(state.unstructuredSessions).toBe(3);
-    expect(state.plannedSessionsCompleted).toBe(9);
-    expect(state.combinations).toBe(7);
-    expect(state.breathersCompleted).toBe(4);
-    expect(state.breatherSeconds).toBe(1_800);
-    expect(state.goalFuel).toBe(3.5);
-    expect(state.practiceLog).toEqual(before.practiceLog);
-    expect(state.sessionRecords).toEqual(before.sessionRecords);
-    expect(state.notes).toEqual(before.notes);
-    // The goal's live slices are the loaded shape's own addition (the
-    // lenient default); the carried row stands beneath them.
-    expect(state.goals[0]).toMatchObject(before.goals[0]!);
-    expect(state.achievements).toEqual(before.achievements);
-    expect(state.chordDiscovery["octave"]).toEqual({ formed: true, firstFormedAt: 800, rootsHeard: 2, roots: [0, 7] });
-    expect(state.forge).toEqual({ progress: 41, earned: 2 });
-    expect(state.mutatorForge).toEqual({ progress: 0, earned: 0 });
-    expect(state.mutatorSlots).toEqual([]);
-    expect(state.mutators).toEqual([]);
-    expect(state.bankedMutatorRolls).toEqual([]);
-    expect(state.scrap).toBe(15);
-    expect(state.draftTierBonus).toBe(1);
-    expect(state.specialDrafts).toMatchObject({ rare: 1 });
-    expect(state.mergeCapPurchases).toBe(1);
-    expect(state.capacityCeilings).toBe(1);
-    expect(state.capacityDiscounts).toBe(2);
-    expect(state.catalogEntryOwned).toBe(false);
-    expect(state.rollPoolJoined).toBe(false);
-  });
-
-  it("the conversion grants no entitlement: no Arete mints, no instant claim waits, no roll banks", () => {
-    const before = overpowered();
-    before.bankedRolls.push({
-      id: "held",
-      candidates: [
-        { id: "c1", type: "additive", tier: 0 },
-        { id: "c2", type: "spacer", tier: 2 },
-        { id: "c3", type: "infusor", tier: 0 },
-      ],
-    });
-    const state = deserialize(asV12(before)).state!;
-    expect(state.arete).toBe(4);
-    expect(bankableClaimOf(state)).toBe(0);
-    expect(state.bankedRolls).toHaveLength(1);
-    expect(state.bankedMutatorRolls).toHaveLength(0);
-  });
-
-  it("future claims bank against newly earned depth alone — no historical depth re-pays, no debt strands", () => {
-    // The runaway save's frontier (1) does not bank against the calibrated
-    // curve: re-earning the entry depth banks the curve's full entry claim,
-    // and the route past the translated frontier is the calibrated ladder
-    // itself — reachable where the un-translated position's was not.
-    const state = deserialize(asV12(overpowered())).state!;
-    state.eraEarned = BALANCE.world.entryNous;
-    expect(pendingClaimOf(state)).toBeCloseTo(frontierEntitlement(BALANCE.world.entryNous), 10);
-    expect(Math.floor(pendingClaimOf(state))).toBe(2);
-  });
-
-  it("the finite migration report states what moved", () => {
-    const report = deserialize(asV12(overpowered())).migration!;
-    const expected: MigrationReport = {
-      fromVersion: 12,
-      modulesCleared: 2,
-      eraEarnedCleared: 4e14,
-      nousCleared: 8.2e9,
-      bucketNousCleared: 0,
-      capacityCleared: 3,
-      frontierCleared: 1,
-      areteRetained: 4,
-    };
-    expect(report).toEqual(expected);
-  });
-
-  it("the converted save reloads as v13 and nothing runs again", () => {
-    const first = deserialize(asV12(overpowered())).state!;
-    const text = serialize(first, 1_000);
-    const second = deserialize(text);
-    expect(second.error).toBeUndefined();
-    expect(second.migration).toBeUndefined();
-    expect(serialize(second.state!, 1_000)).toBe(text);
-  });
-
-  it("the whole chain runs once: the v10 fixture lands converted, the earlier steps intact", () => {
-    const loaded = deserialize(JSON.stringify(v10MigrationFixture), stubRng(new Array(32).fill(0.4)));
-    const state = loaded.state!;
-    // The earlier conversions stand (the Engineer pair the v10 step wrote),
-    // and the calibrated translation ran exactly once at the end.
-    expect(state.habits[0]!.classes.engineer!.experience).toBeGreaterThan(0);
-    expect(state.modules.every((m) => m.level === 0 && m.invested === 0)).toBe(true);
-    expect(state.eraEarned).toBe(0);
-    expect(state.world.frontier).toBe(0);
-    expect(loaded.migration!.fromVersion).toBe(10);
-    // The converted chain output reloads as v13, untouched.
-    const text = serialize(state, 1_000);
-    expect(deserialize(text).migration).toBeUndefined();
-  });
-
-  it.each(["flow", "paused"] as const)("a %s conversion clears old provisional nous but preserves honesty credit and history", (mode) => {
-    const before = fresh();
-    const { habit } = giveHabit(before, "Piano");
-    selectHabit(before, habit.id);
-    before.modules[0]!.level = 100;
-    startSession(before, null);
-    const produced = advance(before, 600, () => 0.4, "provisional");
-    expect(produced.fault).toBeUndefined();
-    const bucket = before.session!.accounting.bucketNous;
-    expect(bucket).toBeGreaterThan(BALANCE.world.entryNous);
-    before.mode = mode;
-    const loaded = deserialize(asV12(before));
-    const state = loaded.state!;
-    expect(state.mode).toBe(mode);
-    expect(state.session!.accounting).toEqual({ ...before.session!.accounting, bucketNous: 0 });
-    expect(state.session!.earned).toBe(before.session!.earned);
-    expect(loaded.migration).toMatchObject({ bucketNousCleared: bucket });
-    // Pausing changes no accounting: settle through the ordinary resumed seam.
-    state.mode = "flow";
-    expect(resolveHonestyReport(state, "full").ok).toBe(true);
-    expect(state.habits[0]!.seconds).toBe(600);
-    expect(state.session!.accounting.creditedSeconds).toBe(600);
-    expect(state.eraEarned).toBe(0);
-    expect(state.nous).toBe(openingGrant());
-    expect(bankableClaimOf(state)).toBe(0);
-    const reloaded = deserialize(serialize(state));
-    expect(reloaded.migration).toBeUndefined();
-    expect(reloaded.state!.session!.accounting).toEqual(state.session!.accounting);
-  });
-
-  it.each(["nous", "arete", "eraEarned", "totalEarned"])("missing, null, and nonfinite %s require recovery instead of migration", (field) => {
-    for (const value of [undefined, null, "lost", Infinity]) {
-      const file = JSON.parse(asV12(overpowered()));
-      file.state[field] = value;
-      const text = value === Infinity
-        ? JSON.stringify(file).replace(`\"${field}\":null`, `\"${field}\":1e999`)
-        : JSON.stringify(file);
-      const loaded = deserialize(text);
-      expect(loaded.state).toBeUndefined();
-      expect(loaded.migration).toBeUndefined();
-      expect(loaded.error).toMatch(/recovery/i);
-      expect(loaded.error).toContain(field);
-    }
-  });
-
-  it("lost investment, frontier, and provisional money are detected before normalization", () => {
-    const source = overpowered();
-    startSession(source, null);
-    const file = JSON.parse(asV12(source));
-    file.state.modules[0].invested = null;
-    file.state.world.frontier = null;
-    file.state.session.accounting.bucketNous = null;
-    const loaded = deserialize(JSON.stringify(file));
-    expect(loaded.state).toBeUndefined();
-    expect(loaded.error).toContain("modules[0].invested");
-    expect(loaded.error).toContain("world.frontier");
-    expect(loaded.error).toContain("session.accounting.bucketNous");
-  });
-
-  it("a mid-flow save converts and keeps its running session", () => {
-    const s = overpowered();
-    startSession(s, null);
-    applyGap(s, 600, "away", 0);
-    const state = deserialize(asV12(s)).state!;
-    expect(state.mode).toBe("flow");
-    expect(state.session).not.toBeNull();
-    expect(state.nous).toBe(openingGrant());
-    expect(state.eraEarned).toBe(0);
+    s.session!.accounting.poolSeconds = Infinity;
+    expect(() => serialize(s)).toThrow(/poolSeconds/);
   });
 });

@@ -1,32 +1,17 @@
-import { BALANCE, EPS } from "./constants";
-import { creditGoalEarning } from "./reserves";
+import { EPS } from "./constants";
 import type { Goal, GoalCondition, GoalSchedule, GameState } from "./types";
 export type { Goal, GoalCondition, GoalSchedule };
 
-// Goals (issue #6, as re-owned by issue #423 and narrowed to one per habit
-// by issue #445, ADR-0075). A goal tracks a practice condition ("Piano,
-// 20 minutes a day") and belongs to ONE habit: only credited practice for
-// that habit advances it — unstructured practice advances nothing. Each
-// habit owns zero or one active goal, never purchasable; progress accrues
-// only while the goal is active — earlier practice never counts
-// retroactively, the one exception being a cadence edit, whose
-// recalculation reads the new period's credited practice from the record
-// (editGoal below). Completions grant nothing themselves — goal templates
-// are conditions only (ADR-0012) — but the completion tick is the fact
-// every owned generator reads, banking its profile's goal credit on the
-// focus equivalent (issue #371) under the bounded fuel budget (below).
+// Goals (issue #6, re-owned by issue #423 and narrowed to one per habit by
+// issue #445, ADR-0075). A goal tracks a practice condition ("Piano, 20
+// minutes a day") and belongs to ONE habit: only credited practice for that
+// habit advances it — unstructured practice advances nothing. Each habit
+// owns zero or one active goal. Progress accrues only while the goal is
+// active — earlier practice never counts retroactively, the one exception
+// being a cadence edit, whose recalculation reads the new period's practice
+// from the record (editGoal below). Completions grant nothing (ADR-0012).
 // Daily and weekly goals reset at the local calendar boundary; one-time
-// goals keep running until edited, replaced, or removed in the habit
-// editor.
-//
-// The goal-generator fuel budget (issue #423): completions credit
-// generators only out of a pool that accrues at
-// BALANCE.goalFuelPerCreditedSecond per credited practice second — more
-// goals, shorter targets, repeated replacement, cadence changes, and
-// migration cannot raise the generator credit the same practice time
-// yields. The pool lives on state.goalFuel and draws down inside the one
-// credit seam (reserves.creditGoalEarning); it is a rule, never a
-// displayed resource.
+// goals keep running until edited, replaced, or removed.
 
 // A habit's active goal: the one running row — a multi-goal migration's
 // unresolved rows are pending (they neither run nor light a read until the
@@ -41,15 +26,6 @@ export function activeGoals(state: GameState): Goal[] {
 
 export function pendingGoalsOf(state: GameState, habitId: string): Goal[] {
   return state.goals.filter((goal) => !goal.retired && goal.pendingChoice === true && goal.condition.habitId === habitId);
-}
-
-// The goal-generator fuel's one accrual leg: credited practice seconds
-// only, called beside the credited time it budgets (advance's live sink
-// and the honesty report's credit). Manual logs and breathers feed
-// nothing.
-export function accrueGoalFuel(state: GameState, seconds: number): void {
-  if (!(seconds > EPS)) return;
-  state.goalFuel += BALANCE.goalFuelPerCreditedSecond * seconds;
 }
 
 export function goalRequiredSeconds(goal: Goal): number {
@@ -105,7 +81,6 @@ export function rollGoalOccurrences(state: GameState, now: number): void {
     if (goal.occurrenceKey !== key) {
       goal.occurrenceKey = key;
       goal.progressSeconds = 0;
-      goal.liveSeconds = 0;
       goal.completed = false;
     }
   }
@@ -153,7 +128,6 @@ export function createGoal(state: GameState, input: GoalCreateInput): { ok: bool
     schedule,
     occurrenceKey: occurrenceKeyFor(schedule, input.now),
     progressSeconds: 0,
-    liveSeconds: 0,
     completed: false,
     completedCount: 0,
     createdAt: input.now,
@@ -178,11 +152,8 @@ export function deleteGoal(state: GameState, id: string): { ok: boolean; reason?
 // un-completes when the raised target is no longer met (a target lowered
 // to or below met progress stays completed — the completion already
 // happened, and no credit can replay). A cadence change recalculates
-// qualifying practice for the new period: live and manual condition
-// progress with separate live reward eligibility, since the new schedule's
-// current occurrence began, with the occurrence rolled to its key.
-// Nothing here awards or replays generator fuel: credit fires only on
-// completion ticks on the accrual paths, against the one bounded pool.
+// qualifying practice for the new period — live and manual — since the new
+// schedule's current occurrence began, with the occurrence rolled to its key.
 export function editGoal(
   state: GameState,
   id: string,
@@ -201,23 +172,18 @@ export function editGoal(
     goal.completed = goal.progressSeconds >= goalRequiredSeconds(goal);
     return { ok: true };
   }
-  // Manual practice advances the condition, but only credited live practice
-  // joins its reward-eligible slice. A live entry is bounded by the time
-  // available after the period start, never attributed wholly by its end.
+  // A live entry is bounded by the time available after the period start,
+  // never attributed wholly by its end.
   goal.schedule = schedule;
   goal.occurrenceKey = occurrenceKeyFor(schedule, now);
   const start = occurrenceStartFor(schedule, now, goal.createdAt);
   let qualifying = 0;
-  let live = 0;
   for (const entry of state.practiceLog) {
     if (entry.habitId !== goal.condition.habitId || entry.at < start || entry.at > now) continue;
     const seconds = entry.source === "manual" ? entry.seconds : Math.min(entry.seconds, (entry.at - start) / 1000);
     qualifying += seconds;
-    if (entry.source === "live") live += seconds;
   }
   goal.progressSeconds = qualifying;
-  goal.liveSeconds = live;
-  // Recalculation never fires completion credit.
   goal.completed = qualifying >= goalRequiredSeconds(goal);
   return { ok: true };
 }
@@ -226,7 +192,7 @@ export function editGoal(
 // carried-over row and its pending siblings retire to history, records
 // intact. The retained row keeps its condition, progress, and completion
 // facts exactly as carried — nothing is reinterpreted, and no completion
-// fires here, so no generator fuel can move at choice time.
+// fires here.
 export function retainGoalChoice(state: GameState, id: string): { ok: boolean; reason?: string } {
   if (state.mode !== "upgrade") return { ok: false, reason: "Goals are managed between sessions." };
   const goal = state.goals.find((g) => g.pendingChoice === true && g.id === id);
@@ -252,38 +218,18 @@ export function goalSummary(state: GameState, goal: Goal): string {
   return `${name} · ${goalTargetSummary(goal)}`;
 }
 
-// Load-time normalization for the goal's live-share surface (ADR-0047): a
-// goal saved before the generators wave carries no live slice —
-// lenient-defaulted to 0, the honest reading (the completion's live share
-// would read 0, banking nothing) and exactly what a fresh shape writes.
-// The per-goal palette key (issue #312) retired with the GOALS face
-// (issue #445): the color rides the habit now, and a save's key drops
-// after the migration has read it. Mutates in place over the merged
-// state's goal list.
+// Load-time normalization: flags other than a literal true drop, and the
+// retired per-goal fields (the palette key, issue #445; the live-share
+// slice, ADR-0047) leave the row. Mutates in place.
 export function normalizeGoals(goals: Goal[]): void {
   for (const goal of goals) {
     if (!goal || typeof goal !== "object") continue;
     if (goal.retired !== true) delete goal.retired;
     if (goal.pendingChoice !== true) delete goal.pendingChoice;
-    if (typeof goal.liveSeconds !== "number" || !Number.isFinite(goal.liveSeconds)) goal.liveSeconds = 0;
-    delete (goal as unknown as Record<string, unknown>).color;
+    const row = goal as unknown as Record<string, unknown>;
+    delete row.color;
+    delete row.liveSeconds;
   }
-}
-
-// The completion tick's credit (ADR-0047, generalized by issue #371,
-// budgeted by issue #423): completing a goal of M minutes banks the focus
-// equivalent (the Flywheel's focus rate × M) × the live share of the
-// goal's progress into every owned generator at its profile's goal
-// coefficient — manual-only completions bank nothing (the honesty
-// boundary) and mixed practice banks its live share. The draw lands
-// inside the one credit seam (reserves.creditGoalEarning) against the
-// goalFuel pool, so a completion can never credit more than the credited
-// practice time it rode on has budgeted. Recurring goals credit once per
-// occurrence — this fires at the completion tick, and the occurrence
-// reset re-opens the goal — and overlapping completions each credit.
-function creditGoalGenerators(state: GameState, goal: Goal): void {
-  if (goal.progressSeconds <= EPS || goal.liveSeconds <= EPS) return;
-  creditGoalEarning(state, goal.progressSeconds, goal.liveSeconds / goal.progressSeconds);
 }
 
 function acceptsPractice(goal: Goal, habitId: string | null): boolean {
@@ -295,48 +241,29 @@ function acceptsPractice(goal: Goal, habitId: string | null): boolean {
     && goal.condition.habitId !== null && goal.condition.habitId === habitId;
 }
 
-// Live advancement must stop at the next completion: its credit can change
-// generator output for the rest of the span. Provisional time never calls
-// this seam because it does not advance goals until reconciliation.
-export function secondsUntilGoalCompletion(state: GameState, habitId: string | null): number {
-  let earliest = Infinity;
-  for (const goal of activeGoals(state)) {
-    if (!acceptsPractice(goal, habitId)) continue;
-    const remaining = goalRequiredSeconds(goal) - goal.progressSeconds;
-    if (remaining > EPS) earliest = Math.min(earliest, remaining);
-  }
-  return earliest;
-}
-
 // Accrues qualifying practice and completes goals. Practice advances only
 // its own habit's goal (issue #423; one per habit since issue #445) —
 // unstructured practice (habitId null) advances nothing, and an unresolved
-// migration choice leaves nothing to advance. The `source` splits the
-// honesty boundary (ADR-0047): "live" is credited present, trusted, and
-// honesty-credited time (the advance and reconciliation paths); "manual"
-// is a player practice log, which advances the condition but never joins
-// the live slice. Returns the number of occurrences completed. While a
+// migration choice leaves nothing to advance. Returns the number of
+// occurrences completed. While a
 // session is live, every credited second is also ledged onto the session's
 // own advancement map (§9), snapshotting into the record at close — manual
 // logs never pass through here with a session live, so they never join
 // the snapshot.
-export function accrueGoalProgress(state: GameState, habitId: string | null, seconds: number, source: "live" | "manual" = "live"): number {
+export function accrueGoalProgress(state: GameState, habitId: string | null, seconds: number): number {
   if (seconds <= EPS) return 0;
   let completions = 0;
   for (const goal of activeGoals(state)) {
     if (!acceptsPractice(goal, habitId)) continue;
-    // Only practice up to completion belongs to this occurrence. Excess
-    // time still counts as practice, but cannot change its live share.
+    // Only practice up to completion belongs to this occurrence.
     const qualifying = Math.min(seconds, Math.max(0, goalRequiredSeconds(goal) - goal.progressSeconds));
     goal.progressSeconds += qualifying;
-    if (source === "live") goal.liveSeconds += qualifying;
     const session = state.session;
     if (session) session.goalSeconds[goal.id] = (session.goalSeconds[goal.id] ?? 0) + qualifying;
     if (goal.progressSeconds >= goalRequiredSeconds(goal)) {
       goal.completed = true;
       goal.completedCount++;
       completions++;
-      creditGoalGenerators(state, goal);
     }
   }
   return completions;
