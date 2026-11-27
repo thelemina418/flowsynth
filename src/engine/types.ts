@@ -186,8 +186,9 @@ export type ModuleCategory = "oscillator" | "modulator";
 export type OscillatorType = "sine" | "triangle" | "square" | "saw" | "release";
 
 // The modulator types (mechanics-sketch.md, Modulators). The Flywheel
-// arrives at the start (spec chunk 03, issue #31).
-export type ModulatorType = "flywheel";
+// arrives at the start (spec chunk 03, issue #31); the Pulsewell is
+// declared as data (issue #32) and chunk 04 makes it arrive.
+export type ModulatorType = "flywheel" | "pulsewell";
 
 // Every module type.
 export type ModuleType = OscillatorType | ModulatorType;
@@ -217,9 +218,8 @@ export interface ResonanceInstance {
 }
 
 // One placed oscillator's rate (mechanics-sketch.md, Rates):
-// rate = base × resonance × charge × faders × (1 − pressure). Charge,
-// faders and pressure are identity legs until chunks 03, 05 and 06 fill
-// them in.
+// rate = base × resonance × charge × faders × (1 − pressure). Faders and
+// pressure are identity legs until chunks 06 and 05 fill them in.
 export interface OscillatorRate {
   cell: Cell;
   module: OscillatorType;
@@ -228,18 +228,44 @@ export interface OscillatorRate {
   strength: Num;
   instances: ResonanceInstance[];
   resonance: Num;
+  // charge/s received: the sum of every modulator's delivery to this cell.
+  chargeReceived: Num;
+  // The charge factor, 1 + ln(1 + chargeReceived) (issue #32).
   charge: Num;
   faders: Num;
   pressure: Num;
   rate: Num;
 }
 
-// The board's rates (issue #26): one pure computation of the layout,
-// cached on the game state, recomputed after a layout change and on load,
-// never persisted and never computed per tick. Oscillators are in
-// placement order.
+// What a reach cell holds when a modulator's charge arrives (issue #32): a
+// module, an empty open cell, a wall or a dark cell. In chunk 03 only an
+// oscillator takes anything from it.
+export type ReachHolds = ModuleType | "empty" | "wall" | "dark";
+
+export interface ChargeDelivery {
+  cell: Cell;
+  holds: ReachHolds;
+}
+
+// One placed modulator's charge (issue #32): its output, charge/s to each
+// target, and the cells its reach delivers to, in reach order. `facing` is
+// null for a facing-free type.
+export interface ModulatorRate {
+  cell: Cell;
+  module: ModulatorType;
+  facing: Facing | null;
+  output: Num;
+  deliveries: ChargeDelivery[];
+}
+
+// The board's rates (issue #26): one pure computation of the layout and
+// the credited Producer time, cached on the game state. Recomputed after
+// a layout or facing change, on load and when a flow session ends (issue
+// #32); never persisted and never computed per tick. Oscillators and
+// modulators are in placement order.
 export interface BoardRates {
   oscillators: OscillatorRate[];
+  modulators: ModulatorRate[];
   total: Num;
 }
 

@@ -2,7 +2,12 @@
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
+import { apply } from "../../engine/apply";
+import { giveOscillators, ownCells } from "../../engine/fixtures";
+import type { Cell } from "../../engine/hex";
 import { STORAGE_KEY } from "../../engine/save";
+import { createInitialState } from "../../engine/state";
+import type { GameState } from "../../engine/types";
 import { memorySaveStorage } from "../shared-save";
 import { App } from "../shell/App";
 import { Shell } from "../shell/shell";
@@ -126,18 +131,101 @@ describe("turning the Flywheel in upgrade mode", () => {
     press("r");
     click(cell("0,0"));
     expect(facing("0,0")).toBe("NE");
-    expect(lines()).toEqual(["Flywheel · Modulator · facing NE"]);
+    expect(lines()).toEqual(["Flywheel · Modulator · facing NE", "1.0 charge/s · no module in reach"]);
   });
 });
 
 describe("the Flywheel's Hex detail", () => {
-  it("reads its name, category and facing", () => {
+  it("reads its name, category and facing, and its effect line", () => {
     mount();
     placeFlywheel();
-    expect(lines()).toEqual(["Flywheel · Modulator · facing NE"]);
+    expect(lines()).toEqual(["Flywheel · Modulator · facing NE", "1.0 charge/s · no module in reach"]);
     press("r");
     press("Escape");
     click(cell("0,0"));
-    expect(lines()).toEqual(["Flywheel · Modulator · facing SE"]);
+    expect(lines()).toEqual(["Flywheel · Modulator · facing SE", "1.0 charge/s · no module in reach"]);
+  });
+});
+
+// Reach and charge on screen (issue #32): a picked or inspected modulator
+// outlines its reach cells, with no number on the board; the Hex detail
+// names what the reach holds and gives a charged oscillator its charge leg.
+describe("the Flywheel's reach and charge", () => {
+  const reached = () => [...host.querySelectorAll("[data-reach]")].map((c) => c.getAttribute("data-cell")).sort();
+
+  // Flywheel at (1,-1) facing S, onto (1,0) and (1,1).
+  function charged(s: GameState, extra: Cell[] = []): GameState {
+    ownCells(s, extra);
+    let next = apply(s, { type: "placeModule", module: "flywheel", cell: { q: 1, r: -1 } }).state;
+    next = apply(next, { type: "rotateModule", cell: { q: 1, r: -1 }, turn: "clockwise" }).state;
+    return apply(next, { type: "rotateModule", cell: { q: 1, r: -1 }, turn: "clockwise" }).state;
+  }
+
+  function show(shell: Shell, s: GameState) {
+    act(() => { shell.state.value = s; });
+  }
+
+  it("picking a Flywheel outlines its reach cells, and turning it moves the outline", () => {
+    mount();
+    expect(reached()).toEqual([]);
+    placeFlywheel();
+    // Placed and inspected: its reach is NE, onto (1,-1) and (2,-2).
+    expect(reached()).toEqual(["1,-1", "2,-2"]);
+    press("Escape");
+    expect(reached()).toEqual([]);
+    click(cell("0,0"));
+    expect(cell("0,0").hasAttribute("data-picked")).toBe(true);
+    expect(reached()).toEqual(["1,-1", "2,-2"]);
+    press("r");
+    expect(reached()).toEqual(["1,0", "2,0"]);
+    // The outline carries no number.
+    for (const key of reached()) expect(cell(key!).querySelector(".cell-reach")!.textContent).toBe("");
+    // An oscillator's pick outlines nothing.
+    press("Escape");
+    click(entry("Sine"));
+    click(cell("1,0"));
+    click(cell("1,0"));
+    expect(reached()).toEqual([]);
+  });
+
+  it("names the oscillators in its reach, nearest first", () => {
+    const { shell } = mount();
+    const s = createInitialState();
+    show(shell, apply(apply(charged(s, [{ q: 1, r: 1 }]), { type: "placeModule", module: "triangle", cell: { q: 1, r: 0 } }).state,
+      { type: "placeModule", module: "sine", cell: { q: 1, r: 1 } }).state);
+    click(cell("1,-1"));
+    press("Escape");
+    click(cell("1,-1"));
+    expect(lines()).toEqual(["Flywheel · Modulator · facing S", "1.0 charge/s · reach → Triangle, Sine"]);
+  });
+
+  it("gives a charged oscillator its charge leg, with and without resonance", () => {
+    const { shell } = mount();
+    let s = createInitialState();
+    giveOscillators(s, { allowance: 3 });
+    for (const [module, q, r] of [["sine", 0, 0], ["triangle", 1, 0], ["triangle", 0, 1]] as const) {
+      s = apply(s, { type: "placeModule", module, cell: { q, r } }).state;
+    }
+    show(shell, charged(s));
+    click(cell("1,0"));
+    expect(lines()).toEqual([
+      "Triangle · Oscillator",
+      "Resonating ×1 · closes Sine–Triangle",
+      "1.0 ν/s base · ×1.75 resonance · ×1.69 charge",
+      "2.96 ν/s",
+    ]);
+    // The other Triangle, out of reach, has no charge leg.
+    click(cell("0,1"));
+    expect(lines()).toEqual(["Triangle · Oscillator", "Resonating ×1 · closes Sine–Triangle", "1.0 ν/s base · ×1.75 resonance", "1.75 ν/s"]);
+
+    const alone = apply(charged(createInitialState()), { type: "placeModule", module: "triangle", cell: { q: 1, r: 0 } }).state;
+    show(shell, alone);
+    click(cell("1,0"));
+    expect(lines()).toEqual([
+      "Triangle · Oscillator",
+      "Not resonating · needs two touching oscillators beside it",
+      "1.0 ν/s base · ×1.69 charge",
+      "1.69 ν/s",
+    ]);
   });
 });

@@ -35,13 +35,18 @@ import { round } from "./svg";
 // a modulator's face adds its facing pointer and jack (issue #31);
 // a pick's targets carry data-target (valid: clear outline, invalid:
 // muted outline) and the picked module data-picked (a firm inset).
-// Resonance outlines (issue #26) are one layer drawn over the cells.
+// Resonance outlines (issue #26) are one layer drawn over the cells. A
+// picked or inspected modulator's reach cells carry data-reach and a clear
+// outline in Charge Green's light register (issue #32).
 
 // The hex circumradius in viewBox units; the SVG scales to its container.
 const SIZE = 30;
 // The drawn hex sits inside its cell, leaving a hairline gutter.
 const FACE = SIZE * 0.94;
 const ENGRAVE = SIZE * 0.74;
+// A modulator's reach outline, inside the face so a pick's target outline
+// still reads around it.
+const REACH = SIZE * 0.86;
 // A placed module's faceplate, inside the engraved ring.
 const MODULE = SIZE * 0.66;
 const PAD = 4;
@@ -91,6 +96,8 @@ interface BoardCellProps {
   placement: Placement | undefined;
   picked: boolean;
   inspected: boolean;
+  // In the reach of the picked or inspected modulator (issue #32).
+  reached: boolean;
   target: Target | undefined;
   // The one cell in the tab order (roving focus); the rest are reached by
   // the arrow keys.
@@ -103,7 +110,7 @@ interface BoardCellProps {
   onPointerDown: ((event: PointerEvent) => void) | undefined;
 }
 
-function BoardCell({ cell, kind, placement, picked, inspected, target, roving, onActivate, onFocus, onPointerDown }: BoardCellProps) {
+function BoardCell({ cell, kind, placement, picked, inspected, reached, target, roving, onActivate, onFocus, onPointerDown }: BoardCellProps) {
   const center = toPixel(cell, SIZE);
   // Every cell takes focus, dark ones too, so the Hex detail opens from
   // the keyboard on any of them.
@@ -114,6 +121,7 @@ function BoardCell({ cell, kind, placement, picked, inspected, target, roving, o
     "data-target": target,
     "data-picked": picked ? "" : undefined,
     "data-inspected": inspected ? "" : undefined,
+    "data-reach": reached ? "" : undefined,
     class: `cell cell-${kind}`,
     tabindex: roving ? 0 : -1,
     role: "button" as const,
@@ -127,7 +135,12 @@ function BoardCell({ cell, kind, placement, picked, inspected, target, roving, o
       onActivate();
     },
   });
-  const targetOutline = target && <polygon class="cell-target" points={points(center, FACE)} />;
+  const targetOutline = (
+    <>
+      {reached && <polygon class="cell-reach" points={points(center, REACH)} />}
+      {target && <polygon class="cell-target" points={points(center, FACE)} />}
+    </>
+  );
   if (kind === "open") {
     return (
       <g {...common(placement ? moduleName(placement.module) : "Open cell")} onPointerDown={onPointerDown}>
@@ -187,6 +200,11 @@ export function Board({ board, rates, flowing, placing, inspected, onCell, onDro
   // first. Arrow keys move it along the drawn grid and stop at the edge.
   const [roving, setRoving] = useState(cellKey(ORIGIN));
   const svg = useRef<SVGSVGElement>(null);
+  // The picked module's cell, else the inspected one: a modulator there
+  // outlines its reach, with no number on the board (issue #32).
+  const shown = pick?.from === "cell" ? pick.cell : inspected;
+  const modulator = shown ? rates.modulators.find((m) => sameCell(m.cell, shown)) : undefined;
+  const reach = new Set(modulator?.deliveries.map((d) => cellKey(d.cell)));
   const onKeyDown = (event: KeyboardEvent) => {
     const direction = ARROWS[event.key];
     const from = event.target instanceof Element ? event.target.closest("[data-cell]")?.getAttribute("data-cell") : null;
@@ -211,6 +229,7 @@ export function Board({ board, rates, flowing, placing, inspected, onCell, onDro
             placement={placement}
             picked={pick?.from === "cell" && sameCell(pick.cell, cell)}
             inspected={inspected !== null && sameCell(inspected, cell)}
+            reached={reach.has(cellKey(cell))}
             target={targets.get(cellKey(cell))}
             roving={roving === cellKey(cell)}
             onActivate={() => onCell(cell)}

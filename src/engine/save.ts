@@ -321,6 +321,7 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
   const intentions = records.intentions as GameState["records"]["intentions"];
   normalizeIntentions(intentions);
   const board = readBoard(game.board);
+  const classCredit = readClassCredit(records.classCredit);
   const state: GameState = {
     records: {
       habits: (records.habits as Habit[]).map(readHabit),
@@ -329,7 +330,7 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
       sessionRecords: (records.sessionRecords as SessionRecord[]).map(readRecord),
       notes: records.notes as GameState["records"]["notes"],
       intentions,
-      classCredit: readClassCredit(records.classCredit),
+      classCredit,
       sessionIndex: finiteOr(records.sessionIndex, fresh.records.sessionIndex),
       sessionsCompleted: finiteOr(records.sessionsCompleted, fresh.records.sessionsCompleted),
       nextId: finiteOr(records.nextId, fresh.records.nextId),
@@ -347,7 +348,7 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
       allowance: readAllowance(game.allowance, fresh.game.allowance),
       arrived: readArrived(game.arrived, fresh.game.arrived),
       // Recomputed once from the layout; a saved rate is never read.
-      rates: computeBoardRates(board),
+      rates: computeBoardRates(board, classCredit.producer),
     },
   };
   const recovered = recovery && lost.length > 0 ? { fromVersion: version, lost } : undefined;
@@ -466,7 +467,7 @@ function readV15(raw: Record<string, unknown>, recovery: boolean): LoadResult {
     game: {
       ...fresh.game,
       // The migration starts from the opening board, and its rates.
-      rates: computeBoardRates(fresh.game.board),
+      rates: computeBoardRates(fresh.game.board, fresh.records.classCredit.producer),
       legacyLine: legacyLineOf(raw.modules),
       mode: flowing ? (raw.mode as GameState["game"]["mode"]) : "upgrade",
       session: flowing ? readSession(raw.session as Partial<SessionState>) : null,
