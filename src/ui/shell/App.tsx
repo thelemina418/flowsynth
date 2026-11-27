@@ -1,3 +1,4 @@
+import { disclosureOf, goalOf } from "../../engine/goal";
 import { grantsOf } from "../../engine/levels";
 import { placedCount } from "../../engine/placement";
 import type { Shell } from "./shell";
@@ -10,13 +11,16 @@ import { Stage } from "../board/Stage";
 
 // The shell's one surface (issue #21): the question owed on first load,
 // and once nothing is owed, the board and its tray (issues #24, #25),
-// `Begin flow` and its panel, and the flow screen (issue #39).
+// `Begin flow` and its panel, and the flow screen (issue #39). Upgrade
+// mode carries the Goal line; the chips and doors wait for the first
+// completed session (issue #42).
 export function App({ shell }: { shell: Shell }) {
   const screen = shell.screen.value;
   const notice = shell.notice.value;
   const state = shell.state.value;
   const game = state.game;
   const grants = grantsOf(state);
+  const shown = disclosureOf(state);
   return (
     <div class="shell">
       <h1 class="sr-only">FlowSynth</h1>
@@ -51,13 +55,17 @@ export function App({ shell }: { shell: Shell }) {
             oscillator: Math.max(0, grants.allowance.oscillator - placedCount(game.board, "oscillator")),
             modulator: Math.max(0, grants.allowance.modulator - placedCount(game.board, "modulator")),
           }}
-          chips={state.records.sessionsCompleted > 0}
+          chips={shown.chips}
+          goal={goalOf(state)}
           placing={shell.placing}
           inspected={shell.inspected}
         />
       )}
       {screen.kind === "ready" && (
         <div class="shell-transport">
+          {/* The Almanac and Encyclopedia doors (issues #43, #44) go here,
+              from the first completed session on (issue #42). */}
+          {shown.doors && <nav class="shell-doors" data-doors="" aria-label="Doors" />}
           <button type="button" class="main-switch" onClick={() => shell.openBegin()}>
             Begin flow
           </button>

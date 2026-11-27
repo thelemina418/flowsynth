@@ -273,3 +273,11 @@
 .cell:focus { outline: none; }
 .cell:focus-visible .cell-face { stroke: var(--ink); stroke-width: 2.4; }
 .cell[data-inspected] .cell-face { stroke: var(--ink); stroke-width: 1.8; }
+
+/* The Goal line (issue #42): one quiet readout under ν, upgrade mode only. */
+.goal-line {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.2;
+  color: var(--ink);
+}

@@ -18,8 +18,11 @@ export interface AuthoredWall {
   regen: number | null;
 }
 
+// Shale's cell, the first wall the Goal names (issue #42).
+export const SHALE_CELL: Cell = { q: -1, r: 1 };
+
 const AUTHORED: Record<string, AuthoredWall> = {
-  [cellKey({ q: -1, r: 1 })]: { name: "Shale", opens: null, regen: 0.1 },
+  [cellKey(SHALE_CELL)]: { name: "Shale", opens: null, regen: 0.1 },
   [cellKey({ q: 2, r: -1 })]: { name: "Flint", opens: "roadie", regen: 10 },
 };
 

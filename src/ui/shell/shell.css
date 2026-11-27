@@ -212,3 +212,11 @@
   .flow-clock { min-width: 0; }
   .session-clock { font-size: 28px; min-width: 0; }
 }
+
+/* The Almanac and Encyclopedia doors (issues #43, #44) sit at the start of
+   the transport row, from the first completed session on (issue #42). */
+.shell-doors {
+  display: flex;
+  gap: 8px;
+  margin-right: auto;
+}

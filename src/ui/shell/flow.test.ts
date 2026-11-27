@@ -252,6 +252,20 @@ describe("the flow screen", () => {
     expect(shell.screen.value.kind).toBe("ready");
   });
 
+  it("shows the Goal in upgrade mode and not in flow, and the chips and doors' place only after a completed session", () => {
+    const shell = mount(saved(laidOut()));
+    expect(text("[data-goal]")).toBe("Conquer Shale");
+    expect(host.querySelector("[data-chip]")).toBeNull();
+    expect(host.querySelector("[data-doors]")).toBeNull();
+    beginOn(shell);
+    expect(host.querySelector("[data-goal]")).toBeNull();
+    tick(shell, 60);
+    click("End");
+    expect(text("[data-goal]")).toBe("Conquer Shale");
+    expect(host.querySelector("[data-chip]")).not.toBeNull();
+    expect(host.querySelector("[data-doors]")).not.toBeNull();
+  });
+
   it("a rebooted Shell lands back on the flow screen with time reconciled from the wall clock", () => {
     const storage = saved(laidOut());
     const shell = mount(storage);
