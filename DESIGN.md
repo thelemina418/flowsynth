@@ -9,7 +9,7 @@ colors:
   line: "#34383b"
   ink: "#e9eae8"
   muted: "#a4aaa9"
-  hue-generator: "#238858"
+  hue-modulator: "#238858"
   hue-oscillator: "#6360d4"
   hue-spacer: "#8a93a8"
   hue-booster: "#1f95b5"
@@ -126,7 +126,7 @@ The palette is a functional instrument table, not a decorative ramp: every color
 ### Primary
 
 - **Nous Indigo** (`#cbcaff`): the game's main resource and the interactive accent — pale luminous register of the oscillator's hue. Buttons, selection, meter fills, the accent family mixed via `color-mix`.
-- **Charge Green** (`#9affa8`): the luminous resource register of the generator hue; patch leads, charge fills, empowerment. Glow and animation belong here first.
+- **Charge Green** (`#9affa8`): the luminous resource register of the modulator hue (the retired generator green, re-mapped by the design reset); patch leads, charge fills, empowerment. Glow and animation belong here first.
 
 ### Secondary
 
@@ -135,7 +135,7 @@ The palette is a functional instrument table, not a decorative ramp: every color
 
 ### Tertiary
 
-- **Category hues** — generator `#238858`, oscillator `#6360d4`, spacer `#8a93a8`, booster `#1f95b5`, forge `#bc9239`, silent voice `#9d7bea`, charge conduit `#d9b84a`, ritual `#cc603d`. Mid-lightness, full-chroma LED registers; hue = category, per-type identity rides the glyph and nameplate. Every hue is paired with a glyph — colorblind safety is structural.
+- **Category hues** — modulator `#238858` (the retired generator green), oscillator `#6360d4`. The retired spacer `#8a93a8`, booster `#1f95b5`, forge `#bc9239`, silent voice `#9d7bea`, charge conduit `#d9b84a` and ritual `#cc603d` wait for the reset's Effect and Arm categories. Mid-lightness, full-chroma LED registers; hue = category, per-type identity rides the glyph and nameplate. Every hue is paired with a glyph — colorblind safety is structural.
 - **Rarity finishes** — common `#b4bdd8`, uncommon `#7fd0a8`, rare `#b39cf2`: a faint plate tint (4–14% mixed over the hex face), supplemented by the shared rarity shape marks below. Engraved rings belong to merge tier. Never glowing.
 - **Chord annotations** (eleven hues in `src/ui/theme.ts`) name the seams — annotation, never category; they never ride a module face.
 - **Habit palette** (six tokens, vermillion default): the habit editor's swatches, worn by the habit's goal tracks and the display well's goal meter wherever the habit — or the goal that inherits its color (issue #445) — renders.
@@ -151,7 +151,7 @@ The palette is a functional instrument table, not a decorative ramp: every color
 
 ### Named Rules
 
-**The Register Rule.** A reserved resource hue anchors its producing category: modules wear the saturated LED register; the resource wears the luminous glow register of the same hue — generator ⇄ charge green, oscillator ⇄ nous indigo.
+**The Register Rule.** A reserved resource hue anchors its producing category: modules wear the saturated LED register; the resource wears the luminous glow register of the same hue — modulator ⇄ charge green, oscillator ⇄ nous indigo.
 
 **The Monochrome Console Rule.** The console is graphite and ink; color is the board's language. The vermillion switch — and its session-strip expression — is the sole exception.
 

@@ -37,7 +37,7 @@ export type Action =
   | { type: "deleteIntention"; id: string }
   | { type: "retainIntention"; id: string }
   | { type: "rollIntentions"; now: number }
-  // The board, in upgrade mode only (issue #25).
+  // The board, in upgrade mode only (issues #25, #31).
   | PlacementAction;
 
 export interface ApplyResult {
@@ -93,11 +93,12 @@ function run(state: GameState, action: Action): Step {
     case "placeModule":
     case "moveModule":
     case "removeModule":
+    case "rotateModule":
       return relaid(state, relayout(state, action));
   }
 }
 
-// A layout change recomputes the board's rates once (issue #26); a
+// A layout or facing change recomputes the board's rates once (issue #26); a
 // refusal changed nothing, so it recomputes nothing.
 function relaid(state: GameState, step: Step): Step {
   if (step.ok) state.game.rates = computeBoardRates(state.game.board);

@@ -39,7 +39,7 @@ describe("a fresh start", () => {
   it("allows two oscillators of the types it has, Sine and Triangle", () => {
     const s = fresh();
     expect(s.game.allowance.oscillator).toBe(2);
-    expect(s.game.arrived).toEqual(["sine", "triangle"]);
+    expect(s.game.arrived.filter((m) => m !== "flywheel")).toEqual(["sine", "triangle"]);
     expect(s.game.board.placements).toEqual([]);
   });
 

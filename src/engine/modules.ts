@@ -2,7 +2,8 @@ import type { ModuleCategory, ModuleType, OscillatorType } from "./types";
 
 // The module catalogue (GLOSSARY: Module, Category): each type's category,
 // its nameplate, and for an oscillator its base rate and resonance pattern
-// (mechanics-sketch.md, Oscillators). Chunk 03 adds the modulators here.
+// (mechanics-sketch.md, Oscillators), and for a modulator whether it has a
+// facing (issue #31). Chunk 03's later tickets add its output and reach.
 // New oscillator types are added as data: the matcher (engine/resonance.ts)
 // reads the pattern, never the type.
 
@@ -32,6 +33,8 @@ interface ModuleSpec {
   // ν/s in flow before any factor.
   base: number;
   pattern: Pattern | null;
+  // A facing the player turns in upgrade mode (issue #31).
+  faces?: true;
 }
 
 const OSCILLATOR: PartnerRule = { kind: "category", category: "oscillator" };
@@ -54,6 +57,8 @@ const MODULES: Record<ModuleType, ModuleSpec> = {
   saw: { category: "oscillator", name: "Saw", base: 2, pattern: { paths: [[0], [0, 0]], partner: OSCILLATOR, strength: 2 } },
   // No pattern, and nothing in flow; its breather output is chunk 04's.
   release: { category: "oscillator", name: "Release", base: 0, pattern: null },
+  // Modulators make charge, not ν: no base and no pattern.
+  flywheel: { category: "modulator", name: "Flywheel", base: 0, pattern: null, faces: true },
 };
 
 export const MODULE_TYPES = Object.keys(MODULES) as readonly ModuleType[];
@@ -78,11 +83,15 @@ export function baseRate(module: ModuleType): number {
   return MODULES[module].base;
 }
 
+export function hasFacing(module: ModuleType): boolean {
+  return MODULES[module].faces === true;
+}
+
 export function patternOf(module: ModuleType): Pattern | null {
   return MODULES[module].pattern;
 }
 
-const CATEGORY_NAMES: Record<ModuleCategory, string> = { oscillator: "Oscillator" };
+const CATEGORY_NAMES: Record<ModuleCategory, string> = { oscillator: "Oscillator", modulator: "Modulator" };
 
 export function categoryName(category: ModuleCategory): string {
   return CATEGORY_NAMES[category];

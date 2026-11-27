@@ -11,7 +11,8 @@ import { Tray } from "./Tray";
 
 // The game surface once nothing is owed on first load: the ν readout, the
 // board, the tray beside it and the Hex detail. Escape or a tap away
-// cancels a pick and empties the Hex detail (PRODUCT.md).
+// cancels a pick and empties the Hex detail (PRODUCT.md). R and Shift+R
+// turn a modulator (issue #31).
 interface StageProps {
   nous: Num;
   board: BoardState;
@@ -30,6 +31,12 @@ export function Stage({ nous, board, rates, flowing, arrived, placing, inspected
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") dismiss();
+      // R turns the picked or inspected modulator clockwise, Shift+R
+      // counter-clockwise (issue #31). Outside upgrade mode it does nothing.
+      if ((event.key === "r" || event.key === "R") && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        const cell = placing.rotationCell(inspected.value);
+        if (cell) placing.rotate(cell, event.shiftKey ? "counterclockwise" : "clockwise");
+      }
     };
     const onClick = (event: MouseEvent) => {
       const target = event.target instanceof Element ? event.target : null;

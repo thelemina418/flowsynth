@@ -1,5 +1,5 @@
 import type { Num } from "./num";
-import type { Cell } from "./hex";
+import type { Cell, Facing } from "./hex";
 
 // The single serialisable GameState (spec chunk 01, issue #17). It has two
 // parts: the real-life records, which nothing in the game ever resets, and
@@ -177,21 +177,28 @@ export interface Records {
 // The macro stages (GLOSSARY: Arc). Each sets the board's reach.
 export type Arc = "sketch" | "demo" | "record" | "master" | "encore";
 
-// The module categories (GLOSSARY: Category). Only Oscillators exist in
-// chunk 02; Modulators arrive in chunk 03, Effects and Arms later.
-export type ModuleCategory = "oscillator";
+// The module categories (GLOSSARY: Category). Oscillators and Modulators
+// exist from chunk 03; Effects and Arms arrive later.
+export type ModuleCategory = "oscillator" | "modulator";
 
 // The oscillator types (mechanics-sketch.md). Square, Saw and Release are
 // declared now; chunk 04 makes them arrive.
 export type OscillatorType = "sine" | "triangle" | "square" | "saw" | "release";
 
-// Every module type. Chunk 03 widens it with the modulator types.
-export type ModuleType = OscillatorType;
+// The modulator types (mechanics-sketch.md, Modulators). The Flywheel
+// arrives at the start (spec chunk 03, issue #31).
+export type ModulatorType = "flywheel";
 
-// One module on one owned open cell (issue #25).
+// Every module type.
+export type ModuleType = OscillatorType | ModulatorType;
+
+// One module on one owned open cell (issue #25). A module whose type has a
+// facing (issue #31) carries it: an index into hex.ts's DIRECTIONS; a type
+// without one never does.
 export interface Placement {
   cell: Cell;
   module: ModuleType;
+  facing?: Facing;
 }
 
 // The board (spec chunk 02): the owned open cells, the current arc and the

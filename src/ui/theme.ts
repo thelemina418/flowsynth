@@ -38,9 +38,12 @@ const substrate = {
 // arrived with the roster (ADR-0048) — silent voice and charge conduit —
 // and RITUAL wears the console's switch vermillion: the one habit-keyed
 // board module carries the session color. The oscillator and booster hues
-// kept their values through the category rename (issue #219).
+// kept their values through the category rename (issue #219). The design
+// reset (spec chunk 03, issue #31) re-maps the retired generator green to
+// the Modulator: the modulator makes charge, so the Register Rule holds.
+// The other retired hues wait for the Effect and Arm chunks.
 const hues = {
-  "hue-generator": "#238858",
+  "hue-modulator": "#238858",
   "hue-oscillator": "#6360d4",
   "hue-spacer": "#8a93a8",
   "hue-booster": "#1f95b5",
@@ -51,7 +54,7 @@ const hues = {
 } as const;
 
 // Resource registers — the register rule: a resource wears the luminous glow
-// register of its producing category's hue (generator ⇄ charge green,
+// register of its producing category's hue (modulator ⇄ charge green,
 // synthesizer ⇄ nous indigo). Interactive roles pick from the same families.
 // Arete is its own register (issue #197): the prestige resource's violet —
 // the prototype's — worn by every Arete surface; it produces from no

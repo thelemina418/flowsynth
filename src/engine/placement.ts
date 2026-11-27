@@ -1,9 +1,10 @@
 import { cellKind } from "./board";
-import { cellKey, sameCell, type Cell } from "./hex";
-import { categoryOf, categoryName, moduleName } from "./modules";
+import { cellKey, sameCell, turnFacing, type Cell } from "./hex";
+import { categoryOf, categoryName, hasFacing, moduleName } from "./modules";
 import type { Board, GameState, ModuleCategory, ModuleType, Placement } from "./types";
 
-// Placing, moving and removing modules (spec chunk 02, issue #25). Callers
+// Placing, moving, removing and turning modules (spec chunk 02, issue #25;
+// rotation, chunk 03, issue #31). Callers
 // reach these through `apply` (engine/apply.ts), the one placement path the
 // tray, the board's drag and its click-to-pick all share. Every refusal
 // leaves the state untouched and says why in player-facing copy.
@@ -16,7 +17,11 @@ import type { Board, GameState, ModuleCategory, ModuleType, Placement } from "./
 export type PlacementAction =
   | { type: "placeModule"; module: ModuleType; cell: Cell }
   | { type: "moveModule"; from: Cell; to: Cell }
-  | { type: "removeModule"; cell: Cell };
+  | { type: "removeModule"; cell: Cell }
+  // Turns a placed module with a facing 60° (issue #31).
+  | { type: "rotateModule"; cell: Cell; turn: Turn };
+
+export type Turn = "clockwise" | "counterclockwise";
 
 export interface PlacementResult {
   ok: boolean;
@@ -83,6 +88,11 @@ export function placementRefusal(state: GameState, action: PlacementAction): str
     }
     case "removeModule":
       return moduleAt(board, action.cell) ? null : "No module sits on that cell.";
+    case "rotateModule": {
+      const placed = moduleAt(board, action.cell);
+      if (!placed) return "No module sits on that cell.";
+      return hasFacing(placed.module) ? null : `${moduleName(placed.module)} has no facing.`;
+    }
   }
 }
 
@@ -93,7 +103,8 @@ export function relayout(state: GameState, action: PlacementAction): PlacementRe
   const board = state.game.board;
   switch (action.type) {
     case "placeModule":
-      board.placements.push({ cell: { q: action.cell.q, r: action.cell.r }, module: action.module });
+      // A new placement with a facing faces NE (issue #31).
+      board.placements.push({ cell: { q: action.cell.q, r: action.cell.r }, module: action.module, ...(hasFacing(action.module) && { facing: 0 as const }) });
       break;
     case "moveModule": {
       // A move onto an occupied open cell swaps the two modules.
@@ -106,6 +117,11 @@ export function relayout(state: GameState, action: PlacementAction): PlacementRe
     case "removeModule": {
       const placed = moduleAt(board, action.cell)!;
       board.placements = board.placements.filter((placement) => placement !== placed);
+      break;
+    }
+    case "rotateModule": {
+      const placed = moduleAt(board, action.cell)!;
+      placed.facing = turnFacing(placed.facing ?? 0, action.turn === "clockwise" ? 1 : -1);
       break;
     }
   }
