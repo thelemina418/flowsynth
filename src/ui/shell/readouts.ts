@@ -11,7 +11,7 @@ import type { BreatherState, GameState, Habit, SessionState, SessionSummary } fr
 const BAR_CELLS = 9;
 
 // Hours to one decimal, truncated: 0.85 h reads 0.8h.
-function hours(seconds: number): string {
+export function hours(seconds: number): string {
   return `${(Math.floor(seconds / 360 + 1e-9) / 10).toFixed(1)}h`;
 }
 

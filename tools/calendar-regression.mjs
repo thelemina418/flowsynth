@@ -21,7 +21,7 @@ const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // The calendar-sensitive regressions: the engine's calendar-basis cases
 // (zone-invariant by construction) and the intentions suite, whose local-calendar
 // accounting every case exercises through local-day-constructed stamps.
-export const CALENDAR_TEST_FILES = ["src/engine/calendar.test.ts", "src/engine/intentions.test.ts"];
+export const CALENDAR_TEST_FILES = ["src/engine/calendar.test.ts", "src/engine/intentions.test.ts", "src/engine/almanac.test.ts"];
 
 // UTC — CI's basis — and a DST-observing zone, where a calendar day is 23 or
 // 25 hours at the transitions the regressions cross.

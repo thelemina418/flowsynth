@@ -122,6 +122,22 @@ export function chooseHabitClass(state: GameState, id: string, habitClass: Habit
   return { ok: true };
 }
 
+// Re-attuning (spec chunk 04, issue #43): an attuned habit's class
+// changes, between sessions only. Nothing else does: no credit moves, so
+// the levels already earned stay with the class that earned them, and
+// only later credited flow goes to the new class. A habit still awaiting
+// its class gets one through the class choice instead.
+export function reattuneHabit(state: GameState, id: string, habitClass: HabitClass): { ok: boolean; reason?: string } {
+  if (state.game.mode !== "upgrade") return { ok: false, reason: "Habits are managed between sessions." };
+  const habit = state.records.habits.find((h) => h.id === id && !h.archived);
+  if (!habit) return { ok: false, reason: "Habit not found." };
+  if (habit.habitClass === null) return { ok: false, reason: "Choose this habit's class first." };
+  if (!classOpen(state, habitClass)) return { ok: false, reason: `The ${CLASS_NAMES[habitClass]} class isn't open yet.` };
+  if (habit.habitClass === habitClass) return { ok: false, reason: `${habit.name} is already ${CLASS_NAMES[habitClass]}.` };
+  habit.habitClass = habitClass;
+  return { ok: true };
+}
+
 // The session lock (ADR-0001): habit selection is an upgrade-mode action —
 // the lock holds for the entire session, pauses included.
 export function selectHabit(state: GameState, id: string | null): { ok: boolean; reason?: string } {

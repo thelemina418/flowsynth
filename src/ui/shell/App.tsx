@@ -2,6 +2,7 @@ import { disclosureOf, goalOf } from "../../engine/goal";
 import { grantsOf } from "../../engine/levels";
 import { placedCount } from "../../engine/placement";
 import type { Shell } from "./shell";
+import { Almanac } from "./Almanac";
 import { BeginFlow } from "./BeginFlow";
 import { ClassChoice } from "./ClassChoice";
 import { FlowScreen } from "./FlowScreen";
@@ -70,9 +71,15 @@ export function App({ shell }: { shell: Shell }) {
       )}
       {screen.kind === "ready" && (
         <div class="shell-transport">
-          {/* The Almanac and Encyclopedia doors (issues #43, #44) go here,
-              from the first completed session on (issue #42). */}
-          {shown.doors && <nav class="shell-doors" data-doors="" aria-label="Doors" />}
+          {/* The Almanac and Encyclopedia doors (issues #43, #44), from the
+              first completed session on (issue #42). */}
+          {shown.doors && (
+            <nav class="shell-doors" data-doors="" aria-label="Doors">
+              <button type="button" class="quiet" data-door="almanac" onClick={() => shell.openAlmanac()}>
+                Almanac
+              </button>
+            </nav>
+          )}
           {game.breather.banked && (
             <button type="button" onClick={() => shell.takeBreather()}>
               {`Take breather · ${breatherMinutes(game.breather.banked.seconds)}`}
@@ -92,6 +99,7 @@ export function App({ shell }: { shell: Shell }) {
           onClose={() => shell.closeBegin()}
         />
       )}
+      {screen.kind === "almanac" && <Almanac shell={shell} error={screen.error} />}
       {screen.kind === "flow" && <FlowScreen shell={shell} error={screen.error} />}
       {screen.kind === "honesty" && <HonestyReport session={screen.session} error={screen.error} onAnswer={(outcome) => shell.answerHonesty(outcome)} />}
       {screen.kind === "summary" && <Summary summary={screen.summary} onDismiss={() => shell.dismissSummary()} />}

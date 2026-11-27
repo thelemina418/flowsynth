@@ -36,7 +36,7 @@ export function intentionRequiredSeconds(intention: Intention): number {
 // local Monday start. The occurrence keys and the cadence recalculation's
 // period start both read them, so the boundary can never disagree with
 // itself.
-function localDayStart(now: number): Date {
+export function localDayStart(now: number): Date {
   const d = new Date(now);
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }

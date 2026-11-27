@@ -2,6 +2,7 @@ import { computed, signal } from "@preact/signals";
 import { advance } from "../../engine/advance";
 import { apply, type Action, type ApplyResult } from "../../engine/apply";
 import type { Cell } from "../../engine/hex";
+import { disclosureOf } from "../../engine/goal";
 import { createInitialState } from "../../engine/state";
 import { poolOutstanding, type Presence } from "../../engine/trust";
 import type { BreatherState, GameState, Habit, HabitClass, HonestyOutcome, SessionState, SessionSummary } from "../../engine/types";
@@ -27,6 +28,7 @@ export type Screen =
   | { kind: "summary"; summary: SessionSummary }
   | { kind: "breather"; running: NonNullable<BreatherState["running"]> }
   | { kind: "breather-result"; result: NonNullable<BreatherState["result"]> }
+  | { kind: "almanac"; error: string | null }
   | { kind: "ready" };
 
 interface Offer {
@@ -55,6 +57,10 @@ export class Shell {
   private readonly beginOpen = signal(false);
   private readonly beginError = signal<string | null>(null);
   private readonly flowError = signal<string | null>(null);
+  // The Almanac (issue #43): open from upgrade mode once its door shows,
+  // with the last refusal as its one quiet line.
+  private readonly almanacOpen = signal(false);
+  private readonly almanacError = signal<string | null>(null);
   // Set by End while provisional time is owed (issue #40): the honesty
   // report shows only then, never mid-session. Not saved: a reload lands
   // on the flow screen, and End asks again.
@@ -85,6 +91,7 @@ export class Shell {
     if (mode === "upgrade" && summary && !summary.seen) return { kind: "summary", summary };
     const result = state.game.breather.result;
     if (mode === "upgrade" && result) return { kind: "breather-result", result };
+    if (this.almanacOpen.value) return { kind: "almanac", error: this.almanacError.value };
     if (this.beginOpen.value) return { kind: "begin", error: this.beginError.value };
     return { kind: "ready" };
   });
@@ -94,7 +101,7 @@ export class Shell {
   // slept through (trust.applyGap).
   constructor(
     storage: SaveStorage,
-    private readonly now: () => number = () => Date.now(),
+    readonly now: () => number = () => Date.now(),
     private readonly drift: () => number = () => 0,
   ) {
     this.save = new SharedSave(storage, now);
@@ -196,6 +203,30 @@ export class Shell {
   closeBegin(): void {
     this.beginOpen.value = false;
     this.beginError.value = null;
+  }
+
+  // The Almanac's door shows in upgrade mode from the first completed
+  // session on. Opening rolls the Intentions to today's occurrence, so
+  // every line reads the current day or week.
+  openAlmanac(): void {
+    const state = this.state.peek();
+    if (state.game.mode !== "upgrade" || !disclosureOf(state).doors) return;
+    this.act({ type: "rollIntentions", now: this.now() });
+    this.almanacError.value = null;
+    this.almanacOpen.value = true;
+  }
+
+  closeAlmanac(): void {
+    this.almanacOpen.value = false;
+    this.almanacError.value = null;
+  }
+
+  // An Almanac action, given the wall clock when it needs one. A refusal
+  // is the Almanac's line; a success clears it.
+  almanacAct(action: Action | ((now: number) => Action)): ApplyResult {
+    const result = this.act(typeof action === "function" ? action(this.now()) : action);
+    this.almanacError.value = result.ok ? null : (result.reason ?? null);
+    return result;
   }
 
   // `+ New habit` in the Begin flow panel. A refusal is the panel's line.
