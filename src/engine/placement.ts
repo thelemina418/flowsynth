@@ -1,5 +1,6 @@
 import { cellKind } from "./board";
 import { cellKey, sameCell, turnFacing, type Cell } from "./hex";
+import { grantsOf } from "./levels";
 import { categoryOf, categoryName, hasFacing, moduleName } from "./modules";
 import type { Board, Cable, GameState, ModuleCategory, ModuleType, Placement } from "./types";
 
@@ -62,9 +63,10 @@ function unbuildable(board: Board, cell: Cell): string | null {
 export function trayRefusal(state: GameState, module: ModuleType): string | null {
   const refused = locked(state);
   if (refused) return refused;
-  if (!state.game.arrived.includes(module)) return `${moduleName(module)} hasn't arrived yet.`;
+  const grants = grantsOf(state);
+  if (!grants.arrived.includes(module)) return `${moduleName(module)} hasn't arrived yet.`;
   const category = categoryOf(module);
-  if (placedCount(state.game.board, category) >= state.game.allowance[category]) {
+  if (placedCount(state.game.board, category) >= grants.allowance[category]) {
     return `${categoryName(category)} allowance is full.`;
   }
   return null;
@@ -78,7 +80,7 @@ export function placementRefusal(state: GameState, action: PlacementAction): str
   const board = state.game.board;
   switch (action.type) {
     case "placeModule": {
-      if (!state.game.arrived.includes(action.module)) return `${moduleName(action.module)} hasn't arrived yet.`;
+      if (!grantsOf(state).arrived.includes(action.module)) return `${moduleName(action.module)} hasn't arrived yet.`;
       const blocked = unbuildable(board, action.cell);
       if (blocked) return blocked;
       if (moduleAt(board, action.cell)) return "That cell already holds a module.";

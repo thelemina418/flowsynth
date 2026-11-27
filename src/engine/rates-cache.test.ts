@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { applyIn, advanceIn, fresh, giveHabit, giveOscillators } from "./fixtures";
+import { grantsOf } from "./levels";
 import { computeBoardRates } from "./rates";
 import { deserialize, serialize } from "./save";
 import { cloneState } from "./state";
@@ -125,6 +126,19 @@ describe("recomputing the board's rates", () => {
     expect(applyIn(s, { type: "chooseClass", habitId: other, habitClass: "engineer" }).ok).toBe(true);
     expect(applyIn(s, { type: "chooseClass", habitId: idle, habitClass: "producer" }).ok).toBe(true);
     expect(applyIn(s, { type: "chooseClass", habitId: flowed, habitClass: "producer" }).ok).toBe(false);
+    expect(counted).not.toHaveBeenCalled();
+  });
+
+  it("a class level crossed mid-flow raises the derived allowance in the same advance and recomputes nothing (issue #38)", () => {
+    const s = fresh();
+    giveHabit(s, "Piano", "engineer");
+    applyIn(s, { type: "placeModule", module: "sine", cell: { q: 0, r: 0 } });
+    applyIn(s, { type: "startSession", target: null, now: 0 });
+    advanceIn(s, 1_799, "flow");
+    expect(grantsOf(s).allowance.oscillator).toBe(2);
+    counted.mockClear();
+    advanceIn(s, 1, "flow");
+    expect(grantsOf(s).allowance.oscillator).toBe(3);
     expect(counted).not.toHaveBeenCalled();
   });
 

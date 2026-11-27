@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { applyIn, fresh } from "./fixtures";
+import { applyIn, fresh, giveProducer } from "./fixtures";
+import { grantsOf } from "./levels";
 import type { Cell } from "./hex";
 import { deserialize, serialize } from "./save";
 import type { GameState } from "./types";
@@ -23,14 +24,14 @@ function must(s: GameState, action: Parameters<typeof applyIn>[1]): void {
 }
 
 // Flywheels on W, NE and FAR, a Sine on the centre's SE neighbour, every
-// Sketch cell owned, two cables: W → O and NE → AIM.
+// Sketch cell owned, Producer credit for 3 modulators and 2 cables (Lv 4),
+// two cables: W → O and NE → AIM.
 function patched(): GameState {
   const s = fresh();
   for (const cell of [O, W, NE, FAR, AIM, { q: -1, r: 1 }, { q: -1, r: 2 }]) {
     if (!s.game.board.open.some((c) => c.q === cell.q && c.r === cell.r)) s.game.board.open.push({ ...cell });
   }
-  s.game.allowance.modulator = 3;
-  s.game.cableAllowance = 2;
+  giveProducer(s, { modulators: 3, cables: 2 });
   for (const cell of [W, NE, FAR]) must(s, { type: "placeModule", module: "flywheel", cell });
   must(s, { type: "placeModule", module: "sine", cell: { q: 1, r: 0 } });
   must(s, { type: "patchCable", cable: "patch", source: W, target: O });
@@ -55,8 +56,8 @@ describe("cables in a v16 save", () => {
     expect(loaded.error).toBeUndefined();
     expect(loaded.state).toEqual(s);
     expect(loaded.state!.game.board.cables).toEqual([cable(W, O), cable(NE, AIM)]);
-    expect(loaded.state!.game.cableAllowance).toBe(2);
-    expect(loaded.state!.game.arrivedCables).toEqual(["patch"]);
+    expect(grantsOf(loaded.state!).cableAllowance).toBe(2);
+    expect(grantsOf(loaded.state!).arrivedCables).toEqual(["patch"]);
   });
 
   it("unplug each saved cable the board can't hold, reading in saved order", () => {
@@ -81,33 +82,38 @@ describe("cables in a v16 save", () => {
     expect(loaded.state).toEqual(patched());
   });
 
-  it("a chunk-02 save loads with the Patch arrived and unused, and one cable allowance", () => {
+  it("ignores a saved cable allowance or arrived list: both derive from class credit (issue #38)", () => {
+    for (const mutate of [
+      (game: Record<string, unknown>) => {
+        delete game.cableAllowance;
+        delete game.arrivedCables;
+      },
+      (game: Record<string, unknown>) => {
+        game.cableAllowance = 1;
+        game.arrivedCables = ["kazoo"];
+      },
+    ]) {
+      const loaded = deserialize(saved(patched(), mutate));
+      expect(loaded.error).toBeUndefined();
+      expect(loaded.state).toEqual(patched());
+      expect(grantsOf(loaded.state!).cableAllowance).toBe(2);
+    }
+  });
+
+  it("a chunk-02 save with no cables loads with the Patch arrived and unused", () => {
     const loaded = deserialize(saved(patched(), (game) => {
       delete game.board.cables;
-      delete game.cableAllowance;
-      delete game.arrivedCables;
     }));
     expect(loaded.error).toBeUndefined();
     expect(loaded.state!.game.board.cables).toEqual([]);
-    expect(loaded.state!.game.cableAllowance).toBe(1);
-    expect(loaded.state!.game.arrivedCables).toEqual(["patch"]);
-  });
-
-  it("reads an unreadable allowance or arrived list as the opening's", () => {
-    const loaded = deserialize(saved(patched(), (game) => {
-      game.cableAllowance = -1;
-      game.arrivedCables = ["kazoo"];
-    }));
-    expect(loaded.state!.game.cableAllowance).toBe(1);
-    expect(loaded.state!.game.arrivedCables).toEqual(["patch"]);
-    expect(loaded.state!.game.board.cables).toEqual([cable(W, O)]);
+    expect(grantsOf(loaded.state!).arrivedCables).toEqual(["patch"]);
   });
 
   it("the v15 fixture loads with the Patch unused", () => {
     const loaded = deserialize(V15);
     expect(loaded.error).toBeUndefined();
     expect(loaded.state!.game.board.cables).toEqual([]);
-    expect(loaded.state!.game.cableAllowance).toBe(1);
-    expect(loaded.state!.game.arrivedCables).toEqual(["patch"]);
+    expect(grantsOf(loaded.state!).cableAllowance).toBe(1);
+    expect(grantsOf(loaded.state!).arrivedCables).toEqual(["patch"]);
   });
 });

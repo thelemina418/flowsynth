@@ -2,7 +2,8 @@ import { cellKind } from "./board";
 import { crosses, distance, sameCell, type Cell } from "./hex";
 import { categoryOf } from "./modules";
 import { cableFrom, locked, moduleAt } from "./placement";
-import type { Board, Cable, CableType, Game, GameState } from "./types";
+import { grantsOf } from "./levels";
+import type { Board, Cable, CableType, GameState } from "./types";
 
 // Cables (spec chunk 03, issue #33). Patching, re-aiming and unplugging
 // reach these through `apply` (engine/apply.ts). The rules live in
@@ -60,7 +61,13 @@ function crossingRefusal(cable: Cable, others: Cable[]): string | null {
 // Why a new cable can't join the board, whatever the mode: the rules a
 // patch runs once the layout is unlocked, and the ones a saved cable is
 // read by (engine/save.ts).
-export function newCableRefusal(game: Pick<Game, "board" | "cableAllowance" | "arrivedCables">, cable: Cable): string | null {
+export interface CableRoom {
+  board: Board;
+  cableAllowance: number;
+  arrivedCables: CableType[];
+}
+
+export function newCableRefusal(game: CableRoom, cable: Cable): string | null {
   const board = game.board;
   if (!game.arrivedCables.includes(cable.type)) return `${cableName(cable.type)} hasn't arrived yet.`;
   const jack = jackRefusal(board, cable.source);
@@ -71,6 +78,12 @@ export function newCableRefusal(game: Pick<Game, "board" | "cableAllowance" | "a
   return crossingRefusal(cable, board.cables);
 }
 
+// The board with its derived cable allowance and cable types (issue #38).
+export function cableRoom(state: GameState): CableRoom {
+  const { cableAllowance, arrivedCables } = grantsOf(state);
+  return { board: state.game.board, cableAllowance, arrivedCables };
+}
+
 // Why `apply` would refuse this cable action, or null when it would take
 // it. Reads the state; never changes it.
 export function cableRefusal(state: GameState, action: CableAction): string | null {
@@ -79,7 +92,7 @@ export function cableRefusal(state: GameState, action: CableAction): string | nu
   const board = state.game.board;
   switch (action.type) {
     case "patchCable":
-      return newCableRefusal(state.game, { type: action.cable, source: action.source, target: action.target });
+      return newCableRefusal(cableRoom(state), { type: action.cable, source: action.source, target: action.target });
     case "repatchCable": {
       const placed = cableFrom(board, action.source);
       if (!placed) return "No cable runs from that cell.";

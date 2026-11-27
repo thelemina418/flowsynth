@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { advanceIn, applyIn, fresh } from "./fixtures";
+import { grantsOf } from "./levels";
 import { deserialize, serialize } from "./save";
 
 // The one-time v15 → v16 migration (issue #19). The fixture is a v15 save
@@ -74,11 +75,15 @@ describe("the v15 → v16 migration (issue #19)", () => {
     expect(board.open.map((c) => `${c.q},${c.r}`).sort()).toEqual(["0,0", "0,1", "1,-1", "1,0"]);
   });
 
-  it("arrives with the Flywheel unplaced and one Modulator allowance (issue #31)", () => {
-    const { game } = migrated();
-    expect(game.arrived).toContain("flywheel");
-    expect(game.allowance.modulator).toBe(1);
-    expect(game.board.placements).toEqual([]);
+  it("arrives with the Flywheel unplaced and one Modulator allowance (issue #31), derived from its class credit (issue #38)", () => {
+    const state = migrated();
+    expect(grantsOf(state)).toEqual({
+      allowance: { oscillator: 2, modulator: 1 },
+      cableAllowance: 1,
+      arrived: ["sine", "triangle", "flywheel"],
+      arrivedCables: ["patch"],
+    });
+    expect(state.game.board.placements).toEqual([]);
   });
 
   it("the migrated state saves as v16 and reloads exactly", () => {

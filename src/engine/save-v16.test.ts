@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { D, pow } from "./num";
 import { applyIn, advanceIn, fresh, giveHabit, giveOscillators } from "./fixtures";
+import { grantsOf } from "./levels";
 import { SAVE_VERSION } from "./constants";
 import { deserialize, recoverLostSave, serialize, SaveRefusedError } from "./save";
 
@@ -98,8 +99,9 @@ describe("the board in a v16 save", () => {
   });
 });
 
-// Placements, allowance and arrived types (issue #25) are additive v16
-// fields too.
+// Placements (issue #25) are additive v16 fields too. The allowance and
+// arrived types derive from class credit (issue #38): never written, and
+// ignored on read.
 describe("placements in a v16 save", () => {
   function laidOut() {
     const s = fresh();
@@ -116,7 +118,7 @@ describe("placements in a v16 save", () => {
     return JSON.stringify(file);
   }
 
-  it("round-trips the layout, the allowance and the arrived types exactly", () => {
+  it("round-trips the layout exactly, with the allowance and arrived types derived from class credit", () => {
     const s = laidOut();
     const loaded = deserialize(serialize(s, 1_000));
     expect(loaded.error).toBeUndefined();
@@ -126,20 +128,22 @@ describe("placements in a v16 save", () => {
       { cell: { q: 0, r: 0 }, module: "sine" },
       { cell: { q: 1, r: -1 }, module: "square" },
     ]);
-    expect(loaded.state!.game.allowance).toEqual({ oscillator: 3, modulator: 1 });
-    expect(loaded.state!.game.arrived).toEqual(["sine", "triangle", "flywheel", "square"]);
+    // Engineer Lv 2 (1.5 h): 3 oscillators and the Square.
+    expect(grantsOf(loaded.state!).allowance).toEqual({ oscillator: 3, modulator: 1 });
+    expect(grantsOf(loaded.state!).arrived).toEqual(["sine", "triangle", "flywheel", "square"]);
   });
 
-  it("a v16 save written before placements loads an empty board and the opening allowance", () => {
+  it("writes none of the old allowance or arrived fields", () => {
+    const game = JSON.parse(serialize(laidOut(), 1_000)).state.game;
+    for (const field of ["allowance", "arrived", "cableAllowance", "arrivedCables"]) expect(game).not.toHaveProperty(field);
+  });
+
+  it("a v16 save written before placements loads an empty board", () => {
     const loaded = deserialize(saved((game) => {
       delete (game.board as Record<string, unknown>).placements;
-      delete game.allowance;
-      delete game.arrived;
     }));
     expect(loaded.error).toBeUndefined();
     expect(loaded.state!.game.board.placements).toEqual([]);
-    expect(loaded.state!.game.allowance).toEqual({ oscillator: 2, modulator: 1 });
-    expect(loaded.state!.game.arrived).toEqual(["sine", "triangle", "flywheel"]);
   });
 
   it("returns a placement with an unknown type, or off an owned open cell, to unplaced", () => {
@@ -157,13 +161,29 @@ describe("placements in a v16 save", () => {
     expect(loaded.state).toEqual(laidOut());
   });
 
-  it("reads unreadable allowance or arrived types as the opening's, and never loses an opening type", () => {
-    const loaded = deserialize(saved((game) => {
-      game.allowance = { oscillator: -1, modulator: 1.5 };
-      game.arrived = ["sine", "kazoo", "sine"];
-    }));
-    expect(loaded.state!.game.allowance).toEqual({ oscillator: 2, modulator: 1 });
-    expect(loaded.state!.game.arrived).toEqual(["sine", "triangle", "flywheel"]);
+  it("a chunk-03 save's allowance and arrived fields are ignored: allowance derives from its class credit", () => {
+    for (const mutate of [
+      (game: Record<string, unknown>) => {
+        game.allowance = { oscillator: 9, modulator: 9 };
+        game.arrived = ["sine", "triangle", "flywheel", "saw", "release"];
+        game.cableAllowance = 9;
+        game.arrivedCables = ["patch"];
+      },
+      (game: Record<string, unknown>) => {
+        game.allowance = { oscillator: -1, modulator: 1.5 };
+        game.arrived = ["sine", "kazoo", "sine"];
+      },
+    ]) {
+      const loaded = deserialize(saved(mutate));
+      expect(loaded.error).toBeUndefined();
+      expect(loaded.state).toEqual(laidOut());
+      expect(grantsOf(loaded.state!)).toEqual({
+        allowance: { oscillator: 3, modulator: 1 },
+        cableAllowance: 1,
+        arrived: ["sine", "triangle", "flywheel", "square"],
+        arrivedCables: ["patch"],
+      });
+    }
   });
 });
 
@@ -262,7 +282,7 @@ describe("facings in a v16 save", () => {
     }));
     expect(loaded.error).toBeUndefined();
     expect(loaded.state!.game.board.placements).toEqual([{ cell: { q: 1, r: 0 }, module: "sine" }]);
-    expect(loaded.state!.game.allowance).toEqual({ oscillator: 2, modulator: 1 });
-    expect(loaded.state!.game.arrived).toEqual(["sine", "triangle", "flywheel"]);
+    expect(grantsOf(loaded.state!).allowance.modulator).toBe(1);
+    expect(grantsOf(loaded.state!).arrived).toContain("flywheel");
   });
 });

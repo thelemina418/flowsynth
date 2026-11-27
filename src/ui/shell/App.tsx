@@ -1,3 +1,5 @@
+import { grantsOf } from "../../engine/levels";
+import { placedCount } from "../../engine/placement";
 import type { Shell } from "./shell";
 import { ClassChoice } from "./ClassChoice";
 import { RecoveryChoice } from "./RecoveryChoice";
@@ -9,7 +11,9 @@ import { Stage } from "../board/Stage";
 export function App({ shell }: { shell: Shell }) {
   const screen = shell.screen.value;
   const notice = shell.notice.value;
-  const game = shell.state.value.game;
+  const state = shell.state.value;
+  const game = state.game;
+  const grants = grantsOf(state);
   return (
     <div class="shell">
       <h1 class="sr-only">FlowSynth</h1>
@@ -38,8 +42,13 @@ export function App({ shell }: { shell: Shell }) {
           board={game.board}
           rates={game.rates}
           flowing={game.mode === "flow"}
-          arrived={game.arrived}
-          arrivedCables={game.arrivedCables}
+          arrived={grants.arrived}
+          arrivedCables={grants.arrivedCables}
+          unplaced={{
+            oscillator: Math.max(0, grants.allowance.oscillator - placedCount(game.board, "oscillator")),
+            modulator: Math.max(0, grants.allowance.modulator - placedCount(game.board, "modulator")),
+          }}
+          chips={state.records.sessionsCompleted > 0}
           placing={shell.placing}
           inspected={shell.inspected}
         />
