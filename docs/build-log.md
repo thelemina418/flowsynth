@@ -102,6 +102,13 @@ Issues #24–#28 (parent #23), on `integration/spec-02-board`.
 - **Placeholder walls carry no initial (#24).** Only Shale and Flint are named in this chunk, so only they carry an initial (and Flint the Roadie mark). Every other wall inside Sketch's radius is nameless unlit stone until chunk 05 authors the map.
 - **The pace runner's greedy placement (#28).** In upgrade mode before the first session, and again after each session, the scripted player fills its remaining allowance one oscillator at a time. Each candidate (every arrived type on every owned cell) is tried through `apply`, which is pure, and the one that most raises `rates.total` is applied. Ties keep the first candidate in arrived-type, then owned-cell order, so on the opening's allowance of 2, where nothing can resonate, it places two Sines at (0,0) and (1,0). It never moves a placed oscillator. With allowance 3 the third oscillator closes a resonance (`pace.test.ts`). `runPace` takes an optional `start` state so tests can grant what chunk 04 will. ν/s prints as the Hex detail shows it (`fmtRate` in `num.ts`: two decimals with at least one, truncated like every shown figure).
 
+### Review fixes
+
+- **A Producer class choice recomputes the rates.** `chooseClass` credited banked live seconds to Producer without recomputing, so the Flywheel's output went stale until the next layout change. `apply` now recomputes once when the choice changes Producer credit.
+- **The plug leaves the target's centre to the cell.** The plug's 52-unit (about 46px) hit circle sits 24 units from the target's centre and covered it, so a centre click on a patched target picked the cable. Any 44px circle near the target's edge reaches one of the two centres beside it, so the circle stays and is clipped (`clip-path`, evenodd) to leave a 24-unit disc (about 21px) on the target's centre. Browsers hit-test the clipped shape, so a click there falls through to the cell and inspects or picks it, while the rest of the circle, the plug itself included, stays the plug's.
+- The cable-crossing test moved into `hex.ts` with the geometry. `cableFrom` and the layout lock live once in `placement.ts`; `takesCharge` (`modules.ts`) is the one rule for which deliveries charge. `num.ts` gained `ln`, so no Decimal method is called outside it. The saved-cable reader returns the cables it keeps without changing the board it reads.
+- The Hex detail's patched-target line handles each target kind exhaustively: a wall reads by name, and a dark target, which the rules refuse, is no longer read as a wall.
+
 ### Pace runner
 
 At the end of the chunk, `npm run pace` (250 credited hours):
@@ -127,3 +134,64 @@ DRY 0.0h–250.0h: 250.0h with no new milestone
 ```
 
 The board makes nous now: the player lays out the two Sines before the first session, so 2 ν/s over every credited second, 2 × 250 h × 3600 = 1.8e6 ν. The allowance never grows (chunk 04 grants it), so the opening layout can't resonate and the rate stays flat. Nothing spends nous and no wall can be conquered yet, so no further milestone is reachable and the whole run is still flagged dry.
+
+## Chunk 03: Charge and cables
+
+Issues #31–#35 (parent #30), on `integration/spec-03-charge`.
+
+### Built
+
+- The Modulator category (#31): `game.allowance` gains `modulator: 1` and the Flywheel arrives at the start. A modulator carries a facing (`hex.ts`: six facings named NE, SE, S, SW, NW, N), and `apply`'s `rotateModule` turns it a step either way in upgrade mode. The faceplate draws a pointer and a jack, and `r` / `Shift+R` turn the inspected or picked module.
+- Reach and the charge factor (#32). Output and reach are catalogue data (`modules.ts`): the Flywheel makes 1 charge/s plus 0.1 per lifetime Producer hour, up to 3, into a faced reach of two cells in a line. The Pulsewell's data is there too, but it hasn't arrived (chunk 04). `computeBoardRates` runs modulators first: every oscillator in reach receives the full output, deliveries sum, and the oscillator's charge leg is `1 + ln(1 + charge/s received)`. Rates are recomputed after a layout or facing change, on load, and when a flow session ends. The board outlines a shown modulator's reach, and the Hex detail adds its effect line.
+- Patch cables (#33): `board.cables`, `game.cableAllowance` (1) and `game.arrivedCables` (Patch). `apply` gains `patchCable`, `repatchCable` and `unplugCable` (`cables.ts`), refused onto dark cells, onto the source's own cell, beyond length 3, beyond the allowance, or across another cable. A patched modulator delivers its whole output to the target in place of its reach. The board draws cords from the jack to a plug that sags below the line, with beads in flow. The tray holds a cable entry.
+- Patching into walls (#34): a wall inside the arc is a Patch target. A patched modulator's output into a wall is that wall's damage/s at 1:1, beside its authored regen (Shale 0.1/s, Flint 10/s) and net, in `rates.walls`. Nothing applies it to HP yet (chunk 05). The Hex detail reads `Taking 1.0/s · regen 0.1/s` on a patched wall and `patched → Shale` on its modulator.
+- The pace runner tends modulators and cables (#35). After the oscillator allowance, `placeAllowanceGreedily` places the modulator allowance one modulator at a time, trying every owned cell in all six facings, then the cable allowance one Patch at a time from each placed modulator to each cell of the lifetime board. Each step keeps the candidate that most raises total ν/s. The board line adds charge/s and each patched wall's damage/s.
+
+### Improvised
+
+- **Turning (#31).** Clicking the picked modulator again turns it clockwise, `Shift+R` turns it counter-clockwise, and a new placement faces NE. The pointer is drawn in ink over the nameplate. A saved facing that is missing or invalid reads as NE, and a type without facing drops it.
+- **The Modulator hue (#31).** The Modulator category takes the old generator green (`hue-generator` became `hue-modulator`).
+- **Per-target output (#32).** Every module in reach, or at a Patch's target, receives the full output; it isn't split. The Pulsewell's patched output is left to chunk 04.
+- **Reach is a fixed shape (#32).** Walls don't block it, and reach charge that lands on a wall is wasted. Only a Patch damages a wall (#34).
+- **The Flywheel's output through a session (#32).** Output is read from lifetime Producer credit when rates are recomputed, so it holds still through a session and updates when the session ends. A class choice that credits a habit's banked live seconds to Producer recomputes the rates once, so the readout never disagrees with the board (story 69); a choice that adds no Producer credit, or is refused, recomputes nothing.
+- **Patch targets (#33).** Any open cell is a target, empty ones included, so a cable can be laid before its target is filled.
+- **Unplugging (#33).** Moving, swapping or removing a patched modulator unplugs its cable. A target cell emptying leaves the cable where it is.
+- **The patch gesture (#33).** Three clicks: the tray's cable entry, the modulator's jack, then the target. The plug is the placed cable's pick handle; picked, it re-aims on the next target or unplugs on the tray.
+- **Crossing (#33).** Two cables cross when their straight segments between cell centres meet anywhere but a shared endpoint. Collinear overlap and running through the other's endpoint count. The test runs exactly on the integer axial cells.
+- **Invalid saved cables (#33).** A saved cable is read through the same patch rules, in saved order, and one that fails them is unplugged instead of failing the load. A chunk-02 save gains the opening's cable allowance and Patch.
+- **Wall damage as a rate only (#34).** `rates.walls` lists the walls in the order a Patch first targets them. `regen` is null for a placeholder wall, so its readout leaves the regen leg out. Flint's regen reads `regen 10.0/s` through `fmtRate`, like every rate. A patched Flint keeps `opens Roadie` on its name line, and the `Taking …` line becomes its one effect line.
+- **The Hex detail copy (#32–#34).** A modulator reads `Flywheel · Modulator · facing NE`, then `1.0 charge/s · reach → Triangle, Sine` (nearest first, oscillators only), `1.0 charge/s · no module in reach`, `patched → Sine`, `patched → Open cell` or `patched → Shale` (`Wall` for a placeholder). An oscillator's legs line adds its charge leg once it receives charge.
+- **The pace runner's modulator and cable pass (#35).** A modulator candidate is a placement followed by up to five clockwise turns, and a cable candidate a `patchCable` to any of the 91 lifetime cells. Each candidate runs through `apply`, which is pure, and a refused one is dropped. A modulator is placed even when it raises nothing, as an oscillator is. A cable is placed only when it raises total ν/s, so wall targets are never chosen (they lower ν/s). Ties keep the first candidate in arrived-type, owned-cell, facing, then target order. Nothing placed is moved, turned or unplugged afterwards. The report's placements carry facing, and it gains `cables`, `charge` and `walls`. The board line reads `<n> oscillators, <n> modulator(s), <ν/s>, <charge/s>[, <Wall> <damage/s>…] — <layout>[, Patch (a) → (b)]`. `pace.test.ts` grants a pre-placed Flywheel that faces off the board, to show a Patch is taken when it raises ν/s, and a pre-patched Shale for the damage figure.
+
+### Review fixes
+
+- **A Producer class choice recomputes the rates.** `chooseClass` credited banked live seconds to Producer without recomputing, so the Flywheel's output went stale until the next layout change. `apply` now recomputes once when the choice changes Producer credit.
+- **The plug leaves the target's centre to the cell.** The plug's 52-unit (about 46px) hit circle sits 24 units from the target's centre and covered it, so a centre click on a patched target picked the cable. Any 44px circle near the target's edge reaches one of the two centres beside it, so the circle stays and is clipped (`clip-path`, evenodd) to leave a 24-unit disc (about 21px) on the target's centre. Browsers hit-test the clipped shape, so a click there falls through to the cell and inspects or picks it, while the rest of the circle, the plug itself included, stays the plug's.
+- The cable-crossing test moved into `hex.ts` with the geometry. `cableFrom` and the layout lock live once in `placement.ts`; `takesCharge` (`modules.ts`) is the one rule for which deliveries charge. `num.ts` gained `ln`, so no Decimal method is called outside it. The saved-cable reader returns the cables it keeps without changing the board it reads.
+- The Hex detail's patched-target line handles each target kind exhaustively: a wall reads by name, and a dark target, which the rules refuse, is no longer read as a wall.
+
+### Pace runner
+
+At the end of the chunk, `npm run pace` (250 credited hours):
+
+```
+Pace run: 300 sessions, 250.0h credited
+Board: 2 oscillators, 1 modulator, 3.38 ν/s, 3.0 charge/s — Sine (0,0), Sine (1,0), Flywheel (0,1) facing NE
+Era ν: 3e6
+
+Milestone                         Reached       Target
+--------------------------------  ------------  -------------------------------------------
+Engineer opens                    0.0h          at the start (0h)
+Producer opens                    0.0h          at the start (0h)
+Roadie opens                      not reached   first contact with Flint (Sketch, 0–15h)
+Mixer opens                       not reached   conquering the marked Schist (Demo, 15–60h)
+First Shale conquered             not reached*  Sketch, 0–15h (ring 1)
+...
+Master finished (Encore opens)    not reached*  250h
+
+* the engine has no such fact yet
+
+DRY 0.0h–250.0h: 250.0h with no new milestone
+```
+
+The opening owns four cells. The two Sines take (0,0) and (1,0), and from either cell left the Flywheel's two-cell reach meets one Sine. The player keeps the first, (0,1) facing NE, which reaches (1,0) and then Flint. That Sine's charge factor starts at 1 + ln 2, so the board makes 2.69 ν/s before the first session. Sessions alternate Engineer and Producer, so the Flywheel reaches its 3 charge/s cap at 20 Producer hours, about 40 credited hours in, and the board holds 2 + ln 4 = 3.38 ν/s from there. The era's ν rises from 1.8e6 to 3e6. A Patch would deliver to that one Sine in place of the reach, which raises nothing, so the cable stays unused. Patching into Shale would cost ν/s and leads to no milestone until chunk 05 lets it fall, so no further milestone is reachable and the run is still flagged dry.

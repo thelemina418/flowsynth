@@ -3,6 +3,7 @@ import { dismissSummary, endSession, pauseSession, recordSummaryReflection, resu
 import { addPracticeLog, archiveHabit, chooseHabitClass, createHabit, renameHabit, selectHabit, setHabitColor } from "./habits";
 import { createIntention, deleteIntention, editIntention, retainIntentionChoice, rollIntentionOccurrences } from "./intentions";
 import { writeNote } from "./notes";
+import { recable, type CableAction } from "./cables";
 import { relayout, type PlacementAction } from "./placement";
 import { computeBoardRates } from "./rates";
 import { settleHonestyReport } from "./trust";
@@ -37,8 +38,9 @@ export type Action =
   | { type: "deleteIntention"; id: string }
   | { type: "retainIntention"; id: string }
   | { type: "rollIntentions"; now: number }
-  // The board, in upgrade mode only (issue #25).
-  | PlacementAction;
+  // The board, in upgrade mode only (issues #25, #31, #33).
+  | PlacementAction
+  | CableAction;
 
 export interface ApplyResult {
   ok: boolean;
@@ -64,12 +66,18 @@ function run(state: GameState, action: Action): Step {
     case "recolorHabit": return setHabitColor(state, action.id, action.color);
     case "archiveHabit": return archiveHabit(state, action.id);
     case "selectHabit": return selectHabit(state, action.id);
-    case "chooseClass": return chooseHabitClass(state, action.habitId, action.habitClass);
+    case "chooseClass": {
+      // Choosing Producer credits the habit's banked live seconds, which
+      // the Flywheel's output reads (issue #32): recompute when it does.
+      const before = state.records.classCredit.producer;
+      const step = chooseHabitClass(state, action.habitId, action.habitClass);
+      return state.records.classCredit.producer === before ? step : relaid(state, step);
+    }
     case "logPractice": return addPracticeLog(state, action.habitId, action.minutes, action.now);
     case "startSession": return startSession(state, action.target, action.now);
     case "pauseSession": return pauseSession(state);
     case "resumeSession": return resumeSession(state);
-    case "endSession": return endSession(state, action.now);
+    case "endSession": return relaid(state, endSession(state, action.now));
     case "signalTarget": return signalTarget(state);
     case "settleHonestyReport": return settleHonestyReport(state, action.outcome);
     case "reflect": {
@@ -93,14 +101,21 @@ function run(state: GameState, action: Action): Step {
     case "placeModule":
     case "moveModule":
     case "removeModule":
+    case "rotateModule":
       return relaid(state, relayout(state, action));
+    case "patchCable":
+    case "repatchCable":
+    case "unplugCable":
+      return relaid(state, recable(state, action));
   }
 }
 
-// A layout change recomputes the board's rates once (issue #26); a
-// refusal changed nothing, so it recomputes nothing.
+// A layout, facing or cable change recomputes the board's rates once (issue #26),
+// and so does a session's end or a class choice that credits Producer
+// time, so the Flywheel picks up that Producer credit (issue #32); a refusal changed nothing, so it recomputes
+// nothing.
 function relaid(state: GameState, step: Step): Step {
-  if (step.ok) state.game.rates = computeBoardRates(state.game.board);
+  if (step.ok) state.game.rates = computeBoardRates(state.game.board, state.records.classCredit.producer);
   return step;
 }
 

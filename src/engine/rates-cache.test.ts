@@ -62,6 +62,72 @@ describe("recomputing the board's rates", () => {
     expect(s.game.nous.toNumber()).toBeGreaterThan(0);
   });
 
+  it("recomputes once for a rotation and once for a session's end, and nothing for a refused rotation (issue #32)", () => {
+    const s = acceptanceLayout();
+    applyIn(s, { type: "removeModule", cell: { q: 0, r: 1 } });
+    applyIn(s, { type: "placeModule", module: "flywheel", cell: { q: 0, r: 1 } });
+    counted.mockClear();
+    applyIn(s, { type: "rotateModule", cell: { q: 0, r: 1 }, turn: "clockwise" });
+    expect(counted).toHaveBeenCalledTimes(1);
+    counted.mockClear();
+    applyIn(s, { type: "rotateModule", cell: { q: 0, r: 0 }, turn: "clockwise" });
+    giveHabit(s, "Synthesis", "producer");
+    applyIn(s, { type: "startSession", target: null, now: 0 });
+    applyIn(s, { type: "rotateModule", cell: { q: 0, r: 1 }, turn: "clockwise" });
+    for (let i = 0; i < 100; i++) advanceIn(s, 36, "flow");
+    expect(counted).not.toHaveBeenCalled();
+    applyIn(s, { type: "endSession", now: 1 });
+    expect(counted).toHaveBeenCalledTimes(1);
+    expect(s.game.rates.modulators[0]!.output.toNumber()).toBe(1.1);
+    counted.mockClear();
+    applyIn(s, { type: "endSession", now: 2 });
+    expect(counted).not.toHaveBeenCalled();
+  });
+
+  it("recomputes once each for a patch, a repatch and an unplug, and nothing for a refused one (issue #33)", () => {
+    const s = acceptanceLayout();
+    applyIn(s, { type: "removeModule", cell: { q: 0, r: 1 } });
+    applyIn(s, { type: "placeModule", module: "flywheel", cell: { q: 0, r: 1 } });
+    counted.mockClear();
+    expect(applyIn(s, { type: "patchCable", cable: "patch", source: { q: 0, r: 1 }, target: { q: 1, r: 0 } }).ok).toBe(true);
+    expect(counted).toHaveBeenCalledTimes(1);
+    expect(applyIn(s, { type: "repatchCable", source: { q: 0, r: 1 }, target: { q: 0, r: 0 } }).ok).toBe(true);
+    expect(counted).toHaveBeenCalledTimes(2);
+    expect(applyIn(s, { type: "unplugCable", source: { q: 0, r: 1 } }).ok).toBe(true);
+    expect(counted).toHaveBeenCalledTimes(3);
+    counted.mockClear();
+    applyIn(s, { type: "unplugCable", source: { q: 0, r: 1 } });
+    applyIn(s, { type: "patchCable", cable: "patch", source: { q: 0, r: 0 }, target: { q: 1, r: 0 } });
+    expect(counted).not.toHaveBeenCalled();
+  });
+
+  it("recomputes once when choosing a class credits Producer time, and nothing when the choice changes no Producer credit or is refused", () => {
+    const s = acceptanceLayout();
+    applyIn(s, { type: "removeModule", cell: { q: 0, r: 1 } });
+    applyIn(s, { type: "placeModule", module: "flywheel", cell: { q: 0, r: 1 } });
+    // Three awaiting habits: one with an hour of live time, one with an
+    // hour for Engineer, one with none.
+    const flowed = applyIn(s, { type: "createHabit", name: "Synthesis" }).id!;
+    const other = applyIn(s, { type: "createHabit", name: "Drums" }).id!;
+    const idle = applyIn(s, { type: "createHabit", name: "Bass" }).id!;
+    for (const id of [flowed, other]) {
+      applyIn(s, { type: "selectHabit", id });
+      applyIn(s, { type: "startSession", target: null, now: 0 });
+      for (let i = 0; i < 100; i++) advanceIn(s, 36, "flow");
+      applyIn(s, { type: "endSession", now: 1 });
+    }
+    expect(s.game.rates.modulators[0]!.output.toNumber()).toBe(1);
+    counted.mockClear();
+    expect(applyIn(s, { type: "chooseClass", habitId: flowed, habitClass: "producer" }).ok).toBe(true);
+    expect(counted).toHaveBeenCalledTimes(1);
+    expect(s.game.rates.modulators[0]!.output.toNumber()).toBe(1.1);
+    counted.mockClear();
+    expect(applyIn(s, { type: "chooseClass", habitId: other, habitClass: "engineer" }).ok).toBe(true);
+    expect(applyIn(s, { type: "chooseClass", habitId: idle, habitClass: "producer" }).ok).toBe(true);
+    expect(applyIn(s, { type: "chooseClass", habitId: flowed, habitClass: "producer" }).ok).toBe(false);
+    expect(counted).not.toHaveBeenCalled();
+  });
+
   it("recomputes once on load, from the layout, and never writes the rates to the save", () => {
     const s = acceptanceLayout();
     const text = serialize(s, 0);

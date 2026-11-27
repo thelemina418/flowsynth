@@ -78,7 +78,7 @@ describe("the board in a v16 save", () => {
     const loaded = deserialize(serialize(s, 1_000));
     expect(loaded.error).toBeUndefined();
     expect(loaded.state).toEqual(s);
-    expect(loaded.state!.game.board).toEqual({ open: [...fresh().game.board.open, { q: -1, r: 1 }, { q: 0, r: 3 }], arc: "demo", placements: [] });
+    expect(loaded.state!.game.board).toEqual({ open: [...fresh().game.board.open, { q: -1, r: 1 }, { q: 0, r: 3 }], arc: "demo", placements: [], cables: [] });
   });
 
   it("a v16 save written before the board loads the opening board", () => {
@@ -126,8 +126,8 @@ describe("placements in a v16 save", () => {
       { cell: { q: 0, r: 0 }, module: "sine" },
       { cell: { q: 1, r: -1 }, module: "square" },
     ]);
-    expect(loaded.state!.game.allowance).toEqual({ oscillator: 3 });
-    expect(loaded.state!.game.arrived).toEqual(["sine", "triangle", "square"]);
+    expect(loaded.state!.game.allowance).toEqual({ oscillator: 3, modulator: 1 });
+    expect(loaded.state!.game.arrived).toEqual(["sine", "triangle", "flywheel", "square"]);
   });
 
   it("a v16 save written before placements loads an empty board and the opening allowance", () => {
@@ -138,8 +138,8 @@ describe("placements in a v16 save", () => {
     }));
     expect(loaded.error).toBeUndefined();
     expect(loaded.state!.game.board.placements).toEqual([]);
-    expect(loaded.state!.game.allowance).toEqual({ oscillator: 2 });
-    expect(loaded.state!.game.arrived).toEqual(["sine", "triangle"]);
+    expect(loaded.state!.game.allowance).toEqual({ oscillator: 2, modulator: 1 });
+    expect(loaded.state!.game.arrived).toEqual(["sine", "triangle", "flywheel"]);
   });
 
   it("returns a placement with an unknown type, or off an owned open cell, to unplaced", () => {
@@ -157,13 +157,13 @@ describe("placements in a v16 save", () => {
     expect(loaded.state).toEqual(laidOut());
   });
 
-  it("reads unreadable allowance or arrived types as the opening's", () => {
+  it("reads unreadable allowance or arrived types as the opening's, and never loses an opening type", () => {
     const loaded = deserialize(saved((game) => {
-      game.allowance = { oscillator: -1 };
+      game.allowance = { oscillator: -1, modulator: 1.5 };
       game.arrived = ["sine", "kazoo", "sine"];
     }));
-    expect(loaded.state!.game.allowance).toEqual({ oscillator: 2 });
-    expect(loaded.state!.game.arrived).toEqual(["sine"]);
+    expect(loaded.state!.game.allowance).toEqual({ oscillator: 2, modulator: 1 });
+    expect(loaded.state!.game.arrived).toEqual(["sine", "triangle", "flywheel"]);
   });
 });
 
@@ -207,5 +207,62 @@ describe("v16 lost-money recovery (ADR-0082)", () => {
   it("clean bytes read through the recovery door exactly as an ordinary load", () => {
     const text = serialize(flowing(), 1_000);
     expect(recoverLostSave(text)).toEqual(deserialize(text));
+  });
+});
+
+// Facings (spec chunk 03, issue #31) are additive v16 fields: a placement
+// gains an optional facing, the allowance a Modulator count, and the
+// arrived types the Flywheel.
+describe("facings in a v16 save", () => {
+  function aimed() {
+    const s = fresh();
+    applyIn(s, { type: "placeModule", module: "flywheel", cell: { q: 0, r: 0 } });
+    applyIn(s, { type: "rotateModule", cell: { q: 0, r: 0 }, turn: "counterclockwise" });
+    applyIn(s, { type: "placeModule", module: "sine", cell: { q: 1, r: 0 } });
+    return s;
+  }
+
+  function saved(mutate: (game: Record<string, unknown> & { board: { placements: Record<string, unknown>[] } }) => void): string {
+    const file = JSON.parse(serialize(aimed(), 1_000));
+    mutate(file.state.game);
+    return JSON.stringify(file);
+  }
+
+  it("round-trips the facing exactly", () => {
+    const s = aimed();
+    const loaded = deserialize(serialize(s, 1_000));
+    expect(loaded.error).toBeUndefined();
+    expect(loaded.state).toEqual(s);
+    expect(loaded.state!.game.board.placements).toEqual([
+      { cell: { q: 0, r: 0 }, module: "flywheel", facing: 5 },
+      { cell: { q: 1, r: 0 }, module: "sine" },
+    ]);
+  });
+
+  it("loads a missing or invalid facing as NE, and drops a facing from a module without one", () => {
+    for (const bad of [undefined, 6, -1, 2.5, "N", null]) {
+      const loaded = deserialize(saved((game) => {
+        if (bad === undefined) delete game.board.placements[0]!.facing;
+        else game.board.placements[0]!.facing = bad;
+        game.board.placements[1]!.facing = 3;
+      }));
+      expect(loaded.error, String(bad)).toBeUndefined();
+      expect(loaded.state!.game.board.placements, String(bad)).toEqual([
+        { cell: { q: 0, r: 0 }, module: "flywheel", facing: 0 },
+        { cell: { q: 1, r: 0 }, module: "sine" },
+      ]);
+    }
+  });
+
+  it("a chunk-02 save loads with the Flywheel arrived and unplaced, and one Modulator allowance", () => {
+    const loaded = deserialize(saved((game) => {
+      game.board.placements = [{ cell: { q: 1, r: 0 }, module: "sine" }];
+      game.allowance = { oscillator: 2 };
+      game.arrived = ["sine", "triangle"];
+    }));
+    expect(loaded.error).toBeUndefined();
+    expect(loaded.state!.game.board.placements).toEqual([{ cell: { q: 1, r: 0 }, module: "sine" }]);
+    expect(loaded.state!.game.allowance).toEqual({ oscillator: 2, modulator: 1 });
+    expect(loaded.state!.game.arrived).toEqual(["sine", "triangle", "flywheel"]);
   });
 });

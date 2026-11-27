@@ -1,10 +1,12 @@
 import { advance } from "./advance";
 import { apply, type Action, type ApplyResult } from "./apply";
 import { createInitialState } from "./state";
-import { cellKey } from "./hex";
-import { moduleName } from "./modules";
-import { fmt, fmtRate, gt, type Num } from "./num";
-import type { AdvanceMode, AdvanceResult, GameState, HabitClass, Placement } from "./types";
+import { cableName } from "./cables";
+import { cellKey, FACING_NAMES, lifetimeCells, type Cell } from "./hex";
+import { wallAt } from "./map";
+import { hasFacing, isOscillator, moduleName } from "./modules";
+import { add, D, fmt, fmtRate, gt, type Num } from "./num";
+import type { AdvanceMode, AdvanceResult, Cable, GameState, HabitClass, Placement } from "./types";
 
 // The pace runner (spec chunk 01, `npm run pace`): a scripted reasonable
 // player driven only through `apply` and `advance`. It reports the credited
@@ -87,29 +89,85 @@ export const DEFAULT_TENDING: TendingHooks = {
   patchChargeToNearestWall: () => {},
 };
 
-// Fill the allowance one oscillator at a time, each where it most raises
-// the board's total ν/s (spec chunk 02, issue #28). Every candidate is tried
-// through `apply` on the current state, which is pure, so a trial changes
-// nothing; only the best is applied through the turn. Ties keep the first
-// candidate in arrived-type then owned-cell order, so the run is
-// deterministic. Placed oscillators are never moved: a later chunk may
-// teach the player to rearrange.
+// The greedy placement (spec chunk 02, issue #28; chunk 03, issue #35).
+// The player fills its oscillator allowance one oscillator at a time, then
+// its modulator allowance one modulator at a time with every facing, then
+// its cable allowance one Patch at a time, each step keeping the candidate
+// that most raises the board's total ν/s. Every candidate is a short run of
+// actions tried through `apply` on the current state, which is pure, so a
+// trial changes nothing and a refused one is dropped; only the best is
+// applied through the turn. An oscillator or modulator is placed even when
+// it raises nothing, since a placed module costs nothing; a cable is left
+// unused unless it raises total ν/s. Ties keep the first candidate in
+// arrived-type, owned-cell, facing, then target order, so the run is
+// deterministic. Nothing placed is ever moved, turned or unplugged: a later
+// chunk may teach the player to rearrange. Patching into walls for damage
+// is chunk 05's, once damage leads to a milestone.
 export function placeAllowanceGreedily(turn: PaceTurn): void {
-  for (;;) {
-    const { game } = turn.state;
-    let best: { action: Action; total: Num } | null = null;
-    for (const module of game.arrived) {
-      for (const cell of game.board.open) {
-        const action: Action = { type: "placeModule", module, cell };
-        const trial = apply(turn.state, action);
-        if (!trial.ok) continue;
-        const total = trial.state.game.rates.total;
-        if (best === null || gt(total, best.total)) best = { action, total };
-      }
-    }
-    if (best === null) return;
-    must(turn.apply(best.action), "placing an oscillator");
+  while (applyBest(turn, oscillatorCandidates(turn.state), true));
+  while (applyBest(turn, modulatorCandidates(turn.state), true));
+  while (applyBest(turn, cableCandidates(turn.state), false));
+}
+
+type Candidate = Action[];
+
+// Tries each candidate from the current state and applies the one that
+// most raises total ν/s. With `always`, the best is applied even when it
+// raises nothing. Returns whether one was applied.
+function applyBest(turn: PaceTurn, candidates: Candidate[], always: boolean): boolean {
+  let best: { candidate: Candidate; total: Num } | null = null;
+  for (const candidate of candidates) {
+    const total = trialTotal(turn.state, candidate);
+    if (total === null) continue;
+    if (best === null || gt(total, best.total)) best = { candidate, total };
   }
+  if (best === null) return false;
+  if (!always && !gt(best.total, turn.state.game.rates.total)) return false;
+  for (const action of best.candidate) must(turn.apply(action), `the pace runner's ${action.type}`);
+  return true;
+}
+
+// Total ν/s after the candidate's actions, or null when any is refused.
+function trialTotal(state: GameState, candidate: Candidate): Num | null {
+  let trial = state;
+  for (const action of candidate) {
+    const result = apply(trial, action);
+    if (!result.ok) return null;
+    trial = result.state;
+  }
+  return trial.game.rates.total;
+}
+
+function oscillatorCandidates(state: GameState): Candidate[] {
+  const { game } = state;
+  return game.arrived.filter(isOscillator).flatMap((module) =>
+    game.board.open.map((cell): Candidate => [{ type: "placeModule", module, cell }]));
+}
+
+// Each arrived cable from each placed modulator to each cell of the
+// lifetime board; `apply` refuses what isn't a valid target.
+function cableCandidates(state: GameState): Candidate[] {
+  const { game } = state;
+  const sources = game.board.placements.filter((p) => !isOscillator(p.module)).map((p) => p.cell);
+  return game.arrivedCables.flatMap((cable) =>
+    sources.flatMap((source) =>
+      lifetimeCells().map((target): Candidate => [{ type: "patchCable", cable, source, target }])));
+}
+
+// Each arrived modulator on each owned cell, in each of the six facings: a
+// placement (which faces NE) and then that many clockwise turns. A
+// facing-free modulator has the placement alone.
+function modulatorCandidates(state: GameState): Candidate[] {
+  const { game } = state;
+  return game.arrived.filter((module) => !isOscillator(module)).flatMap((module) =>
+    game.board.open.flatMap((cell) => {
+      const place: Action = { type: "placeModule", module, cell };
+      if (!hasFacing(module)) return [[place]];
+      return [0, 1, 2, 3, 4, 5].map((turns): Candidate => [
+        place,
+        ...Array.from({ length: turns }, (): Action => ({ type: "rotateModule", cell, turn: "clockwise" })),
+      ]);
+    }));
 }
 
 // ── The run ───────────────────────────────────────────────────────────────
@@ -150,7 +208,12 @@ export interface PaceReport {
   milestones: MilestoneRow[];
   // The board at the end of the run: its layout and total ν/s.
   placements: Placement[];
+  cables: Cable[];
   rate: Num;
+  // The modulators' summed output in charge/s, and each wall a Patch
+  // damages, by its authored name ("Wall" for a placeholder).
+  charge: Num;
+  walls: { name: string; cell: Cell; damage: Num }[];
   // The era's nous at the end of the run.
   nous: Num;
   // Every stretch longer than DRY_STRETCH_HOURS with no new milestone,
@@ -256,8 +319,15 @@ export function runPace(script: PaceScript): PaceReport {
       reachedAtHours: reachedAt.get(p.id) ?? null,
       tracked: p.reached !== undefined,
     })),
-    placements: state.game.board.placements.map((p) => ({ cell: { q: p.cell.q, r: p.cell.r }, module: p.module })),
+    placements: state.game.board.placements.map((p) => ({
+      cell: { q: p.cell.q, r: p.cell.r },
+      module: p.module,
+      ...(p.facing === undefined ? {} : { facing: p.facing }),
+    })),
+    cables: state.game.board.cables.map((c) => ({ type: c.type, source: { ...c.source }, target: { ...c.target } })),
     rate: state.game.rates.total,
+    charge: state.game.rates.modulators.reduce((sum, m) => add(sum, m.output), D(0)),
+    walls: state.game.rates.walls.map((w) => ({ name: wallAt(w.cell).name ?? "Wall", cell: { ...w.cell }, damage: w.damage })),
     nous: state.game.nous,
     dryStretches: dryStretches([...reachedAt.values()], creditedHours),
   };
@@ -275,6 +345,7 @@ function dryStretches(reached: number[], endHours: number): DryStretch[] {
 // ── Printing ──────────────────────────────────────────────────────────────
 
 const hours = (h: number) => `${h.toFixed(1)}h`;
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 export function formatPaceReport(report: PaceReport): string {
   const rows = report.milestones.map((m) => [
@@ -285,10 +356,23 @@ export function formatPaceReport(report: PaceReport): string {
   const head = ["Milestone", "Reached", "Target"];
   const widths = head.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i]!.length)));
   const line = (cells: string[]) => cells.map((c, i) => c.padEnd(widths[i]!)).join("  ").trimEnd();
-  const layout = report.placements.map((p) => `${moduleName(p.module)} (${cellKey(p.cell)})`).join(", ");
+  const layout = [
+    ...report.placements.map((p) =>
+      `${moduleName(p.module)} (${cellKey(p.cell)})${p.facing === undefined ? "" : ` facing ${FACING_NAMES[p.facing]}`}`),
+    ...report.cables.map((c) => `${cableName(c.type)} (${cellKey(c.source)}) → (${cellKey(c.target)})`),
+  ].join(", ");
+  const oscillators = report.placements.filter((p) => isOscillator(p.module)).length;
+  const modulators = report.placements.length - oscillators;
+  const rates = [
+    plural(oscillators, "oscillator"),
+    plural(modulators, "modulator"),
+    `${fmtRate(report.rate)} ν/s`,
+    `${fmtRate(report.charge)} charge/s`,
+    ...report.walls.map((w) => `${w.name} ${fmtRate(w.damage)} damage/s`),
+  ].join(", ");
   const out = [
     `Pace run: ${report.sessions} sessions, ${hours(report.creditedHours)} credited`,
-    `Board: ${report.placements.length} oscillators, ${fmtRate(report.rate)} ν/s${layout ? ` — ${layout}` : ""}`,
+    `Board: ${rates}${layout ? ` — ${layout}` : ""}`,
     `Era ν: ${fmt(report.nous)}`,
     "",
     line(head),

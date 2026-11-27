@@ -39,6 +39,7 @@ export function App({ shell }: { shell: Shell }) {
           rates={game.rates}
           flowing={game.mode === "flow"}
           arrived={game.arrived}
+          arrivedCables={game.arrivedCables}
           placing={shell.placing}
           inspected={shell.inspected}
         />

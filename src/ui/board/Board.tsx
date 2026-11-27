@@ -1,6 +1,6 @@
 import type { JSX } from "preact";
 import { boardCells, type CellKind } from "../../engine/board";
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import {
   cellKey,
   corners,
@@ -15,11 +15,12 @@ import {
   type ScreenDirection,
 } from "../../engine/hex";
 import { wallAt } from "../../engine/map";
-import { categoryOf, moduleName } from "../../engine/modules";
+import { moduleName } from "../../engine/modules";
 import { moduleAt } from "../../engine/placement";
-import type { Board as BoardState, BoardRates, HabitClass, ModuleType } from "../../engine/types";
+import type { Board as BoardState, BoardRates, HabitClass, Placement } from "../../engine/types";
 import { startDrag } from "./drag";
-import { Glyph } from "./glyphs";
+import { Cords, type Aim } from "./Cords";
+import { ModuleFace } from "./ModuleFace";
 import type { Placing, Target } from "./placing";
 import { Resonances } from "./Resonances";
 import { round } from "./svg";
@@ -32,15 +33,23 @@ import { round } from "./svg";
 // Every cell carries data-cell, data-kind and data-ring, the seams later
 // tickets (resonance outlines, Hex detail) hang off. A placed module is a
 // faceplate in its category hue with its glyph and nameplate (issue #25);
+// a modulator's face adds its facing pointer and jack (issue #31);
 // a pick's targets carry data-target (valid: clear outline, invalid:
 // muted outline) and the picked module data-picked (a firm inset).
-// Resonance outlines (issue #26) are one layer drawn over the cells.
+// Resonance outlines (issue #26) are one layer drawn over the cells. A
+// picked or inspected modulator's reach cells carry data-reach and a clear
+// outline in Charge Green's light register (issue #32). Cords (issue #33,
+// Cords.tsx) lie above the cells and under the pick and reach outlines,
+// which are their own layer, tagged with data-for.
 
 // The hex circumradius in viewBox units; the SVG scales to its container.
 const SIZE = 30;
 // The drawn hex sits inside its cell, leaving a hairline gutter.
 const FACE = SIZE * 0.94;
 const ENGRAVE = SIZE * 0.74;
+// A modulator's reach outline, inside the face so a pick's target outline
+// still reads around it.
+const REACH = SIZE * 0.86;
 // A placed module's faceplate, inside the engraved ring.
 const MODULE = SIZE * 0.66;
 const PAD = 4;
@@ -87,9 +96,11 @@ const CLASS_MARKS: Partial<Record<HabitClass, (x: number, y: number) => JSX.Elem
 interface BoardCellProps {
   cell: Cell;
   kind: CellKind;
-  module: ModuleType | undefined;
+  placement: Placement | undefined;
   picked: boolean;
   inspected: boolean;
+  // In the reach of the picked or inspected modulator (issue #32).
+  reached: boolean;
   target: Target | undefined;
   // The one cell in the tab order (roving focus); the rest are reached by
   // the arrow keys.
@@ -102,7 +113,7 @@ interface BoardCellProps {
   onPointerDown: ((event: PointerEvent) => void) | undefined;
 }
 
-function BoardCell({ cell, kind, module, picked, inspected, target, roving, onActivate, onFocus, onPointerDown }: BoardCellProps) {
+function BoardCell({ cell, kind, placement, picked, inspected, reached, target, roving, onActivate, onFocus, onPointerDown }: BoardCellProps) {
   const center = toPixel(cell, SIZE);
   // Every cell takes focus, dark ones too, so the Hex detail opens from
   // the keyboard on any of them.
@@ -113,6 +124,7 @@ function BoardCell({ cell, kind, module, picked, inspected, target, roving, onAc
     "data-target": target,
     "data-picked": picked ? "" : undefined,
     "data-inspected": inspected ? "" : undefined,
+    "data-reach": reached ? "" : undefined,
     class: `cell cell-${kind}`,
     tabindex: roving ? 0 : -1,
     role: "button" as const,
@@ -126,22 +138,12 @@ function BoardCell({ cell, kind, module, picked, inspected, target, roving, onAc
       onActivate();
     },
   });
-  const targetOutline = target && <polygon class="cell-target" points={points(center, FACE)} />;
   if (kind === "open") {
     return (
-      <g {...common(module ? moduleName(module) : "Open cell")} onPointerDown={onPointerDown}>
+      <g {...common(placement ? moduleName(placement.module) : "Open cell")} onPointerDown={onPointerDown}>
         <polygon class="cell-face" points={points(center, FACE)} />
         <polygon class="cell-engrave" points={points(center, ENGRAVE)} />
-        {module && (
-          <g class="module" data-module={module} data-category={categoryOf(module)}>
-            <polygon class="module-face" points={points(center, MODULE)} />
-            <Glyph module={module} x={round(center.x)} y={round(center.y - 4)} />
-            <text class="module-name" x={round(center.x)} y={round(center.y + 13)} text-anchor="middle">
-              {moduleName(module)}
-            </text>
-          </g>
-        )}
-        {targetOutline}
+        {placement && <ModuleFace placement={placement} center={center} size={MODULE} />}
       </g>
     );
   }
@@ -149,7 +151,6 @@ function BoardCell({ cell, kind, module, picked, inspected, target, roving, onAc
     return (
       <g {...common("Dark cell")}>
         <polygon class="cell-face" points={points(center, FACE)} stroke-dasharray="3 5" />
-        {targetOutline}
       </g>
     );
   }
@@ -165,7 +166,35 @@ function BoardCell({ cell, kind, module, picked, inspected, target, roving, onAc
         </text>
       )}
       {mark?.(center.x, center.y + 10)}
-      {targetOutline}
+    </g>
+  );
+}
+
+// The pick and reach outlines, one layer over the cells and the cords
+// (issue #33), each tagged with the cell it outlines.
+function Outlines({ reach, targets, picked }: { reach: Set<string>; targets: ReadonlyMap<string, Target>; picked: Cell | null }) {
+  return (
+    <g class="outlines" aria-hidden="true">
+      {lifetimeCells().map((cell) => {
+        const key = cellKey(cell);
+        const target = targets.get(key);
+        if (!target && !reach.has(key)) return null;
+        const center = toPixel(cell, SIZE);
+        return (
+          <g key={key}>
+            {reach.has(key) && <polygon class="cell-reach" data-for={key} points={points(center, REACH)} />}
+            {target && (
+              <polygon
+                class="cell-target"
+                data-for={key}
+                data-target={target}
+                data-picked={picked && sameCell(picked, cell) ? "" : undefined}
+                points={points(center, FACE)}
+              />
+            )}
+          </g>
+        );
+      })}
     </g>
   );
 }
@@ -181,51 +210,95 @@ interface BoardProps {
   placing: Placing;
   inspected: Cell | null;
   onCell: (cell: Cell) => void;
+  // A click on a placed cable's plug (issue #33).
+  onPlug: (source: Cell) => void;
   onDrop: (target: Element | null) => void;
+}
+
+function cellOf(key: string): Cell {
+  const [q, r] = key.split(",").map(Number) as [number, number];
+  return { q, r };
 }
 
 const ARROWS: Record<string, ScreenDirection> = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
 
-export function Board({ board, rates, flowing, placing, inspected, onCell, onDrop }: BoardProps) {
+export function Board({ board, rates, flowing, placing, inspected, onCell, onPlug, onDrop }: BoardProps) {
   const pick = placing.pick.value;
   const targets = placing.targets.value;
   const locked = placing.locked.value;
+  // The jack a held cable runs from (issue #33): its cell reads as picked.
+  const source = placing.source.value;
+  const picked = pick?.from === "cell" ? pick.cell : source;
   // The board is one tab stop: the cell last focused, from (0,0) at
   // first. Arrow keys move it along the drawn grid and stop at the edge.
   const [roving, setRoving] = useState(cellKey(ORIGIN));
   const svg = useRef<SVGSVGElement>(null);
+  // Where a held cable's would-be cord runs: the pointer, else the
+  // focused cell. A new jack starts with no aim.
+  const [aim, setAim] = useState<Aim | null>(null);
+  const sourceKey = source ? cellKey(source) : null;
+  useEffect(() => setAim(null), [sourceKey]);
+  const onPointerMove = (event: PointerEvent) => {
+    if (!source) return;
+    const key = event.target instanceof Element ? event.target.closest("[data-cell]")?.getAttribute("data-cell") : null;
+    if (!key) return;
+    const matrix = svg.current?.getScreenCTM?.()?.inverse();
+    const point = matrix && typeof DOMPoint === "function" ? new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix) : null;
+    setAim({ cell: cellOf(key), point: point ? { x: point.x, y: point.y } : null });
+  };
+  // The picked module's cell, else the inspected one: a modulator there
+  // outlines its reach, with no number on the board (issue #32).
+  const shown = pick?.from === "cell" ? pick.cell : inspected;
+  const modulator = shown ? rates.modulators.find((m) => sameCell(m.cell, shown)) : undefined;
+  const reach = new Set(modulator?.deliveries.map((d) => cellKey(d.cell)));
   const onKeyDown = (event: KeyboardEvent) => {
     const direction = ARROWS[event.key];
     const from = event.target instanceof Element ? event.target.closest("[data-cell]")?.getAttribute("data-cell") : null;
     if (!direction || !from) return;
     event.preventDefault();
-    const [q, r] = from.split(",").map(Number) as [number, number];
-    const next = screenNeighbour({ q, r }, direction);
+    const next = screenNeighbour(cellOf(from), direction);
     if (ring(next) > LIFETIME_RADIUS) return;
     const key = cellKey(next);
     setRoving(key);
     svg.current?.querySelector<SVGGElement>(`[data-cell="${key}"]`)?.focus();
   };
   return (
-    <svg ref={svg} class="board" viewBox={VIEW_BOX} role="group" aria-label="Board" onKeyDown={onKeyDown}>
+    <svg ref={svg} class="board" viewBox={VIEW_BOX} role="group" aria-label="Board" onKeyDown={onKeyDown} onPointerMove={onPointerMove}>
       {boardCells(board).map(({ cell, kind }) => {
-        const module = kind === "open" ? moduleAt(board, cell)?.module : undefined;
+        const placement = kind === "open" ? moduleAt(board, cell) : undefined;
         return (
           <BoardCell
             key={cellKey(cell)}
             cell={cell}
             kind={kind}
-            module={module}
-            picked={pick?.from === "cell" && sameCell(pick.cell, cell)}
+            placement={placement}
+            picked={picked !== null && sameCell(picked, cell)}
             inspected={inspected !== null && sameCell(inspected, cell)}
+            reached={reach.has(cellKey(cell))}
             target={targets.get(cellKey(cell))}
             roving={roving === cellKey(cell)}
             onActivate={() => onCell(cell)}
-            onFocus={() => setRoving(cellKey(cell))}
-            onPointerDown={!locked && module ? (event) => startDrag(event, { begin: () => placing.pickCell(cell), drop: onDrop }) : undefined}
+            onFocus={() => {
+              setRoving(cellKey(cell));
+              if (source) setAim({ cell, point: null });
+            }}
+            onPointerDown={!locked && placement && !source ? (event) => startDrag(event, { begin: () => placing.pickCell(cell), drop: onDrop }) : undefined}
           />
         );
       })}
+      <Cords
+        board={board}
+        size={SIZE}
+        flowing={flowing}
+        live={!locked && pick === null}
+        source={source}
+        aim={source ? aim : null}
+        aimTarget={aim ? targets.get(cellKey(aim.cell)) : undefined}
+        onPlug={onPlug}
+        onPlugDrag={(from) => placing.pickPlug(from)}
+        onDrop={onDrop}
+      />
+      <Outlines reach={reach} targets={targets} picked={picked} />
       <Resonances rates={rates} flowing={flowing} size={SIZE} />
     </svg>
   );

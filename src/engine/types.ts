@@ -1,5 +1,5 @@
 import type { Num } from "./num";
-import type { Cell } from "./hex";
+import type { Cell, Facing } from "./hex";
 
 // The single serialisable GameState (spec chunk 01, issue #17). It has two
 // parts: the real-life records, which nothing in the game ever resets, and
@@ -177,21 +177,29 @@ export interface Records {
 // The macro stages (GLOSSARY: Arc). Each sets the board's reach.
 export type Arc = "sketch" | "demo" | "record" | "master" | "encore";
 
-// The module categories (GLOSSARY: Category). Only Oscillators exist in
-// chunk 02; Modulators arrive in chunk 03, Effects and Arms later.
-export type ModuleCategory = "oscillator";
+// The module categories (GLOSSARY: Category). Oscillators and Modulators
+// exist from chunk 03; Effects and Arms arrive later.
+export type ModuleCategory = "oscillator" | "modulator";
 
 // The oscillator types (mechanics-sketch.md). Square, Saw and Release are
 // declared now; chunk 04 makes them arrive.
 export type OscillatorType = "sine" | "triangle" | "square" | "saw" | "release";
 
-// Every module type. Chunk 03 widens it with the modulator types.
-export type ModuleType = OscillatorType;
+// The modulator types (mechanics-sketch.md, Modulators). The Flywheel
+// arrives at the start (spec chunk 03, issue #31); the Pulsewell is
+// declared as data (issue #32) and chunk 04 makes it arrive.
+export type ModulatorType = "flywheel" | "pulsewell";
 
-// One module on one owned open cell (issue #25).
+// Every module type.
+export type ModuleType = OscillatorType | ModulatorType;
+
+// One module on one owned open cell (issue #25). A module whose type has a
+// facing (issue #31) carries it: an index into hex.ts's DIRECTIONS; a type
+// without one never does.
 export interface Placement {
   cell: Cell;
   module: ModuleType;
+  facing?: Facing;
 }
 
 // The board (spec chunk 02): the owned open cells, the current arc and the
@@ -201,6 +209,22 @@ export interface Board {
   open: Cell[];
   arc: Arc;
   placements: Placement[];
+  // The placed cables (issue #33), in placement order. A cable occupies no
+  // cell.
+  cables: Cable[];
+}
+
+// The cable types (GLOSSARY: Cable). Patch arrives at the start; Mult,
+// Inverter and Sync are later chunks'.
+export type CableType = "patch";
+
+// One cable (issue #33): from the jack of the modulator on `source` to the
+// `target` cell, within length 3 and crossing no other cable. A Patch
+// carries the source's whole output to the target in place of its reach.
+export interface Cable {
+  type: CableType;
+  source: Cell;
+  target: Cell;
 }
 
 // One satisfied instance of an oscillator's pattern (issue #26): a distinct
@@ -210,9 +234,8 @@ export interface ResonanceInstance {
 }
 
 // One placed oscillator's rate (mechanics-sketch.md, Rates):
-// rate = base × resonance × charge × faders × (1 − pressure). Charge,
-// faders and pressure are identity legs until chunks 03, 05 and 06 fill
-// them in.
+// rate = base × resonance × charge × faders × (1 − pressure). Faders and
+// pressure are identity legs until chunks 06 and 05 fill them in.
 export interface OscillatorRate {
   cell: Cell;
   module: OscillatorType;
@@ -221,18 +244,56 @@ export interface OscillatorRate {
   strength: Num;
   instances: ResonanceInstance[];
   resonance: Num;
+  // charge/s received: the sum of every modulator's delivery to this cell.
+  chargeReceived: Num;
+  // The charge factor, 1 + ln(1 + chargeReceived) (issue #32).
   charge: Num;
   faders: Num;
   pressure: Num;
   rate: Num;
 }
 
-// The board's rates (issue #26): one pure computation of the layout,
-// cached on the game state, recomputed after a layout change and on load,
-// never persisted and never computed per tick. Oscillators are in
-// placement order.
+// What a reach cell holds when a modulator's charge arrives (issue #32): a
+// module, an empty open cell, a wall or a dark cell. In chunk 03 only an
+// oscillator takes anything from it.
+export type ReachHolds = ModuleType | "empty" | "wall" | "dark";
+
+export interface ChargeDelivery {
+  cell: Cell;
+  holds: ReachHolds;
+}
+
+// One placed modulator's charge (issue #32): its output, charge/s to each
+// target, and the cells its reach delivers to, in reach order. `facing` is
+// null for a facing-free type.
+export interface ModulatorRate {
+  cell: Cell;
+  module: ModulatorType;
+  facing: Facing | null;
+  output: Num;
+  deliveries: ChargeDelivery[];
+}
+
+// One wall a Patch targets (issue #34): the patched charge into it as
+// damage at 1:1, its regen from the authored map (null for a placeholder)
+// and net = damage − regen. A rate only: nothing applies it until chunk 05.
+export interface WallRate {
+  cell: Cell;
+  damage: Num;
+  regen: Num | null;
+  net: Num;
+}
+
+// The board's rates (issue #26): one pure computation of the layout and
+// the credited Producer time, cached on the game state. Recomputed after
+// a layout or facing change, on load and when a flow session ends (issue
+// #32); never persisted and never computed per tick. Oscillators and
+// modulators are in placement order.
 export interface BoardRates {
   oscillators: OscillatorRate[];
+  modulators: ModulatorRate[];
+  // Walls in the order a Patch first targets them.
+  walls: WallRate[];
   total: Num;
 }
 
@@ -255,6 +316,10 @@ export interface Game {
   // The module types the player has, in arrival order. Sine and Triangle
   // at the start; chunk 04 adds the rest.
   arrived: ModuleType[];
+  // How many cables may be placed at once (issue #33), separate from the
+  // module categories, and the cable types the player has.
+  cableAllowance: number;
+  arrivedCables: CableType[];
   // Derived from the board, never saved (engine/rates.ts).
   rates: BoardRates;
 }
