@@ -309,17 +309,9 @@ export interface Game {
   // The Almanac's legacy line (`Legacy era · <n> modules · archived`),
   // written once by the v15 migration; null on a fresh start.
   legacyLine: string | null;
+  // The allowance and the arrived types are derived from class credit and
+  // the open classes (engine/levels.ts, issue #38), never stored.
   board: Board;
-  // How many modules of each category may be placed at once (GLOSSARY:
-  // Allowance). Plain facts here; chunk 04's class levels grant them.
-  allowance: Record<ModuleCategory, number>;
-  // The module types the player has, in arrival order. Sine and Triangle
-  // at the start; chunk 04 adds the rest.
-  arrived: ModuleType[];
-  // How many cables may be placed at once (issue #33), separate from the
-  // module categories, and the cable types the player has.
-  cableAllowance: number;
-  arrivedCables: CableType[];
   // Derived from the board, never saved (engine/rates.ts).
   rates: BoardRates;
 }

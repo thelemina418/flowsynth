@@ -1,7 +1,7 @@
 import type { Signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 import type { Cell } from "../../engine/hex";
-import type { Board as BoardState, BoardRates, CableType, ModuleType } from "../../engine/types";
+import type { Board as BoardState, BoardRates, CableType, ModuleCategory, ModuleType } from "../../engine/types";
 import type { Num } from "../../engine/num";
 import { Board } from "./Board";
 import { HexDetail } from "./HexDetail";
@@ -21,11 +21,14 @@ interface StageProps {
   flowing: boolean;
   arrived: ModuleType[];
   arrivedCables: CableType[];
+  unplaced: Record<ModuleCategory, number>;
+  // The allowance chips show once a session has completed (issue #38).
+  chips: boolean;
   placing: Placing;
   inspected: Signal<Cell | null>;
 }
 
-export function Stage({ nous, board, rates, flowing, arrived, arrivedCables, placing, inspected }: StageProps) {
+export function Stage({ nous, board, rates, flowing, arrived, arrivedCables, unplaced, chips, placing, inspected }: StageProps) {
   useEffect(() => {
     const dismiss = () => {
       placing.clear();
@@ -83,7 +86,7 @@ export function Stage({ nous, board, rates, flowing, arrived, arrivedCables, pla
       <NousReadout nous={nous} />
       <div class="stage-board">
         <Board board={board} rates={rates} flowing={flowing} placing={placing} inspected={open} onCell={onCell} onPlug={onPlug} onDrop={onDrop} />
-        <Tray arrived={arrived} cables={arrivedCables} placing={placing} onDrop={onDrop} />
+        <Tray arrived={arrived} cables={arrivedCables} unplaced={unplaced} chips={chips} placing={placing} onDrop={onDrop} />
       </div>
       <HexDetail board={board} rates={rates} cell={open} />
       {note !== null && (

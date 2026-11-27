@@ -79,7 +79,7 @@
    fit. */
 @media (max-width: 679px) {
   .stage-board { grid-template-columns: minmax(0, 1fr); }
-  .tray { flex-direction: row; flex-wrap: wrap; }
+  .tray, .tray-group { flex-direction: row; flex-wrap: wrap; align-items: center; }
 }
 
 .tray {
@@ -88,6 +88,24 @@
   gap: 8px;
   min-width: 132px;
 }
+
+/* A category group (issue #38): its count chip, then its entries. */
+.tray-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tray-group:empty { display: none; }
+
+.tray-chip {
+  margin: 4px 0 0;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.tray-chip[data-muted] { color: var(--muted); }
 
 .tray[data-returning] { outline: 1px solid var(--line-strong); outline-offset: 4px; }
 

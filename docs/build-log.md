@@ -195,3 +195,19 @@ DRY 0.0h–250.0h: 250.0h with no new milestone
 ```
 
 The opening owns four cells. The two Sines take (0,0) and (1,0), and from either cell left the Flywheel's two-cell reach meets one Sine. The player keeps the first, (0,1) facing NE, which reaches (1,0) and then Flint. That Sine's charge factor starts at 1 + ln 2, so the board makes 2.69 ν/s before the first session. Sessions alternate Engineer and Producer, so the Flywheel reaches its 3 charge/s cap at 20 Producer hours, about 40 credited hours in, and the board holds 2 + ln 4 = 3.38 ν/s from there. The era's ν rises from 1.8e6 to 3e6. A Patch would deliver to that one Sine in place of the reach, which raises nothing, so the cable stays unused. Patching into Shale would cost ν/s and leads to no milestone until chunk 05 lets it fall, so no further milestone is reachable and the run is still flagged dry.
+
+## Chunk 04: Cadence
+
+Issues #38–#45 (parent #37), on `integration/spec-04-cadence`.
+
+### Built
+
+- **Class levels and grants (#38).** `levels.ts` owns the thresholds (0.5, 1.5, 3, 5, 8, 12, 17, 23, 30 h, then each step 1 h longer: 38, 47, 57, 68…) and the grant ladders as data. `classLevel` gives a class's level and its current and next thresholds. `grantsOf` is the one derivation of the allowance per category, the cable allowance and the arrived module and cable types, from `records.classCredit` and `game.openClasses`. The four old `game` fields are gone: the save no longer writes them and ignores them on read. Placement, cables, the saved-cable reader, the tray and the pace runner all read `grantsOf`.
+- **The tray's chips (#38).** Each category group is headed by its unplaced allowance (`Oscillators 1`), muted at 0, once a session has completed. The cable entry's count is the cables' chip.
+
+### Improvised
+
+- **Arrival order (#38).** Credit history isn't kept, so a derived type arrives in the order of the threshold (in hours on its class) that brought it, ties by class order (Engineer, Producer, Mixer, Roadie). Start types come first.
+- **Roadie and Mixer ladders (#38).** Declared empty: their types (Blade, Guard Plate) don't exist yet, and a closed class grants nothing. Chunk 05 fills Roadie's.
+- **The Pulsewell's patched output (#38).** Per target, as chunk 03's outputs are: patched, it delivers its 0.5 charge/s to its one target, and unpatched 0.5 to each of its six neighbours.
+- **Test fixtures (#38).** `giveOscillators` and `giveProducer` set class credit at the lowest level that grants what a test asks for. Producer credit also raises the Flywheel's output, so chunk 03's charge and wall tests that needed a second modulator or cable now read Producer Lv 1 or 2 figures (1.05 or 1.15 charge/s).

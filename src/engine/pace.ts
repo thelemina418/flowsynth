@@ -4,6 +4,7 @@ import { createInitialState } from "./state";
 import { cableName } from "./cables";
 import { cellKey, FACING_NAMES, lifetimeCells, type Cell } from "./hex";
 import { wallAt } from "./map";
+import { grantsOf } from "./levels";
 import { hasFacing, isOscillator, moduleName } from "./modules";
 import { add, D, fmt, fmtRate, gt, type Num } from "./num";
 import type { AdvanceMode, AdvanceResult, Cable, GameState, HabitClass, Placement } from "./types";
@@ -140,7 +141,7 @@ function trialTotal(state: GameState, candidate: Candidate): Num | null {
 
 function oscillatorCandidates(state: GameState): Candidate[] {
   const { game } = state;
-  return game.arrived.filter(isOscillator).flatMap((module) =>
+  return grantsOf(state).arrived.filter(isOscillator).flatMap((module) =>
     game.board.open.map((cell): Candidate => [{ type: "placeModule", module, cell }]));
 }
 
@@ -149,7 +150,7 @@ function oscillatorCandidates(state: GameState): Candidate[] {
 function cableCandidates(state: GameState): Candidate[] {
   const { game } = state;
   const sources = game.board.placements.filter((p) => !isOscillator(p.module)).map((p) => p.cell);
-  return game.arrivedCables.flatMap((cable) =>
+  return grantsOf(state).arrivedCables.flatMap((cable) =>
     sources.flatMap((source) =>
       lifetimeCells().map((target): Candidate => [{ type: "patchCable", cable, source, target }])));
 }
@@ -159,7 +160,7 @@ function cableCandidates(state: GameState): Candidate[] {
 // facing-free modulator has the placement alone.
 function modulatorCandidates(state: GameState): Candidate[] {
   const { game } = state;
-  return game.arrived.filter((module) => !isOscillator(module)).flatMap((module) =>
+  return grantsOf(state).arrived.filter((module) => !isOscillator(module)).flatMap((module) =>
     game.board.open.flatMap((cell) => {
       const place: Action = { type: "placeModule", module, cell };
       if (!hasFacing(module)) return [[place]];
@@ -183,7 +184,7 @@ export interface PaceScript {
   milestones?: MilestoneProbe[];
   tending?: Partial<TendingHooks>;
   // The state the player starts from; a fresh start when absent. Tests use
-  // it to grant what later chunks will (a larger allowance, say).
+  // it to start from given class credit, say.
   start?: GameState;
 }
 

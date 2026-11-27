@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyIn, giveOscillators } from "./fixtures";
-import { creditedHoursOf, formatPaceReport, placeAllowanceGreedily, runPace, type MilestoneProbe } from "./pace";
+import { creditedHoursOf, formatPaceReport, placeAllowanceGreedily, runPace, type MilestoneProbe, type PaceTurn } from "./pace";
 import { createInitialState } from "./state";
 
 // The pace runner (spec chunk 01, issue #20): a scripted reasonable player
@@ -68,6 +68,20 @@ describe("the tending seams", () => {
   });
 });
 
+// The greedy placement before the first session only: the board the
+// opening allowance makes, before any class level grants more.
+function openingOnly(): { tending: { placeAllowance: (turn: PaceTurn) => void } } {
+  let first = true;
+  return {
+    tending: {
+      placeAllowance: (turn) => {
+        if (first) placeAllowanceGreedily(turn);
+        first = false;
+      },
+    },
+  };
+}
+
 describe("placing the allowance", () => {
   it("places the opening allowance, and the report gives the board's ν/s and the era's ν", () => {
     // The two Sines and the Flywheel go down before the first session, the
@@ -75,11 +89,19 @@ describe("placing the allowance", () => {
     // Producer, and the Flywheel's 1 charge/s grows by 0.1 per Producer hour
     // when a session ends: sessions 1–2 run at 2 + ln 2 ν/s, sessions 3–4
     // at 2 + ln(2 + 1/12), each 3000 s. The board ends at 2 + ln(2 + 1/6).
-    const report = runPace({ creditedHours: 3 });
+    const report = runPace({ creditedHours: 3, ...openingOnly() });
     expect(report.sessions).toBe(4);
     expect(report.placements).toHaveLength(3);
     expect(report.rate.toNumber()).toBeCloseTo(2.77319, 4);
     expect(report.nous.toNumber()).toBeCloseTo(32_562.7, 0);
+  });
+
+  it("places the third oscillator Engineer Lv 1 grants after the first session, and resonates (issue #38)", () => {
+    // One 50-minute Engineer session passes 0.5 h: Lv 1, a third
+    // oscillator. The greedy player lays a Triangle beside both Sines.
+    const report = runPace({ creditedHours: 0.1 });
+    expect(report.placements.filter((p) => p.module !== "flywheel")).toHaveLength(3);
+    expect(report.rate.toNumber()).toBeGreaterThan(3);
   });
 
   it("finds a resonating layout given allowance 3", () => {
@@ -92,7 +114,7 @@ describe("placing the allowance", () => {
   });
 
   it("prints the board's ν/s, its charge/s, its layout and the era's ν", () => {
-    const text = formatPaceReport(runPace({ creditedHours: 3 }));
+    const text = formatPaceReport(runPace({ creditedHours: 3, ...openingOnly() }));
     // Rates read as the Hex detail reads them, truncated: 2.773… ν/s, and
     // the Flywheel's 1 + 0.1 × 5/3 Producer hours = 1.166… charge/s.
     expect(text).toContain(
@@ -107,7 +129,7 @@ describe("placing the allowance", () => {
     const start = createInitialState();
     applyIn(start, { type: "placeModule", module: "flywheel", cell: { q: 0, r: 1 } });
     applyIn(start, { type: "patchCable", cable: "patch", source: { q: 0, r: 1 }, target: { q: -1, r: 1 } });
-    const text = formatPaceReport(runPace({ creditedHours: 0.1, start }));
+    const text = formatPaceReport(runPace({ creditedHours: 0.1, start, ...openingOnly() }));
     expect(text).toContain(
       "Board: 2 oscillators, 1 modulator, 2.0 ν/s, 1.0 charge/s, Shale 1.0 damage/s — Flywheel (0,1) facing NE, Sine (0,0), Sine (1,0), Patch (0,1) → (-1,1)\n",
     );
@@ -118,7 +140,7 @@ describe("placing the allowance", () => {
     // from either cell left the Flywheel's reach meets one Sine at most.
     // That Sine's charge factor is 1 + ln 2 at 1 charge/s, so the board
     // makes 1 + 1.693… ν/s before the first session.
-    const report = runPace({ creditedHours: 0.1 });
+    const report = runPace({ creditedHours: 0.1, ...openingOnly() });
     expect(report.placements).toEqual([
       { cell: { q: 0, r: 0 }, module: "sine" },
       { cell: { q: 1, r: 0 }, module: "sine" },
@@ -131,7 +153,7 @@ describe("placing the allowance", () => {
     // Patched, the Flywheel would deliver to one cell in place of its
     // reach: at best the same Sine, which raises nothing, and a wall, which
     // lowers ν/s. Wall-seeking is chunk 05's.
-    const report = runPace({ creditedHours: 0.1 });
+    const report = runPace({ creditedHours: 0.1, ...openingOnly() });
     expect(report.cables).toEqual([]);
   });
 
@@ -140,7 +162,7 @@ describe("placing the allowance", () => {
     // The Sines take (0,0) and (1,0); a Patch onto either gives it 1 + ln 2.
     const start = createInitialState();
     applyIn(start, { type: "placeModule", module: "flywheel", cell: { q: 1, r: -1 } });
-    const report = runPace({ creditedHours: 0.1, start });
+    const report = runPace({ creditedHours: 0.1, start, ...openingOnly() });
     expect(report.cables).toHaveLength(1);
     const [cable] = report.cables;
     expect(cable!.type).toBe("patch");

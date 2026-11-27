@@ -40,7 +40,7 @@ The opening allowance is 2 oscillators. No resonance is possible until the first
 | Patch cable | Start (1), +1 at Producer Lv 2 and 5 | Carries one modulator's output to one target, replacing its reach | Max length 3, may not cross another cable |
 
 - A modulator's charge can reach an **oscillator** (charge factor), an **Arm** (damage, see below) or a **wall** directly through a Patch. A wall hit directly takes charge as damage at 1:1. That's how the first wall falls before Roadie exists.
-- Producer levels alternate: odd levels give +1 Modulator allowance, even levels +1 cable.
+- Producer levels alternate: the non-milestone levels give +1 Modulator allowance and +1 cable in turn, starting with a Modulator at Lv 1, and skip the milestone (Lv 3, the Pulsewell). So Lv 1, 4, 6, 8… give +1 Modulator and Lv 2, 5, 7, 9… +1 cable.
 
 ## Arms (Roadie)
 

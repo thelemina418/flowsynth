@@ -3,7 +3,7 @@ import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
 import { apply, type Action } from "../../engine/apply";
-import { ownCells } from "../../engine/fixtures";
+import { giveProducer, ownCells } from "../../engine/fixtures";
 import { cellsWithin } from "../../engine/hex";
 import { createInitialState } from "../../engine/state";
 import type { GameState } from "../../engine/types";
@@ -114,8 +114,7 @@ describe("patching in three clicks", () => {
       ],
       (s) => {
         ownCells(s, cellsWithin(2));
-        s.game.allowance.modulator = 2;
-        s.game.cableAllowance = 2;
+        giveProducer(s, { modulators: 2, cables: 2 });
       },
     ));
     click(cableEntry());
