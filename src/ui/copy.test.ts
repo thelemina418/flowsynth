@@ -5,7 +5,9 @@ import { describe, expect, it } from "vitest";
 
 // The banned-word list in docs/design/philosophy.md ("Words", rule 5),
 // enforced over every string a UI source file holds: string and template
-// literals and JSX text. Comments are not copy and are not scanned.
+// literals and JSX text. The engine's sources are scanned the same way:
+// their refusal reasons and load messages reach the player verbatim.
+// Comments are not copy and are not scanned.
 const ROOT = join(import.meta.dirname, "..", "..");
 const PHILOSOPHY = readFileSync(join(ROOT, "docs/design/philosophy.md"), "utf8");
 
@@ -39,10 +41,10 @@ function bannedCopy(source: string, fileName: string): string[] {
   return found;
 }
 
-function uiSources(dir: string): string[] {
+function sources(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
-    if (entry.isDirectory()) return uiSources(path);
+    if (entry.isDirectory()) return sources(path);
     return /\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name) ? [path] : [];
   });
 }
@@ -54,7 +56,14 @@ describe("UI copy (philosophy.md, Words rule 5)", () => {
   });
 
   it("no UI source string carries a banned word or an exclamation mark", () => {
-    const files = [...uiSources(join(ROOT, "src/ui")), join(ROOT, "src/main.tsx")];
+    const files = [...sources(join(ROOT, "src/ui")), join(ROOT, "src/main.tsx")];
+    expect(files.length).toBeGreaterThan(3);
+    const found = files.flatMap((path) => bannedCopy(readFileSync(path, "utf8"), relative(ROOT, path)));
+    expect(found).toEqual([]);
+  });
+
+  it("no engine refusal or load message carries a banned word or an exclamation mark", () => {
+    const files = sources(join(ROOT, "src/engine"));
     expect(files.length).toBeGreaterThan(3);
     const found = files.flatMap((path) => bannedCopy(readFileSync(path, "utf8"), relative(ROOT, path)));
     expect(found).toEqual([]);
