@@ -1,5 +1,7 @@
 import { EPS, REFLECTION_SLIDER_MIN, REFLECTION_SLIDER_NEUTRAL, REFLECTION_SLIDER_POSITIONS } from "./constants";
 import { logSessionPractice } from "./habits";
+import { classLevelOf } from "./levels";
+import { D } from "./num";
 import { rollIntentionOccurrences } from "./intentions";
 import { freshAccounting } from "./trust";
 import type { GameState, SessionReflection } from "./types";
@@ -43,6 +45,7 @@ export function startSession(state: GameState, habitId: string, target: number |
     targetSignaled: false,
     startedAt: now,
     goalSeconds: {},
+    nousMade: D(0),
   };
   return ok;
 }
@@ -60,6 +63,13 @@ export function endSession(state: GameState, now: number = 0): ActionResult {
   // summary's practice minutes key off C — never raw elapsed.
   const credited = session?.accounting.creditedSeconds ?? 0;
   const target = session?.target ?? null;
+  // The class's share: all credited time went to the session habit's
+  // class, if it had one (habits.accrueLivePractice).
+  const habitClass = state.records.habits.find((h) => h.id === state.records.activeHabitId)?.habitClass ?? null;
+  const classSeconds = habitClass !== null ? credited : 0;
+  const credit = habitClass !== null ? state.records.classCredit[habitClass] : 0;
+  const levelAfter = classLevelOf(credit).level;
+  const levelBefore = classLevelOf(Math.max(0, credit - classSeconds)).level;
   state.game.mode = "upgrade";
   state.game.session = null;
   state.records.sessionsCompleted++;
@@ -87,6 +97,11 @@ export function endSession(state: GameState, now: number = 0): ActionResult {
   state.game.summary = {
     sessionNumber: state.records.sessionsCompleted,
     seconds: credited,
+    nous: session?.nousMade ?? D(0),
+    habitClass,
+    classSeconds,
+    levelBefore,
+    levelAfter,
     plannedTarget: target,
     honestyEvents: events,
     reflection: null,

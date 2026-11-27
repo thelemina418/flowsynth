@@ -46,6 +46,9 @@ export interface SessionState {
   startedAt: number;
   // goalId → credited seconds accrued while the session ran (§9).
   goalSeconds: Record<string, number>;
+  // The ν the session made (issue #40): banked from trusted flow time,
+  // plus provisional ν once a non-missed honesty answer settles it.
+  nousMade: Num;
 }
 
 // The summary's reflection (spec §8).
@@ -54,10 +57,18 @@ export interface SessionReflection {
   slider: number;
 }
 
-// The session's closing summary (§5.7), interim: practice facts only.
+// The session's closing summary (§5.7; spec chunk 04, issue #40).
 export interface SessionSummary {
   sessionNumber: number;
   seconds: number;
+  // The session's ν, its habit's class (null while awaiting one), the
+  // credited seconds that went to the class, and the class level before
+  // and after the session.
+  nous: Num;
+  habitClass: HabitClass | null;
+  classSeconds: number;
+  levelBefore: number;
+  levelAfter: number;
   plannedTarget: number | null;
   honestyEvents: HonestyEvent[];
   reflection: SessionReflection | null;

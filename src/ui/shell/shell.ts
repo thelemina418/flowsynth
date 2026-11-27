@@ -3,8 +3,8 @@ import { advance } from "../../engine/advance";
 import { apply, type Action, type ApplyResult } from "../../engine/apply";
 import type { Cell } from "../../engine/hex";
 import { createInitialState } from "../../engine/state";
-import type { Presence } from "../../engine/trust";
-import type { GameState, Habit, HabitClass } from "../../engine/types";
+import { poolOutstanding, type Presence } from "../../engine/trust";
+import type { GameState, Habit, HabitClass, HonestyOutcome, SessionState, SessionSummary } from "../../engine/types";
 import { Placing } from "../board/placing";
 import { SharedSave, type SaveStorage } from "../shared-save";
 
@@ -13,13 +13,16 @@ import { SharedSave, type SaveStorage } from "../shared-save";
 // stale-tab guard), offers the explicit recovery (ADR-0082) when a load
 // requires it, and asks each habit awaiting a class for one. From upgrade
 // mode it opens Begin flow, and in flow it runs the session clock's
-// boundary (issue #39).
+// boundary (issue #39). At End it asks the honesty report when
+// provisional time is owed, then shows the summary (issue #40).
 
 export type Screen =
   | { kind: "recovery"; raw: string; lost: string[]; error: string | null }
   | { kind: "class"; habit: Habit; liveSeconds: number; open: HabitClass[]; error: string | null }
   | { kind: "begin"; error: string | null }
   | { kind: "flow"; error: string | null }
+  | { kind: "honesty"; session: SessionState; error: string | null }
+  | { kind: "summary"; summary: SessionSummary }
   | { kind: "ready" };
 
 interface Offer {
@@ -48,6 +51,10 @@ export class Shell {
   private readonly beginOpen = signal(false);
   private readonly beginError = signal<string | null>(null);
   private readonly flowError = signal<string | null>(null);
+  // Set by End while provisional time is owed (issue #40): the honesty
+  // report shows only then, never mid-session. Not saved: a reload lands
+  // on the flow screen, and End asks again.
+  private readonly ending = signal(false);
   // The clock boundary's last reading: the wall clock and the drift
   // between the wall and performance clocks, both in ms. Null while no
   // session clock is running.
@@ -63,7 +70,13 @@ export class Shell {
       return { kind: "class", habit, liveSeconds: liveSeconds(state, habit.id), open: [...state.game.openClasses], error: this.classError.value };
     }
     const mode = state.game.mode;
-    if (mode === "flow" || mode === "paused") return { kind: "flow", error: this.flowError.value };
+    const session = state.game.session;
+    if (mode === "flow" || mode === "paused") {
+      if (this.ending.value && session && poolOutstanding(state)) return { kind: "honesty", session, error: this.flowError.value };
+      return { kind: "flow", error: this.flowError.value };
+    }
+    const summary = state.game.summary;
+    if (mode === "upgrade" && summary && !summary.seen) return { kind: "summary", summary };
     if (this.beginOpen.value) return { kind: "begin", error: this.beginError.value };
     return { kind: "ready" };
   });
@@ -204,14 +217,43 @@ export class Shell {
     this.act({ type: "resumeSession" });
   }
 
-  // End flushes a visible boundary, then ends the session.
+  // End flushes a visible boundary. With provisional time owed it asks
+  // the honesty report first; otherwise it ends the session.
   end(): void {
     this.boundary("visible");
+    if (poolOutstanding(this.state.peek())) {
+      this.flowError.value = null;
+      this.ending.value = true;
+      return;
+    }
+    this.finish();
+  }
+
+  // The honesty report's answer settles the pool, then the session ends.
+  // A paused session resumes for the answer: the report settles in flow,
+  // and no time passes between.
+  answerHonesty(outcome: HonestyOutcome): void {
+    if (this.state.peek().game.mode === "paused") this.act({ type: "resumeSession" });
+    const result = this.act({ type: "settleHonestyReport", outcome });
+    if (!result.ok) {
+      this.flowError.value = result.reason ?? null;
+      return;
+    }
+    this.ending.value = false;
+    this.finish();
+  }
+
+  private finish(): void {
     const result = this.act({ type: "endSession", now: this.now() });
     this.flowError.value = result.ok ? null : (result.reason ?? null);
     if (!result.ok) return;
     this.lastWall = null;
     this.inspected.value = null;
+  }
+
+  // The summary's one control: dismissed, it leads to upgrade mode.
+  dismissSummary(): void {
+    this.act({ type: "dismissSummary" });
   }
 
   writeNote(text: string): ApplyResult {

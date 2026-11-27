@@ -4,13 +4,16 @@ import type { Shell } from "./shell";
 import { BeginFlow } from "./BeginFlow";
 import { ClassChoice } from "./ClassChoice";
 import { FlowScreen } from "./FlowScreen";
+import { HonestyReport } from "./HonestyReport";
+import { Summary } from "./Summary";
 import { RecoveryChoice } from "./RecoveryChoice";
 import { downloadSave } from "./download";
 import { Stage } from "../board/Stage";
 
 // The shell's one surface (issue #21): the question owed on first load,
 // and once nothing is owed, the board and its tray (issues #24, #25),
-// `Begin flow` and its panel, and the flow screen (issue #39).
+// `Begin flow` and its panel, and the flow screen (issue #39), and at End
+// the honesty report and the summary (issue #40).
 export function App({ shell }: { shell: Shell }) {
   const screen = shell.screen.value;
   const notice = shell.notice.value;
@@ -73,6 +76,8 @@ export function App({ shell }: { shell: Shell }) {
         />
       )}
       {screen.kind === "flow" && <FlowScreen shell={shell} error={screen.error} />}
+      {screen.kind === "honesty" && <HonestyReport session={screen.session} error={screen.error} onAnswer={(outcome) => shell.answerHonesty(outcome)} />}
+      {screen.kind === "summary" && <Summary summary={screen.summary} onDismiss={() => shell.dismissSummary()} />}
     </div>
   );
 }

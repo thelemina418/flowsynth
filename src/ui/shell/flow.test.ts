@@ -249,7 +249,8 @@ describe("the flow screen", () => {
     click("End");
     expect(shell.state.value.game.mode).toBe("upgrade");
     expect(shell.state.value.records.sessionsCompleted).toBe(1);
-    expect(shell.screen.value.kind).toBe("ready");
+    // The summary shows first (issue #40).
+    expect(shell.screen.value.kind).toBe("summary");
   });
 
   it("a rebooted Shell lands back on the flow screen with time reconciled from the wall clock", () => {

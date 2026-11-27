@@ -1,8 +1,9 @@
 import { formatClock } from "../../engine/clock";
 import { className } from "../../engine/habits";
+import { fmt } from "../../engine/num";
 import { classLevel, grantsOf } from "../../engine/levels";
 import { placedCount } from "../../engine/placement";
-import type { GameState, Habit, SessionState } from "../../engine/types";
+import type { GameState, Habit, SessionState, SessionSummary } from "../../engine/types";
 
 // The flow screen's readouts (issue #39): the session class's line, the
 // Ready count and the ported console clock. Readouts, not sentences.
@@ -51,4 +52,15 @@ export function clockCaption(session: SessionState, paused: boolean): string {
   if (session.target === null) return "open-ended";
   if (session.elapsed >= session.target) return "overrun";
   return formatClock(session.target);
+}
+
+// The summary line (issue #40): `+48 210 ν · Engineer +50 min`, with
+// ` → Lv 2` when the session crossed a level. Minutes are truncated, like
+// every shown figure. A habit still awaiting its class shows only its
+// minutes. Chunk 05 appends the HP segment.
+export function summaryLine(summary: SessionSummary): string {
+  const minutes = Math.floor(summary.seconds / 60 + 1e-9);
+  const practice = summary.habitClass === null ? `+${minutes} min` : `${className(summary.habitClass)} +${Math.floor(summary.classSeconds / 60 + 1e-9)} min`;
+  const crossed = summary.levelAfter > summary.levelBefore ? ` → Lv ${summary.levelAfter}` : "";
+  return `+${fmt(summary.nous)} ν · ${practice}${crossed}`;
 }
