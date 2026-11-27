@@ -11,6 +11,7 @@
     "test": "node tools/run-supported.mjs node_modules/vitest/vitest.mjs run",
     "test:watch": "node tools/run-supported.mjs node_modules/vitest/vitest.mjs",
     "test:calendar": "node tools/run-supported.mjs tools/calendar-regression.mjs",
+    "pace": "node tools/run-supported.mjs tools/pace.mjs",
     "check": "node tools/run-supported.mjs node_modules/typescript/bin/tsc --noEmit",
     "preflight": "node tools/runtime-preflight.mjs",
     "deploy:vercel": "vercel build --prod && vercel deploy --prebuilt --prod"
