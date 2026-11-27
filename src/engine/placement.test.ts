@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { apply, type Action } from "./apply";
 import { applyIn, fresh, giveHabit, giveOscillators } from "./fixtures";
+import { lifetimeCells } from "./hex";
+import { placementRefusal, trayRefusal, type PlacementAction } from "./placement";
 import { cloneState } from "./state";
 import type { GameState } from "./types";
 
@@ -146,5 +148,54 @@ describe("the layout is locked outside upgrade mode (ADR-0001)", () => {
     applyIn(s, { type: "pauseSession" });
     expect(s.game.mode).toBe("paused");
     for (const action of actions) expectRefused(s, action);
+  });
+});
+
+// The board's targets (issue #25) read the placement rules without
+// running `apply`, so the rules alone must say what `apply` would do.
+describe("the placement rules, read without applying", () => {
+  function everyAction(): PlacementAction[] {
+    const actions: PlacementAction[] = [];
+    for (const cell of lifetimeCells()) {
+      for (const module of ["sine", "triangle", "square"] as const) actions.push({ type: "placeModule", module, cell });
+      for (const from of [O, E, NE]) actions.push({ type: "moveModule", from, to: cell });
+      actions.push({ type: "removeModule", cell });
+    }
+    return actions;
+  }
+
+  function expectAgreement(s: GameState) {
+    for (const action of everyAction()) {
+      const result = apply(s, action);
+      expect(placementRefusal(s, action), JSON.stringify(action)).toBe(result.ok ? null : result.reason);
+    }
+  }
+
+  it("refuse exactly what apply refuses, with its reason, in upgrade mode", () => {
+    const s = fresh();
+    expectAgreement(s);
+    applyIn(s, { type: "placeModule", module: "sine", cell: O });
+    expectAgreement(s);
+    applyIn(s, { type: "placeModule", module: "triangle", cell: E });
+    expectAgreement(s);
+  });
+
+  it("refuse every action in flow", () => {
+    const s = fresh();
+    applyIn(s, { type: "placeModule", module: "sine", cell: O });
+    inFlow(s);
+    expectAgreement(s);
+  });
+
+  it("say when the tray can give a type: arrived, with allowance left, in upgrade mode", () => {
+    const s = fresh();
+    expect(trayRefusal(s, "sine")).toBeNull();
+    expect(trayRefusal(s, "square")).toMatch(/hasn't arrived/);
+    applyIn(s, { type: "placeModule", module: "sine", cell: O });
+    applyIn(s, { type: "placeModule", module: "sine", cell: E });
+    expect(trayRefusal(s, "triangle")).toBe("Oscillator allowance is full.");
+    const flowing = fresh();
+    inFlow(flowing);
+    expect(trayRefusal(flowing, "sine")).toBe("The board is locked while a session runs.");
   });
 });

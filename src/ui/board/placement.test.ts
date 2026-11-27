@@ -57,7 +57,7 @@ describe("click-to-pick, click-to-place", () => {
     expect(host.querySelector("[data-picked]")).toBeNull();
   });
 
-  it("marks the pick with a firm inset, open cells as valid and walls as invalid targets", () => {
+  it("marks the pick with a firm inset, open cells as valid and walls and dark cells as invalid targets", () => {
     mount();
     click(entry("Triangle"));
     expect(entry("Triangle").getAttribute("aria-pressed")).toBe("true");
@@ -65,7 +65,8 @@ describe("click-to-pick, click-to-place", () => {
     expect(entry("Sine").getAttribute("aria-pressed")).toBe("false");
     for (const k of ["0,0", "1,0", "0,1", "1,-1"]) expect(cell(k).getAttribute("data-target")).toBe("valid");
     expect(cell("-1,1").getAttribute("data-target")).toBe("invalid");
-    expect(cell("3,0").getAttribute("data-target")).toBeNull();
+    expect(cell("3,0").getAttribute("data-target")).toBe("invalid");
+    expect(cell("3,0").querySelector(".cell-target")).not.toBeNull();
   });
 
   it("keeps the board as it was when a wall is clicked", () => {
@@ -125,7 +126,7 @@ describe("click-to-pick, click-to-place", () => {
     const { shell } = mount();
     click(entry("Sine"));
     const target = cell("0,1");
-    expect(target.getAttribute("tabindex")).toBe("0");
+    expect(target.getAttribute("tabindex")).toMatch(/^(0|-1)$/);
     act(() => { target.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
     expect(placed(shell)).toEqual(["sine@0,1"]);
   });

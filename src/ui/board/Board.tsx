@@ -1,6 +1,19 @@
 import type { JSX } from "preact";
 import { boardCells, type CellKind } from "../../engine/board";
-import { corners, cellKey, lifetimeCells, ring, sameCell, toPixel, type Cell, type Point } from "../../engine/hex";
+import { useRef, useState } from "preact/hooks";
+import {
+  cellKey,
+  corners,
+  LIFETIME_RADIUS,
+  lifetimeCells,
+  ring,
+  sameCell,
+  screenNeighbour,
+  toPixel,
+  type Cell,
+  type Point,
+  type ScreenDirection,
+} from "../../engine/hex";
 import { wallAt } from "../../engine/map";
 import { categoryOf, moduleName } from "../../engine/modules";
 import { moduleAt } from "../../engine/placement";
@@ -31,6 +44,7 @@ const ENGRAVE = SIZE * 0.74;
 // A placed module's faceplate, inside the engraved ring.
 const MODULE = SIZE * 0.66;
 const PAD = 4;
+const ORIGIN: Cell = { q: 0, r: 0 };
 
 function points(center: Point, size: number): string {
   return corners(center, size)
@@ -77,16 +91,22 @@ interface BoardCellProps {
   picked: boolean;
   inspected: boolean;
   target: Target | undefined;
+  // The one cell in the tab order (roving focus); the rest are reached by
+  // the arrow keys.
+  roving: boolean;
   // A click, Enter or Space on the cell: always reads it into the Hex
   // detail, and in upgrade mode also picks or places.
   onActivate: () => void;
+  onFocus: () => void;
   // Present only while a placed module can be dragged (upgrade mode).
   onPointerDown: ((event: PointerEvent) => void) | undefined;
 }
 
-function BoardCell({ cell, kind, module, picked, inspected, target, onActivate, onPointerDown }: BoardCellProps) {
+function BoardCell({ cell, kind, module, picked, inspected, target, roving, onActivate, onFocus, onPointerDown }: BoardCellProps) {
   const center = toPixel(cell, SIZE);
-  const common = {
+  // Every cell takes focus, dark ones too, so the Hex detail opens from
+  // the keyboard on any of them.
+  const common = (label: string) => ({
     "data-cell": cellKey(cell),
     "data-kind": kind,
     "data-ring": String(ring(cell)),
@@ -94,24 +114,22 @@ function BoardCell({ cell, kind, module, picked, inspected, target, onActivate, 
     "data-picked": picked ? "" : undefined,
     "data-inspected": inspected ? "" : undefined,
     class: `cell cell-${kind}`,
-    onClick: onActivate,
-  };
-  // Open cells and walls take focus, so the Hex detail opens from the
-  // keyboard; the dark rings stay out of the tab order.
-  const focusable = (label: string) => ({
-    tabindex: 0,
+    tabindex: roving ? 0 : -1,
     role: "button" as const,
     "aria-label": label,
     "aria-pressed": picked ? ("true" as const) : undefined,
+    onClick: onActivate,
+    onFocus,
     onKeyDown: (event: KeyboardEvent) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
       onActivate();
     },
   });
+  const targetOutline = target && <polygon class="cell-target" points={points(center, FACE)} />;
   if (kind === "open") {
     return (
-      <g {...common} {...focusable(module ? moduleName(module) : "Open cell")} onPointerDown={onPointerDown}>
+      <g {...common(module ? moduleName(module) : "Open cell")} onPointerDown={onPointerDown}>
         <polygon class="cell-face" points={points(center, FACE)} />
         <polygon class="cell-engrave" points={points(center, ENGRAVE)} />
         {module && (
@@ -123,14 +141,15 @@ function BoardCell({ cell, kind, module, picked, inspected, target, onActivate, 
             </text>
           </g>
         )}
-        {target && <polygon class="cell-target" points={points(center, FACE)} />}
+        {targetOutline}
       </g>
     );
   }
   if (kind === "dark") {
     return (
-      <g {...common}>
+      <g {...common("Dark cell")}>
         <polygon class="cell-face" points={points(center, FACE)} stroke-dasharray="3 5" />
+        {targetOutline}
       </g>
     );
   }
@@ -138,7 +157,7 @@ function BoardCell({ cell, kind, module, picked, inspected, target, onActivate, 
   const mark = wall.opens ? CLASS_MARKS[wall.opens] : undefined;
   const initialY = mark ? center.y - 2 : center.y + 5;
   return (
-    <g {...common} {...focusable(wall.name ?? "Wall")}>
+    <g {...common(wall.name ?? "Wall")}>
       <polygon class="cell-face" points={points(center, FACE)} />
       {wall.name !== null && (
         <text class="wall-initial" x={round(center.x)} y={round(initialY)} text-anchor="middle">
@@ -146,7 +165,7 @@ function BoardCell({ cell, kind, module, picked, inspected, target, onActivate, 
         </text>
       )}
       {mark?.(center.x, center.y + 10)}
-      {target && <polygon class="cell-target" points={points(center, FACE)} />}
+      {targetOutline}
     </g>
   );
 }
@@ -165,12 +184,30 @@ interface BoardProps {
   onDrop: (target: Element | null) => void;
 }
 
+const ARROWS: Record<string, ScreenDirection> = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
+
 export function Board({ board, rates, flowing, placing, inspected, onCell, onDrop }: BoardProps) {
   const pick = placing.pick.value;
   const targets = placing.targets.value;
   const locked = placing.locked.value;
+  // The board is one tab stop: the cell last focused, from (0,0) at
+  // first. Arrow keys move it along the drawn grid and stop at the edge.
+  const [roving, setRoving] = useState(cellKey(ORIGIN));
+  const svg = useRef<SVGSVGElement>(null);
+  const onKeyDown = (event: KeyboardEvent) => {
+    const direction = ARROWS[event.key];
+    const from = event.target instanceof Element ? event.target.closest("[data-cell]")?.getAttribute("data-cell") : null;
+    if (!direction || !from) return;
+    event.preventDefault();
+    const [q, r] = from.split(",").map(Number) as [number, number];
+    const next = screenNeighbour({ q, r }, direction);
+    if (ring(next) > LIFETIME_RADIUS) return;
+    const key = cellKey(next);
+    setRoving(key);
+    svg.current?.querySelector<SVGGElement>(`[data-cell="${key}"]`)?.focus();
+  };
   return (
-    <svg class="board" viewBox={VIEW_BOX} role="img" aria-label="Board">
+    <svg ref={svg} class="board" viewBox={VIEW_BOX} role="group" aria-label="Board" onKeyDown={onKeyDown}>
       {boardCells(board).map(({ cell, kind }) => {
         const module = kind === "open" ? moduleAt(board, cell)?.module : undefined;
         return (
@@ -182,7 +219,9 @@ export function Board({ board, rates, flowing, placing, inspected, onCell, onDro
             picked={pick?.from === "cell" && sameCell(pick.cell, cell)}
             inspected={inspected !== null && sameCell(inspected, cell)}
             target={targets.get(cellKey(cell))}
+            roving={roving === cellKey(cell)}
             onActivate={() => onCell(cell)}
+            onFocus={() => setRoving(cellKey(cell))}
             onPointerDown={!locked && module ? (event) => startDrag(event, { begin: () => placing.pickCell(cell), drop: onDrop }) : undefined}
           />
         );

@@ -7,16 +7,20 @@ import type { Board, GameState, ModuleCategory, ModuleType, Placement } from "./
 // reach these through `apply` (engine/apply.ts), the one placement path the
 // tray, the board's drag and its click-to-pick all share. Every refusal
 // leaves the state untouched and says why in player-facing copy.
+//
+// The rules live in `placementRefusal` alone. `apply` runs it before it
+// changes anything, and the board's pick outlines read it directly, so an
+// outline can never disagree with what a click would do, and holding a
+// pick never recomputes the board's rates.
+
+export type PlacementAction =
+  | { type: "placeModule"; module: ModuleType; cell: Cell }
+  | { type: "moveModule"; from: Cell; to: Cell }
+  | { type: "removeModule"; cell: Cell };
 
 export interface PlacementResult {
   ok: boolean;
   reason?: string;
-}
-
-const ok: PlacementResult = { ok: true };
-
-function fail(reason: string): PlacementResult {
-  return { ok: false, reason };
 }
 
 export function moduleAt(board: Board, cell: Cell): Placement | undefined {
@@ -30,56 +34,80 @@ export function placedCount(board: Board, category: ModuleCategory): number {
 
 // The layout is locked whenever time produces (ADR-0001): in flow, paused,
 // and the breather once chunk 04 adds it.
-function locked(state: GameState): PlacementResult | null {
-  return state.game.mode === "upgrade" ? null : fail("The board is locked while a session runs.");
+function locked(state: GameState): string | null {
+  return state.game.mode === "upgrade" ? null : "The board is locked while a session runs.";
 }
 
 // Only an owned open cell takes a module.
-function unbuildable(board: Board, cell: Cell): PlacementResult | null {
+function unbuildable(board: Board, cell: Cell): string | null {
   const kind = cellKind(board, cell);
-  if (kind === "wall") return fail("That cell is a wall.");
-  if (kind === "dark") return fail("That cell is dark.");
+  if (kind === "wall") return "That cell is a wall.";
+  if (kind === "dark") return "That cell is dark.";
   return null;
 }
 
-export function placeModule(state: GameState, module: ModuleType, cell: Cell): PlacementResult {
+// Why the tray can't give out a module of this type right now, or null
+// when it can: the layout is unlocked, the type has arrived, and its
+// category has allowance left.
+export function trayRefusal(state: GameState, module: ModuleType): string | null {
   const refused = locked(state);
   if (refused) return refused;
-  const board = state.game.board;
-  if (!state.game.arrived.includes(module)) return fail(`${moduleName(module)} hasn't arrived yet.`);
-  const blocked = unbuildable(board, cell);
-  if (blocked) return blocked;
-  if (moduleAt(board, cell)) return fail("That cell already holds a module.");
+  if (!state.game.arrived.includes(module)) return `${moduleName(module)} hasn't arrived yet.`;
   const category = categoryOf(module);
-  if (placedCount(board, category) >= state.game.allowance[category]) {
-    return fail(`${categoryName(category)} allowance is full.`);
+  if (placedCount(state.game.board, category) >= state.game.allowance[category]) {
+    return `${categoryName(category)} allowance is full.`;
   }
-  board.placements.push({ cell: { q: cell.q, r: cell.r }, module });
-  return ok;
+  return null;
 }
 
-// A move onto an occupied open cell swaps the two modules.
-export function moveModule(state: GameState, from: Cell, to: Cell): PlacementResult {
+// Why `apply` would refuse this placement action, or null when it would
+// take it. Reads the state; never changes it.
+export function placementRefusal(state: GameState, action: PlacementAction): string | null {
   const refused = locked(state);
   if (refused) return refused;
   const board = state.game.board;
-  const moving = moduleAt(board, from);
-  if (!moving) return fail("No module sits on that cell.");
-  const blocked = unbuildable(board, to);
-  if (blocked) return blocked;
-  if (sameCell(from, to)) return fail("The module is already there.");
-  const other = moduleAt(board, to);
-  if (other) other.cell = { q: from.q, r: from.r };
-  moving.cell = { q: to.q, r: to.r };
-  return ok;
+  switch (action.type) {
+    case "placeModule": {
+      if (!state.game.arrived.includes(action.module)) return `${moduleName(action.module)} hasn't arrived yet.`;
+      const blocked = unbuildable(board, action.cell);
+      if (blocked) return blocked;
+      if (moduleAt(board, action.cell)) return "That cell already holds a module.";
+      return trayRefusal(state, action.module);
+    }
+    case "moveModule": {
+      if (!moduleAt(board, action.from)) return "No module sits on that cell.";
+      const blocked = unbuildable(board, action.to);
+      if (blocked) return blocked;
+      if (sameCell(action.from, action.to)) return "The module is already there.";
+      return null;
+    }
+    case "removeModule":
+      return moduleAt(board, action.cell) ? null : "No module sits on that cell.";
+  }
 }
 
-export function removeModule(state: GameState, cell: Cell): PlacementResult {
-  const refused = locked(state);
-  if (refused) return refused;
+// Applies a placement action to the draft state, once the rules allow it.
+export function relayout(state: GameState, action: PlacementAction): PlacementResult {
+  const reason = placementRefusal(state, action);
+  if (reason !== null) return { ok: false, reason };
   const board = state.game.board;
-  const placed = moduleAt(board, cell);
-  if (!placed) return fail("No module sits on that cell.");
-  board.placements = board.placements.filter((placement) => placement !== placed);
-  return ok;
+  switch (action.type) {
+    case "placeModule":
+      board.placements.push({ cell: { q: action.cell.q, r: action.cell.r }, module: action.module });
+      break;
+    case "moveModule": {
+      // A move onto an occupied open cell swaps the two modules.
+      const moving = moduleAt(board, action.from)!;
+      const other = moduleAt(board, action.to);
+      if (other) other.cell = { q: action.from.q, r: action.from.r };
+      moving.cell = { q: action.to.q, r: action.to.r };
+      break;
+    }
+    case "removeModule": {
+      const placed = moduleAt(board, action.cell)!;
+      board.placements = board.placements.filter((placement) => placement !== placed);
+      break;
+    }
+  }
+  return { ok: true };
 }

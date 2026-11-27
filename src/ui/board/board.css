@@ -17,11 +17,13 @@
   white-space: nowrap;
 }
 
+/* The board scales with its width only, never the viewport's height, so a
+   short desktop window keeps every cell at least 44px across its flats
+   (the touch floor) and the page scrolls instead. */
 .board {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 80vh;
 }
 
 .cell-open .cell-face {
@@ -72,7 +74,10 @@
   align-items: start;
 }
 
-@media (max-width: 560px) {
+/* Beside the tray the board needs about 440px for 44px cells, so below
+   640px the tray drops under it. At phone width the board only has to
+   fit. */
+@media (max-width: 639px) {
   .stage-board { grid-template-columns: minmax(0, 1fr); }
   .tray { flex-direction: row; flex-wrap: wrap; }
 }
@@ -112,10 +117,6 @@
 }
 
 .tray-entry:disabled .glyph { stroke: var(--muted); }
-
-.cell-open[tabindex] { cursor: pointer; }
-.cell-open[tabindex]:focus { outline: none; }
-.cell-open[tabindex]:focus-visible .cell-face { stroke: var(--ink); stroke-width: 2.4; }
 
 .module { pointer-events: none; }
 
@@ -195,8 +196,9 @@
 .hex-detail-line:first-child,
 .hex-detail-line[data-effect] { color: var(--ink); }
 
-.cell[tabindex],
-.cell-dark { cursor: pointer; }
-.cell[tabindex]:focus { outline: none; }
-.cell-wall[tabindex]:focus-visible .cell-face { stroke: var(--ink); stroke-width: 2.4; }
+/* Every cell is focusable (one tab stop, arrow keys between cells), so
+   every kind shows the same focus ring. */
+.cell { cursor: pointer; }
+.cell:focus { outline: none; }
+.cell:focus-visible .cell-face { stroke: var(--ink); stroke-width: 2.4; }
 .cell[data-inspected] .cell-face { stroke: var(--ink); stroke-width: 1.8; }

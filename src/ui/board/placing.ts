@@ -1,16 +1,15 @@
 import { computed, signal, type ReadonlySignal } from "@preact/signals";
-import { apply, type Action, type ApplyResult } from "../../engine/apply";
-import { boardCells } from "../../engine/board";
-import { cellKey, sameCell, type Cell } from "../../engine/hex";
-import { categoryOf } from "../../engine/modules";
-import { moduleAt, placedCount } from "../../engine/placement";
+import type { Action, ApplyResult } from "../../engine/apply";
+import { cellKey, lifetimeCells, sameCell, type Cell } from "../../engine/hex";
+import { moduleAt, placementRefusal, trayRefusal, type PlacementAction } from "../../engine/placement";
 import type { GameState, ModuleType } from "../../engine/types";
 
 // The pick (issue #25): what the player is holding between a click on a
 // tray entry or a placed module and the click (or drop) that places it.
 // Drag, click-to-pick and keyboard all end in `commit`, the shell's one
-// `apply` path. A target's validity is that same `apply` run dry, so the
-// outlines can never disagree with what a click would do.
+// `apply` path. A target's validity is the engine's `placementRefusal`,
+// the rules `apply` itself runs first, so the outlines can never disagree
+// with what a click would do, and holding a pick never recomputes rates.
 
 export type Pick = { from: "tray"; module: ModuleType } | { from: "cell"; cell: Cell };
 
@@ -25,16 +24,14 @@ export class Placing {
   readonly locked = computed(() => this.state.value.game.mode !== "upgrade");
   readonly pick = computed<Pick | null>(() => (this.locked.value ? null : this.held.value));
 
-  // Each owned or wall cell's standing as a target for the pick. Dark
-  // cells stay quiet: they carry no detail.
+  // Every cell's standing as a target for the pick: open, wall or dark.
   readonly targets = computed<ReadonlyMap<string, Target>>(() => {
     const pick = this.pick.value;
     const targets = new Map<string, Target>();
     if (!pick) return targets;
     const state = this.state.value;
-    for (const { cell, kind } of boardCells(state.game.board)) {
-      if (kind === "dark") continue;
-      targets.set(cellKey(cell), apply(state, actionOnto(pick, cell)).ok ? "valid" : "invalid");
+    for (const cell of lifetimeCells()) {
+      targets.set(cellKey(cell), placementRefusal(state, actionOnto(pick, cell)) === null ? "valid" : "invalid");
     }
     return targets;
   });
@@ -49,9 +46,7 @@ export class Placing {
   canTake(module: ModuleType): boolean {
     if (this.locked.value) return false;
     if (this.pick.value?.from === "cell") return true;
-    const game = this.state.value.game;
-    const category = categoryOf(module);
-    return game.arrived.includes(module) && placedCount(game.board, category) < game.allowance[category];
+    return trayRefusal(this.state.value, module) === null;
   }
 
   clear(): void {
@@ -119,6 +114,6 @@ export class Placing {
   }
 }
 
-function actionOnto(pick: Pick, cell: Cell): Action {
+function actionOnto(pick: Pick, cell: Cell): PlacementAction {
   return pick.from === "tray" ? { type: "placeModule", module: pick.module, cell } : { type: "moveModule", from: pick.cell, to: cell };
 }

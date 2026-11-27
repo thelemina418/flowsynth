@@ -115,3 +115,20 @@ export function corners(center: Point, size: number): Point[] {
     return { x: center.x + size * Math.cos(angle), y: center.y + size * Math.sin(angle) };
   });
 }
+
+// Arrow keys on the drawn board. Up and down step along a column (q
+// fixed). Flat-top cells have no neighbour straight left or right, so left
+// and right zig-zag along a drawn row: from an even column east steps
+// down-right and west down-left, from an odd column up-right and up-left,
+// so a step left undoes a step right.
+export type ScreenDirection = "up" | "down" | "left" | "right";
+
+export function screenNeighbour(cell: Cell, direction: ScreenDirection): Cell {
+  const odd = (cell.q & 1) === 1;
+  switch (direction) {
+    case "up": return addCell(cell, DIRECTIONS[5]!);
+    case "down": return addCell(cell, DIRECTIONS[2]!);
+    case "right": return addCell(cell, DIRECTIONS[odd ? 0 : 1]!);
+    case "left": return addCell(cell, DIRECTIONS[odd ? 4 : 3]!);
+  }
+}

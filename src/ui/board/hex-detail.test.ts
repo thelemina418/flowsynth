@@ -66,7 +66,6 @@ describe("the Hex detail panel", () => {
 
   it("opens from the keyboard on a focused cell and closes on Escape", () => {
     mount();
-    expect(cell("2,-1").getAttribute("tabindex")).toBe("0");
     press(cell("2,-1"), "Enter");
     expect(lines()).toEqual(["Flint · Wall · opens Roadie"]);
     press(document, "Escape");
@@ -136,5 +135,54 @@ describe("the Hex detail panel", () => {
     });
     expect(s.game.mode).toBe("flow");
     expect(lines()).toEqual(["Triangle · Oscillator", "Not resonating · needs two touching oscillators beside it", "1.0 ν/s"]);
+  });
+});
+
+// Every cell, dark ones included, is reachable from the keyboard (spec:
+// the Hex detail opens by click, keyboard and touch). The board is one tab
+// stop; arrow keys move between cells along the drawn grid.
+describe("keyboard reach across the board", () => {
+  const inTabOrder = () => [...host.querySelectorAll("[data-cell]")].filter((c) => c.getAttribute("tabindex") === "0");
+  const focused = () => (document.activeElement as Element | null)?.getAttribute("data-cell");
+
+  it("puts the board in the tab order once, at the centre cell, with every other cell focusable", () => {
+    mount();
+    expect(inTabOrder().map((c) => c.getAttribute("data-cell"))).toEqual(["0,0"]);
+    for (const c of host.querySelectorAll("[data-cell]")) expect(c.getAttribute("tabindex")).toMatch(/^(0|-1)$/);
+  });
+
+  it("moves focus with the arrow keys: up and down a column, left and right along a drawn row", () => {
+    mount();
+    act(() => cell("0,0").focus());
+    press(cell("0,0"), "ArrowRight");
+    expect(focused()).toBe("1,0");
+    press(cell("1,0"), "ArrowRight");
+    expect(focused()).toBe("2,-1");
+    press(cell("2,-1"), "ArrowLeft");
+    expect(focused()).toBe("1,0");
+    press(cell("1,0"), "ArrowUp");
+    expect(focused()).toBe("1,-1");
+    press(cell("1,-1"), "ArrowDown");
+    expect(focused()).toBe("1,0");
+    press(cell("1,0"), "ArrowLeft");
+    expect(focused()).toBe("0,0");
+    expect(inTabOrder().map((c) => c.getAttribute("data-cell"))).toEqual(["0,0"]);
+  });
+
+  it("reaches a dark cell and reads it with Enter", () => {
+    mount();
+    act(() => cell("0,0").focus());
+    for (const from of ["0,0", "0,1", "0,2"]) press(cell(from), "ArrowDown");
+    expect(focused()).toBe("0,3");
+    expect(cell("0,3").getAttribute("data-kind")).toBe("dark");
+    press(cell("0,3"), "Enter");
+    expect(lines()).toEqual(["Dark cell · beyond this arc"]);
+  });
+
+  it("stops at the board's edge", () => {
+    mount();
+    act(() => cell("0,-5").focus());
+    press(cell("0,-5"), "ArrowUp");
+    expect(focused()).toBe("0,-5");
   });
 });
