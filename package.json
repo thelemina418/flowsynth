@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "FlowSynth first playable: a modular focus instrument driven by real practice.",
+  "description": "Flowsynth: an incremental game played during real-life focus sessions.",
   "scripts": {
     "dev": "node tools/run-supported.mjs tools/dev-server.mjs",
     "build": "node tools/run-supported.mjs node_modules/typescript/bin/tsc --noEmit && node tools/run-supported.mjs node_modules/vite/bin/vite.js build",
@@ -11,7 +11,7 @@
     "test": "node tools/run-supported.mjs node_modules/vitest/vitest.mjs run",
     "test:watch": "node tools/run-supported.mjs node_modules/vitest/vitest.mjs",
     "test:calendar": "node tools/run-supported.mjs tools/calendar-regression.mjs",
-    "check": "node tools/run-supported.mjs node_modules/typescript/bin/tsc --noEmit && node tools/run-supported.mjs tools/dev/recorder-static-check.mjs",
+    "check": "node tools/run-supported.mjs node_modules/typescript/bin/tsc --noEmit",
     "preflight": "node tools/runtime-preflight.mjs",
     "deploy:vercel": "vercel build --prod && vercel deploy --prebuilt --prod"
   },

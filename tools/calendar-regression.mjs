@@ -1,6 +1,6 @@
 // Issue #505: the targeted calendar regression runner. The engine's calendar
-// basis is the host's local calendar — goal occurrence days and playthrough
-// schedule days both read it — so the calendar-sensitive regressions run
+// basis is the host's local calendar — goal occurrence days read it — so
+// the calendar-sensitive regressions run
 // under UTC and a DST-observing zone, the two bases the repository declares,
 // and establish the intended behavior in each. Targeted by design: the two
 // files below, twice — never a duplicated full suite. CI's ubuntu runner is

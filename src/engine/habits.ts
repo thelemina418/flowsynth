@@ -1,21 +1,14 @@
-import { NumericFault } from "./numeric";
 import { EPS } from "./constants";
-import { syncAchievements } from "./achievements";
-import { createHabitClasses } from "./classes";
 import { accrueGoalProgress, rollGoalOccurrences } from "./goals";
 import type { GameState, Habit, HabitColor, PracticeEntry } from "./types";
 
 export type { Habit, PracticeEntry };
 
-// Habits (issue #5; class-wearing since issue #423). A habit names what
-// you are practicing; one may be selected as the session's active habit,
-// locked for the session (ADR-0001). Development accrues from live flow
-// time and manual practice logs — manual logs never produce nous or
-// charge (ADR-0012's boundary rule). The Habit app is a fixed-function
-// console instrument (ADR-0012): no module, no power curve; development
-// always advances one-for-one until the console long goals arrive. Every
-// habit wears the launch class (Engineer) from creation; its pair's
-// progression lives under the habit and never transfers.
+// Habits (issue #5). A habit names what you are practicing; one may be
+// selected as the session's active habit, locked for the session
+// (ADR-0001). Credited time accrues from live flow time and manual
+// practice logs. Interim (issue #15): classes retired with the old game and
+// return with spec chunk 04.
 
 // The six-token palette (issue #312, re-owned by the habit with issue
 // #445, ADR-0075), vermillion default. The choice is made in the habit
@@ -50,10 +43,6 @@ export function createHabit(state: GameState, name: string): { ok: boolean; reas
     archived: false,
     // The palette default (issue #445): the editor's swatches change it.
     color: DEFAULT_HABIT_COLOR,
-    // Every habit wears the launch class from creation (issue #423); its
-    // Engineer pair starts at zero and accrues only from credited flow.
-    classId: "engineer",
-    classes: createHabitClasses(),
   };
   state.habits.push(habit);
   return { ok: true, habit };
@@ -91,10 +80,8 @@ export function archiveHabit(state: GameState, id: string): { ok: boolean; reaso
   return { ok: true };
 }
 
-// The session lock (ADR-0001, extended by issue #423): habit selection is
-// an upgrade-mode action — the lock holds for the entire session,
-// pauses included, and the class selection behind it shares the same
-// refusal surface. "Between sessions" is the gate's whole vocabulary.
+// The session lock (ADR-0001): habit selection is an upgrade-mode action —
+// the lock holds for the entire session, pauses included.
 export function selectHabit(state: GameState, id: string | null): { ok: boolean; reason?: string } {
   if (state.mode !== "upgrade") return { ok: false, reason: "The active habit is locked during flow." };
   if (id !== null && !state.habits.some((h) => h.id === id && !h.archived)) {
@@ -104,23 +91,20 @@ export function selectHabit(state: GameState, id: string | null): { ok: boolean;
   return { ok: true };
 }
 
-// Manual practice log: advances development and goal conditions without
-// producing nous or charge (§2.3).
-function applyPracticeLog(
+// Manual practice log: advances the habit's credited time and its goal
+// conditions (§2.3).
+export function addPracticeLog(
   state: GameState,
   habitId: string,
   minutes: number,
   now: number = 0,
-): { ok: boolean; reason?: string; completions?: number; unlocked?: string[] } {
+): { ok: boolean; reason?: string; completions?: number } {
   if (state.mode !== "upgrade") return { ok: false, reason: "Practice is logged between sessions." };
   const habit = state.habits.find((h) => h.id === habitId && !h.archived);
   if (!habit) return { ok: false, reason: "Habit not found." };
   if (!(minutes > 0)) return { ok: false, reason: "Log a positive number of minutes." };
   rollGoalOccurrences(state, now);
-  // The manual side of the honesty boundary (ADR-0047): the log advances
-  // goal conditions but never joins the live slice the completion
-  // credit prorates by.
-  const completions = accrueGoalProgress(state, habitId, minutes * 60, "manual");
+  const completions = accrueGoalProgress(state, habitId, minutes * 60);
   habit.seconds += minutes * 60;
   state.practiceLog.push({
     id: `p${state.nextId++}`,
@@ -129,8 +113,7 @@ function applyPracticeLog(
     source: "manual",
     at: now,
   });
-  // The manual-log boundary check (ADR-0015): Off the clock, Time in the seat.
-  return { ok: true, completions, unlocked: syncAchievements(state, { now }).map((def) => def.id) };
+  return { ok: true, completions };
 }
 
 // Called from advance: live practice develops the active habit.
@@ -153,20 +136,4 @@ export function logSessionPractice(state: GameState, seconds: number, now: numbe
     source: "live",
     at: now,
   });
-}
-
-export function addPracticeLog(
-  state: GameState,
-  habitId: string,
-  minutes: number,
-  now: number = 0,
-): { ok: boolean; reason?: string; completions?: number; unlocked?: string[] } {
-  const pristine = structuredClone(state);
-  try {
-    return applyPracticeLog(state, habitId, minutes, now);
-  } catch (error) {
-    if (!(error instanceof NumericFault)) throw error;
-    Object.assign(state, pristine);
-    return { ok: false, reason: "The generator charge cannot bank safely, so nothing was logged." };
-  }
 }

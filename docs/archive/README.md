@@ -2,12 +2,16 @@
 
 These are the records of Flowsynth before the design reset of 2026-11 (ADR-0090 to 0095). They are history, not guidance: nothing here binds new work. The current target is in `GLOSSARY.md`, `docs/design/` and `docs/spec/`.
 
+## What moved here with spec chunk 01
+
+Spec chunk 01 (issue #15) deleted the code that still read these, and they moved here:
+
+- the tuning, calibration and economy records (`arete-tuning.md`, `breather-*.md`, `capacity-release-tuning.md`, `century-*`, `economy-*`, `later-era-*`, `response-comparison.md`), `dev-controls-audit.md`, `modules.md` and `save-migration.md`
+- `instrument-standards.md` (superseded by `docs/design/philosophy.md`)
+- `evidence/`
+- `CONTEXT.md` (superseded by `GLOSSARY.md`)
+- `agents/`: the retired process docs (review workflow, verification, recordings, visual evidence, checks, briefs). `AGENTS.md` carries the lean process.
+
 ## Still to move
 
-Code that the rebuild deletes still reads the files below, so they stay in place until spec chunk 01 removes that code. Then they move here.
-
-- `docs/arete-tuning.md`, `breather-spec.md`, `breather-tuning.md`, `capacity-release-tuning.md`, `century-calibration*.{md,json}`, `century-fixture-*.json`, `dev-controls-audit.md`, `economy-report.md`, `economy-results.json`, `later-era-*.{md,json}`, `modules.md`, `response-comparison.md`, `save-migration.md`
-- `docs/instrument-standards.md` (superseded by `docs/design/philosophy.md`)
-- `docs/evidence/`
-- `CONTEXT.md` (superseded by `GLOSSARY.md`)
-- `docs/agents/` process docs other than `issue-tracker.md`, `triage-labels.md` and `domain.md`
+Nothing.

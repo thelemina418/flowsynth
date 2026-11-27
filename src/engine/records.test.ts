@@ -81,16 +81,14 @@ describe("the session record", () => {
     selectHabit(s, habit.id);
     startSession(s, 600, START);
     practice(s, 600);
-    // Half an hour away past the plan, reported as a miss: the bucket
-    // drops, so earned excludes it and C stays at the plan.
+    // Half an hour away past the plan, reported as a miss: C stays at the
+    // plan.
     applyGap(s, 1800, "away", 0);
     flushPendingAway(s);
     resolveHonestyReport(s, "missed");
-    const earnedBefore = s.session!.earned;
     endSession(s, END);
     const record = s.sessionRecords[0]!;
     expect(record.creditedSeconds).toBe(600);
-    expect(record.earned).toBeCloseTo(earnedBefore, 6);
     expect(record.honestyEvents).toEqual([{ awaySeconds: 1800, outcome: "missed" }]);
   });
 

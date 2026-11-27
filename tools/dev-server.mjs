@@ -52,7 +52,7 @@ async function main() {
 
   // Ask the running server for its own provenance; this is the same check
   // the browser performs, done once at launch so a mismatch surfaces before
-  // any evidence is captured from the tab.
+  // the tab is opened.
   let provenance = null;
   try {
     if (url) provenance = await fetch(new URL("-/dev/provenance", url)).then((r) => r.json());
@@ -82,19 +82,14 @@ async function main() {
       if (source.changes.length > 8) {
         console.log(`              … and ${source.changes.length - 8} more`);
       }
-      console.log("              Commit or stash before capturing evidence from this server.");
     }
   } else if (provenance?.commit) {
-    console.log("  source    unknown — relaunch to pick up the capture preflight.");
+    console.log("  source    unknown");
   }
-  if (url) console.log(`  preflight node tools/evidence-preflight.mjs --url ${url}`);
   if (!provenance?.commit) {
-    console.log(
-      "\n  ! The server did not confirm its provenance (GET /-/dev/provenance).",
-    );
-    console.log("  ! Verify manually before capturing any visual evidence from this URL.");
+    console.log("\n  ! The server did not confirm its provenance (GET /-/dev/provenance).");
   }
-  console.log("\n  Evidence rules: docs/agents/visual-evidence.md\n");
+  console.log("");
 }
 
 const isMain = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;

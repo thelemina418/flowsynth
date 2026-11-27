@@ -1,6 +1,6 @@
 # Product
 
-Synthesized from the repo's own records: [CONTEXT.md](CONTEXT.md), [ADR-0016](docs/adr/0016-adopt-the-rack-identity.md), the [instrument standards](docs/instrument-standards.md) (with the 2026-10-12 controls pin and the 2026-10-14 #334 amendment), and the [2026-10-10 retro](docs/retro-2026-10-10.md).
+Synthesized from the repo's own records: [CONTEXT.md](docs/archive/CONTEXT.md), [ADR-0016](docs/adr/0016-adopt-the-rack-identity.md), the [instrument standards](docs/archive/instrument-standards.md) (with the 2026-10-12 controls pin and the 2026-10-14 #334 amendment), and the [2026-10-10 retro](docs/archive/retro-2026-10-10.md).
 
 ## Register
 
