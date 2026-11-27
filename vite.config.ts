@@ -3,8 +3,12 @@ import { defineConfig } from "vite";
 import { defaultTheme, themeCss } from "./src/ui/theme";
 import { devProvenance } from "./tools/dev/provenance.mjs";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   base: "./",
+  // Preact's JSX (issue #21). A build never carries the development JSX
+  // transform: it writes source file paths into the bundle, and a build run
+  // under vitest (NODE_ENV=test) would otherwise pick it.
+  esbuild: { jsxDev: command === "serve" },
   plugins: [
     {
       // Issue #253: development-only provenance at /-/dev/provenance, so a
@@ -76,4 +80,4 @@ export default defineConfig({
       },
     ],
   },
-});
+}));
