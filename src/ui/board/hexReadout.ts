@@ -35,12 +35,7 @@ const RESONANCE_WORDS: Record<OscillatorType, { verb: string; needs: string } | 
 export function hexDetail(board: Board, rates: BoardRates, cell: Cell): DetailLine[] {
   const kind = cellKind(board, cell);
   if (kind === "dark") return [{ text: "Dark cell · beyond this arc" }];
-  if (kind === "wall") {
-    const wall = wallAt(cell);
-    if (wall.name === null) return [{ text: "Wall" }];
-    if (wall.opens === null) return [{ text: `${wall.name} · Wall` }];
-    return [{ text: `${wall.name} · Wall · opens ${className(wall.opens)}`, effect: true }];
-  }
+  if (kind === "wall") return wallLines(rates, cell);
   const oscillator = rates.oscillators.find((o) => sameCell(o.cell, cell));
   if (oscillator) return oscillatorLines(oscillator);
   const modulator = rates.modulators.find((m) => sameCell(m.cell, cell));
@@ -50,6 +45,19 @@ export function hexDetail(board: Board, rates: BoardRates, cell: Cell): DetailLi
   return [{ text: nameLine(placed.module) }];
 }
 
+// A wall names itself, and what it opens. Once a Patch targets it, its
+// effect line is the damage it takes and its regen (issue #34); the opens
+// note then stays on the name line.
+function wallLines(rates: BoardRates, cell: Cell): DetailLine[] {
+  const wall = wallAt(cell);
+  const name = wall.name === null ? "Wall" : `${wall.name} · Wall`;
+  const opens = wall.opens === null ? "" : ` · opens ${className(wall.opens)}`;
+  const patched = rates.walls.find((w) => sameCell(w.cell, cell));
+  if (!patched) return [opens ? { text: name + opens, effect: true } : { text: name }];
+  const regen = patched.regen === null ? "" : ` · regen ${fmtRate(patched.regen)}/s`;
+  return [{ text: name + opens }, { text: `Taking ${fmtRate(patched.damage)}/s${regen}`, effect: true }];
+}
+
 // A modulator names its facing in compass words (issue #31), then its
 // output and the oscillators its reach charges, nearest first (issue #32),
 // or, once patched, its Patch's target (issue #33).
@@ -57,9 +65,9 @@ function modulatorLines(board: Board, m: ModulatorRate): DetailLine[] {
   const facing = m.facing === null ? "" : ` · facing ${FACING_NAMES[m.facing]}`;
   const name = { text: nameLine(m.module) + facing };
   if (cableFrom(board, m.cell)) {
-    const holds = m.deliveries[0]!.holds;
-    // Wall targets, and their names, are issue #34's.
-    const target = holds === "empty" ? "Open cell" : holds === "wall" || holds === "dark" ? "Wall" : moduleName(holds);
+    const { cell, holds } = m.deliveries[0]!;
+    // A wall target goes by its name, a placeholder as Wall (issue #34).
+    const target = holds === "empty" ? "Open cell" : holds === "wall" || holds === "dark" ? (wallAt(cell).name ?? "Wall") : moduleName(holds);
     return [name, { text: `${fmtRate(m.output)} charge/s · patched → ${target}`, effect: true }];
   }
   const charged = m.deliveries.flatMap((d) => (isChargedBy(d.holds) ? [moduleName(d.holds)] : []));
