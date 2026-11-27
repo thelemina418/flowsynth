@@ -1,4 +1,5 @@
 import type { Num } from "./num";
+import type { Hex } from "./hex";
 
 // The single serialisable GameState (spec chunk 01, issue #17). It has two
 // parts: the real-life records, which nothing in the game ever resets, and
@@ -173,7 +174,18 @@ export interface Records {
   nextId: number;
 }
 
-// The game state: minimal in chunk 01.
+// The macro stages (GLOSSARY: Arc). Each sets the board's reach.
+export type Arc = "sketch" | "demo" | "record" | "master" | "encore";
+
+// The board (spec chunk 02, issue #24): the owned open cells and the
+// current arc. Cell kinds are derived (engine/board.ts); placements arrive
+// with issue #25.
+export interface Board {
+  open: Hex[];
+  arc: Arc;
+}
+
+// The game state.
 export interface Game {
   nous: Num;
   mode: Mode;
@@ -185,6 +197,7 @@ export interface Game {
   // The Almanac's legacy line (`Legacy era · <n> modules · archived`),
   // written once by the v15 migration; null on a fresh start.
   legacyLine: string | null;
+  board: Board;
 }
 
 export interface GameState {

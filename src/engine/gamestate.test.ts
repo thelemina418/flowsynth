@@ -38,6 +38,15 @@ describe("advance in upgrade mode freezes the game", () => {
     expect(s).toEqual(before);
   });
 
+  it("leaves the board deep-equal (issue #24)", () => {
+    const s = fresh();
+    s.game.board.open.push({ q: -1, r: 1 });
+    const before = cloneState(s);
+    advanceIn(s, 3600, "upgrade");
+    expect(s.game.board).toEqual(before.game.board);
+    expect(s).toEqual(before);
+  });
+
   it("breather time is reserved: it moves nothing yet", () => {
     const s = flowing();
     const before = cloneState(s);

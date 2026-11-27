@@ -3,7 +3,9 @@ import { normalizeIntentions } from "./intentions";
 import { normalizeHabitColor } from "./habits";
 import { SAVE_VERSION } from "./constants";
 import { D, fromSave, isNum, NumFault, toSave, type Num } from "./num";
-import type { GameState, Habit, HabitClass, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
+import { ARCS, openingBoard } from "./board";
+import { hexKey, LIFETIME_RADIUS, ring, type Hex } from "./hex";
+import type { Arc, Board, GameState, Habit, HabitClass, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
 
 // The save boundary. Save v16 (issue #18) writes the nested GameState
 // (`records`, `game`) with every Decimal as num's save string, and reads it
@@ -334,10 +336,37 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
         ? game.openClasses.map(readClass).filter((c): c is HabitClass => c !== null)
         : fresh.game.openClasses,
       legacyLine: typeof game.legacyLine === "string" ? game.legacyLine : null,
+      board: readBoard(game.board),
     },
   };
   const recovered = recovery && lost.length > 0 ? { fromVersion: version, lost } : undefined;
   return { state, ...(recovered && { recovered }) };
+}
+
+function readCell(value: unknown): Hex | null {
+  if (!isRecord(value) || !Number.isInteger(value.q) || !Number.isInteger(value.r)) return null;
+  const cell = { q: value.q as number, r: value.r as number };
+  return ring(cell) <= LIFETIME_RADIUS ? cell : null;
+}
+
+// The board (issue #24) is an additive v16 field: a save written before it
+// has none and loads the opening board. Cells the lifetime board can't hold
+// are dropped; a board with no readable cell is the opening board, never an
+// invented one.
+function readBoard(raw: unknown): Board {
+  const opening = openingBoard();
+  if (!isRecord(raw) || !Array.isArray(raw.open)) return opening;
+  const seen = new Set<string>();
+  const open: Hex[] = [];
+  for (const item of raw.open) {
+    const cell = readCell(item);
+    if (cell === null || seen.has(hexKey(cell))) continue;
+    seen.add(hexKey(cell));
+    open.push(cell);
+  }
+  if (open.length === 0) return opening;
+  const arc = typeof raw.arc === "string" && (ARCS as readonly string[]).includes(raw.arc) ? (raw.arc as Arc) : opening.arc;
+  return { open, arc };
 }
 
 function needsRecovery(lost: string[]): LoadResult {

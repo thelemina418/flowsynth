@@ -69,6 +69,35 @@ describe("save v16", () => {
   });
 });
 
+// The board is an additive v16 field (issue #24): SAVE_VERSION stays 16.
+describe("the board in a v16 save", () => {
+  it("round-trips the owned cells and the arc", () => {
+    const s = flowing();
+    s.game.board.open.push({ q: -1, r: 1 }, { q: 0, r: 3 });
+    s.game.board.arc = "demo";
+    const loaded = deserialize(serialize(s, 1_000));
+    expect(loaded.error).toBeUndefined();
+    expect(loaded.state).toEqual(s);
+    expect(loaded.state!.game.board).toEqual({ open: [...fresh().game.board.open, { q: -1, r: 1 }, { q: 0, r: 3 }], arc: "demo" });
+  });
+
+  it("a v16 save written before the board loads the opening board", () => {
+    const loaded = deserialize(v16((st) => { delete st.game.board; }));
+    expect(loaded.error).toBeUndefined();
+    expect(loaded.state).toEqual(flowing());
+    expect(loaded.state!.game.board).toEqual(fresh().game.board);
+  });
+
+  it("an unreadable board loads the opening board rather than an invented one", () => {
+    for (const bad of [null, "board", { open: "x", arc: "sketch" }, { open: [{ q: 0 }], arc: "sketch" }, { open: [], arc: "sketch" }]) {
+      const loaded = deserialize(v16((st) => { st.game.board = bad; }));
+      expect(loaded.state!.game.board, JSON.stringify(bad)).toEqual(fresh().game.board);
+    }
+    const unknownArc = deserialize(v16((st) => { (st.game.board as { arc: string }).arc = "bootleg"; }));
+    expect(unknownArc.state!.game.board.arc).toBe("sketch");
+  });
+});
+
 describe("v16 lost-money recovery (ADR-0082)", () => {
   it("an unreadable nous refuses ordinary loading with the path named", () => {
     for (const bad of [null, "NaN", "banana", {}]) {

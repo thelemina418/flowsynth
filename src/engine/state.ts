@@ -1,8 +1,10 @@
 import { D, isNum, isNaNNum, NumFault } from "./num";
+import { openingBoard } from "./board";
 import type { GameState } from "./types";
 
 // A fresh start: empty real-life records, and a game state with no nous,
-// no session, Engineer and Producer open, and no legacy line.
+// no session, Engineer and Producer open, no legacy line, and the opening
+// board.
 export function createInitialState(): GameState {
   return {
     records: {
@@ -24,6 +26,7 @@ export function createInitialState(): GameState {
       summary: null,
       openClasses: ["engineer", "producer"],
       legacyLine: null,
+      board: openingBoard(),
     },
   };
 }
