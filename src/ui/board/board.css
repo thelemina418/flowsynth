@@ -74,10 +74,10 @@
   align-items: start;
 }
 
-/* Beside the tray the board needs about 440px for 44px cells, so below
-   640px the tray drops under it. At phone width the board only has to
+/* Beside the tray the board needs about 470px for 44px plates, so below
+   680px the tray drops under it. At phone width the board only has to
    fit. */
-@media (max-width: 639px) {
+@media (max-width: 679px) {
   .stage-board { grid-template-columns: minmax(0, 1fr); }
   .tray { flex-direction: row; flex-wrap: wrap; }
 }
