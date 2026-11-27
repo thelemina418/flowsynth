@@ -1,7 +1,7 @@
 import { cellKind } from "./board";
 import { cellKey, sameCell, turnFacing, type Cell } from "./hex";
 import { categoryOf, categoryName, hasFacing, moduleName } from "./modules";
-import type { Board, GameState, ModuleCategory, ModuleType, Placement } from "./types";
+import type { Board, Cable, GameState, ModuleCategory, ModuleType, Placement } from "./types";
 
 // Placing, moving, removing and turning modules (spec chunk 02, issue #25;
 // rotation, chunk 03, issue #31). Callers
@@ -37,9 +37,14 @@ export function placedCount(board: Board, category: ModuleCategory): number {
   return board.placements.filter((placement) => categoryOf(placement.module) === category).length;
 }
 
-// The layout is locked whenever time produces (ADR-0001): in flow, paused,
-// and the breather once chunk 04 adds it.
-function locked(state: GameState): string | null {
+// The cable plugged into the jack on `source`, if any.
+export function cableFrom(board: Board, source: Cell): Cable | undefined {
+  return board.cables.find((cable) => sameCell(cable.source, source));
+}
+
+// The layout, cables included, is locked whenever time produces
+// (ADR-0001): in flow, paused, and the breather once chunk 04 adds it.
+export function locked(state: GameState): string | null {
   return state.game.mode === "upgrade" ? null : "The board is locked while a session runs.";
 }
 
@@ -99,7 +104,8 @@ export function placementRefusal(state: GameState, action: PlacementAction): str
 // The cable plugged into the jack on `cell`, if any, returns to the
 // allowance.
 function unplugFrom(board: Board, cell: Cell): void {
-  board.cables = board.cables.filter((cable) => !sameCell(cable.source, cell));
+  const plugged = cableFrom(board, cell);
+  if (plugged) board.cables = board.cables.filter((cable) => cable !== plugged);
 }
 
 // Applies a placement action to the draft state, once the rules allow it.

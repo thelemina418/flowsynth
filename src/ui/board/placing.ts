@@ -1,9 +1,9 @@
 import { computed, signal, type ReadonlySignal } from "@preact/signals";
 import type { Action, ApplyResult } from "../../engine/apply";
-import { cableFrom, cableRefusal, jackRefusal } from "../../engine/cables";
+import { cableRefusal, jackRefusal } from "../../engine/cables";
 import { cellKey, lifetimeCells, sameCell, type Cell } from "../../engine/hex";
 import { hasFacing } from "../../engine/modules";
-import { moduleAt, placementRefusal, trayRefusal, type Turn } from "../../engine/placement";
+import { cableFrom, moduleAt, placementRefusal, trayRefusal, type Turn } from "../../engine/placement";
 import type { CableType, GameState, ModuleType } from "../../engine/types";
 
 // The pick (issue #25): what the player is holding between a click on a
@@ -208,7 +208,9 @@ export class Placing {
 
 // The action a click on `cell` would take with this pick; a held cable
 // entry takes none until a jack is plugged.
-function actionOnto(pick: Pick, cell: Cell): Action | null {
+type OntoAction = Extract<Action, { type: "placeModule" | "moveModule" | "patchCable" | "repatchCable" }>;
+
+function actionOnto(pick: Pick, cell: Cell): OntoAction | null {
   switch (pick.from) {
     case "tray": return { type: "placeModule", module: pick.module, cell };
     case "cell": return { type: "moveModule", from: pick.cell, to: cell };
@@ -231,7 +233,9 @@ function refusalOnto(state: GameState, pick: Pick, cell: Cell): string | null {
     case "placeModule":
     case "moveModule":
       return placementRefusal(state, action);
-    default:
-      return null;
+    default: {
+      const unknown: never = action;
+      throw new Error(`no refusal for ${JSON.stringify(unknown)}`);
+    }
   }
 }

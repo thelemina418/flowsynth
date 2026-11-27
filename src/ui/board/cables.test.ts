@@ -182,6 +182,38 @@ describe("a placed cable's plug", () => {
     show(shell, { ...s, game: { ...s.game, mode: "flow" } });
     expect(host.querySelector("[data-plug]")!.hasAttribute("data-live")).toBe(false);
   });
+
+  // happy-dom draws nothing, so the hit area is read from its geometry: a
+  // circle clipped by everything but a disc on the target cell's centre.
+  // A browser hit-tests the clipped circle, so a click inside that disc
+  // falls through to the cell.
+  it("leaves the target cell's centre to the cell, so a centre click inspects and picks it", () => {
+    const shell = mount();
+    show(shell, laid(PATCHED));
+    const hit = host.querySelector('[data-plug="0,0"] .plug-hit')!;
+    const clipId = /^url\(#(.+)\)$/.exec(hit.getAttribute("clip-path") ?? "")?.[1];
+    expect(clipId).toBeDefined();
+    const clip = host.querySelector(`clipPath[id="${clipId}"] path`)!;
+    expect(clip.getAttribute("clip-rule")).toBe("evenodd");
+    // The hole: the clip's second subpath, a circle drawn as two arcs from
+    // its rightmost point.
+    const hole = /M\s*[-\d.]+\s+[-\d.]+\s*[^M]*Z\s*M\s*([-\d.]+)\s+([-\d.]+)\s*A\s*([-\d.]+)/.exec(clip.getAttribute("d")!)!;
+    const r = Number(hole[3]);
+    const centre = { x: Number(hole[1]) - r, y: Number(hole[2]) };
+    // The target (0,1) is drawn at (0, 30√3) for the board's 30-unit hexes.
+    const target = { x: 0, y: 30 * Math.sqrt(3) };
+    expect(Math.hypot(centre.x - target.x, centre.y - target.y)).toBeLessThan(0.01);
+    // A centre disc at least 20px across (23 units).
+    expect(r * 2).toBeGreaterThanOrEqual(23);
+    const plug = host.querySelector('[data-plug="0,0"] .plug-body')!;
+    const plugAt = { x: Number(plug.getAttribute("cx")), y: Number(plug.getAttribute("cy")) };
+    expect(Math.hypot(plugAt.x - target.x, plugAt.y - target.y)).toBeGreaterThan(r + 3.2);
+    expect(Number(hit.getAttribute("r")) * 2).toBeGreaterThanOrEqual(50);
+    // The click that reaches the target cell inspects it and picks its module.
+    click(cell("0,1"));
+    expect(host.querySelector('[data-cell="0,1"]')!.hasAttribute("data-inspected")).toBe(true);
+    expect(cell("0,1").getAttribute("aria-pressed")).toBe("true");
+  });
 });
 
 describe("beads", () => {

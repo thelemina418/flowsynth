@@ -101,6 +101,33 @@ describe("recomputing the board's rates", () => {
     expect(counted).not.toHaveBeenCalled();
   });
 
+  it("recomputes once when choosing a class credits Producer time, and nothing when the choice changes no Producer credit or is refused", () => {
+    const s = acceptanceLayout();
+    applyIn(s, { type: "removeModule", cell: { q: 0, r: 1 } });
+    applyIn(s, { type: "placeModule", module: "flywheel", cell: { q: 0, r: 1 } });
+    // Three awaiting habits: one with an hour of live time, one with an
+    // hour for Engineer, one with none.
+    const flowed = applyIn(s, { type: "createHabit", name: "Synthesis" }).id!;
+    const other = applyIn(s, { type: "createHabit", name: "Drums" }).id!;
+    const idle = applyIn(s, { type: "createHabit", name: "Bass" }).id!;
+    for (const id of [flowed, other]) {
+      applyIn(s, { type: "selectHabit", id });
+      applyIn(s, { type: "startSession", target: null, now: 0 });
+      for (let i = 0; i < 100; i++) advanceIn(s, 36, "flow");
+      applyIn(s, { type: "endSession", now: 1 });
+    }
+    expect(s.game.rates.modulators[0]!.output.toNumber()).toBe(1);
+    counted.mockClear();
+    expect(applyIn(s, { type: "chooseClass", habitId: flowed, habitClass: "producer" }).ok).toBe(true);
+    expect(counted).toHaveBeenCalledTimes(1);
+    expect(s.game.rates.modulators[0]!.output.toNumber()).toBe(1.1);
+    counted.mockClear();
+    expect(applyIn(s, { type: "chooseClass", habitId: other, habitClass: "engineer" }).ok).toBe(true);
+    expect(applyIn(s, { type: "chooseClass", habitId: idle, habitClass: "producer" }).ok).toBe(true);
+    expect(applyIn(s, { type: "chooseClass", habitId: flowed, habitClass: "producer" }).ok).toBe(false);
+    expect(counted).not.toHaveBeenCalled();
+  });
+
   it("recomputes once on load, from the layout, and never writes the rates to the save", () => {
     const s = acceptanceLayout();
     const text = serialize(s, 0);

@@ -15,7 +15,10 @@ import { round } from "./svg";
 // an invalid target. In flow, beads of charge light travel each cord at
 // one slow constant pace; under prefers-reduced-motion there are none.
 // A plug's hit target is a circle at least 44px across on the desktop
-// board, live only while nothing is picked in upgrade mode.
+// board, live only while nothing is picked in upgrade mode. It reaches
+// over the target cell's centre, so it is clipped to leave a disc there
+// (CLEAR): a click on the target's centre falls through to the cell and
+// inspects or picks it, and the rest of the circle stays the plug's.
 
 // Where the cord leaves the modulator: its jack, under the glyph
 // (ModuleFace.tsx).
@@ -26,6 +29,11 @@ const PLUG_INSET = 0.8;
 // The plug's hit radius in viewBox units: beside the tray the desktop
 // board draws its 518 units in about 460px, so 52 units make 46px.
 const HIT = 26;
+// The disc left to the target cell, as a share of the hex's circumradius:
+// 12 units, about 21px across on the desktop board.
+const CLEAR = 0.4;
+// The clip's outer square: wider than any hit circle.
+const CLIP_SPAN = 4;
 // The sag, as a share of the cord's span, plus a little.
 const SAG = 0.12;
 // Beads: viewBox units per second, and roughly one per this many units.
@@ -53,6 +61,21 @@ export function plugPoint(source: Cell, target: Cell, size: number): Point {
   const span = Math.hypot(dx, dy) || 1;
   const inset = Math.min(size * PLUG_INSET, span / 2);
   return { x: to.x + (dx / span) * inset, y: to.y + (dy / span) * inset };
+}
+
+// Everything around `around` but a disc on the target's centre, as one
+// evenodd path: an outer square, then the disc as two arcs from its
+// rightmost point.
+function clearedCentre(around: Point, centre: Point, size: number): string {
+  const half = HIT * CLIP_SPAN;
+  const r = size * CLEAR;
+  const x0 = round(around.x - half);
+  const x1 = round(around.x + half);
+  const y0 = round(around.y - half);
+  const y1 = round(around.y + half);
+  const right = `${round(centre.x + r)} ${round(centre.y)}`;
+  const left = `${round(centre.x - r)} ${round(centre.y)}`;
+  return `M ${x0} ${y0} H ${x1} V ${y1} H ${x0} Z M ${right} A ${round(r)} ${round(r)} 0 1 0 ${left} A ${round(r)} ${round(r)} 0 1 0 ${right} Z`;
 }
 
 // A slack curve: one quadratic hung below the straight line.
@@ -125,6 +148,7 @@ export function Cords({ board, size, flowing, live, source, aim, aimTarget, onPl
       {board.cables.map((cable) => {
         if (reaiming(cable)) return null;
         const key = cellKey(cable.source);
+        const clipId = `plug-clear-${cable.source.q}_${cable.source.r}`;
         const plug = plugPoint(cable.source, cable.target, size);
         const { d, length } = curve(jackPoint(cable.source, size), plug);
         return (
@@ -139,7 +163,10 @@ export function Cords({ board, size, flowing, live, source, aim, aimTarget, onPl
               onClick={live ? () => onPlug(cable.source) : undefined}
               onPointerDown={live ? (event) => startDrag(event, { begin: () => onPlugDrag(cable.source), drop: onDrop }) : undefined}
             >
-              <circle class="plug-hit" cx={round(plug.x)} cy={round(plug.y)} r={HIT} />
+              <clipPath id={clipId}>
+                <path clip-rule="evenodd" d={clearedCentre(plug, toPixel(cable.target, size), size)} />
+              </clipPath>
+              <circle class="plug-hit" cx={round(plug.x)} cy={round(plug.y)} r={HIT} clip-path={`url(#${clipId})`} />
               <circle class="plug-body" cx={round(plug.x)} cy={round(plug.y)} r="3.2" />
             </g>
           </g>
