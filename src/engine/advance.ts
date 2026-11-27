@@ -1,5 +1,4 @@
-import { NumFault } from "./num";
-import { cloneState, requireNoNaN, restoreState } from "./state";
+import { transact } from "./state";
 import { applyGap, type Presence } from "./trust";
 import { emptyAdvanceResult } from "./walk";
 import type { AdvanceMode, AdvanceResult, GameState } from "./types";
@@ -12,24 +11,22 @@ import type { AdvanceMode, AdvanceResult, GameState } from "./types";
 //   trust.applyGap). A visible boundary first settles any buffered absence,
 //   so `advance(s, 0, 'flow')` is the return-of-presence flush.
 // - 'breather' is reserved for chunk 04 and moves nothing yet.
-// The update is all-or-nothing: a numeric fault (a nonfinite second, a NaN
-// Decimal) restores the state it was given and names the figure in `fault`.
+// Pure: the state given is never touched. The next state comes back with
+// the result; a numeric fault (a nonfinite second, a NaN Decimal) returns
+// the state given and names the figure in `fault`.
+export interface Advanced extends AdvanceResult {
+  state: GameState;
+}
+
 export function advance(
   state: GameState,
   seconds: number,
   mode: AdvanceMode,
   presence: Presence = "visible",
   driftStepSeconds = 0,
-): AdvanceResult {
-  if (mode !== "flow") return emptyAdvanceResult();
-  const pristine = cloneState(state);
-  try {
-    const result = applyGap(state, seconds, presence, driftStepSeconds);
-    requireNoNaN(state);
-    return result;
-  } catch (error) {
-    if (!(error instanceof NumFault)) throw error;
-    restoreState(state, pristine);
-    return { ...emptyAdvanceResult(), fault: error.detail };
-  }
+): Advanced {
+  if (mode !== "flow") return { ...emptyAdvanceResult(), state };
+  const done = transact(state, (draft) => applyGap(draft, seconds, presence, driftStepSeconds));
+  if (done.fault !== undefined) return { ...emptyAdvanceResult(), fault: done.fault, state };
+  return { ...done.result, state: done.state };
 }

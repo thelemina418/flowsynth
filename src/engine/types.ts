@@ -193,6 +193,6 @@ export interface GameState {
 export interface AdvanceResult {
   goalsCompleted: number;
   // The numeric-fault refusal (issue #486): set when the update was
-  // restored whole; names the figure that refused.
+  // refused whole; names the figure that refused.
   fault?: string | undefined;
 }

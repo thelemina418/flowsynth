@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { D, pow } from "./num";
-import { apply } from "./apply";
-import { advance } from "./advance";
-import { fresh, giveHabit } from "./fixtures";
+import { applyIn, advanceIn, fresh, giveHabit } from "./fixtures";
 import { SAVE_VERSION } from "./constants";
 import { deserialize, recoverLostSave, serialize, SaveRefusedError } from "./save";
 
@@ -15,9 +13,9 @@ import { deserialize, recoverLostSave, serialize, SaveRefusedError } from "./sav
 function flowing() {
   const s = fresh();
   const { habit } = giveHabit(s, "Piano", "engineer");
-  apply(s, { type: "createIntention", habitId: habit.id, minutes: 20, schedule: "daily", now: 1 });
-  apply(s, { type: "startSession", target: 600, now: 1_000 });
-  advance(s, 123.25, "flow");
+  applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 20, schedule: "daily", now: 1 });
+  applyIn(s, { type: "startSession", target: 600, now: 1_000 });
+  advanceIn(s, 123.25, "flow");
   return s;
 }
 

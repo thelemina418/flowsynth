@@ -25,8 +25,9 @@ export type { HonestyOutcome };
 // reconciles into the same stretch), and the flush that classifies it
 // happens once, when presence returns.
 //
-// These functions mutate and throw NumFault on an unrepresentable figure;
-// `advance` and `apply` are the boundaries that restore the state whole.
+// These functions mutate the working copy `advance` and `apply` hand them,
+// and throw NumFault on an unrepresentable figure; the boundary then
+// discards the copy and returns the state it was given.
 
 export function freshAccounting(): SessionAccounting {
   return { creditedSeconds: 0, poolSeconds: 0, pendingAwaySeconds: 0, events: [], provisionalNous: D(0) };
@@ -85,7 +86,7 @@ export function flushPendingAway(state: GameState): AdvanceResult {
   const trusted = seconds < RECONCILIATION_FLOOR_SECONDS ? seconds
     : Math.min(seconds, Math.max(0, (session.target ?? 0) - session.elapsed));
   // The buffer belongs to the same transaction as both sides of the plan:
-  // a fault in either walk restores the absence for a later retry.
+  // a fault in either walk keeps the absence for a later retry.
   let result = trusted > 0 ? walkFlow(state, trusted, "trusted") : emptyAdvanceResult();
   if (seconds > trusted) result = sumResults(result, walkFlow(state, seconds - trusted, "provisional"));
   return result;
@@ -104,7 +105,7 @@ export interface HonestyResolution {
 // (C rises to max(C, T)); practiced the whole time away credits fully. Both
 // non-missed answers bank the provisional nous. The recorded event is the
 // reconciliation's factual line. Throws NumFault on an unrepresentable
-// figure; `apply` restores the state whole.
+// figure; `apply` then returns the state it was given.
 export function settleHonestyReport(state: GameState, outcome: HonestyOutcome): HonestyResolution {
   if (state.game.mode !== "flow") return { ok: false, reason: "No session is running." };
   const session = state.game.session;

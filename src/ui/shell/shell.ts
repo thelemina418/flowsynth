@@ -99,15 +99,13 @@ export class Shell {
   }
 
   chooseClass(habitId: string, habitClass: HabitClass): void {
-    const next = this.state.peek();
-    const result = apply(next, { type: "chooseClass", habitId, habitClass });
+    const result = apply(this.state.peek(), { type: "chooseClass", habitId, habitClass });
     if (!result.ok) {
       this.classError.value = result.reason ?? null;
       return;
     }
     this.classError.value = null;
-    // The state mutates in place; a fresh reference re-derives the screen.
-    this.state.value = { ...next };
+    this.state.value = result.state;
     this.persist();
   }
 

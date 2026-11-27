@@ -42,27 +42,6 @@ export function cloneState<T>(value: T): T {
   return value;
 }
 
-function isContainer(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !isNum(value);
-}
-
-// Puts `target` back to `snapshot` (a cloneState copy) in place: every
-// object a caller holds — the state, a habit, an Intention — keeps its
-// identity and reads its restored values.
-export function restoreState(target: GameState, snapshot: GameState): void {
-  restoreInto(target as unknown as Record<string, unknown>, snapshot as unknown as Record<string, unknown>);
-}
-
-function restoreInto(target: Record<string, unknown>, snapshot: Record<string, unknown>): void {
-  if (Array.isArray(target) && Array.isArray(snapshot)) target.length = snapshot.length;
-  for (const key of Object.keys(target)) if (!(key in snapshot)) delete target[key];
-  for (const [key, value] of Object.entries(snapshot)) {
-    const current = target[key];
-    if (isContainer(current) && isContainer(value) && Array.isArray(current) === Array.isArray(value)) restoreInto(current, value);
-    else target[key] = value;
-  }
-}
-
 // The NaN check at the apply/advance boundary (ADR-0094): every Decimal in
 // the game state must be a number.
 export function requireNoNaN(state: GameState): void {
@@ -77,4 +56,23 @@ export function requireNoNaN(state: GameState): void {
     }
   };
   walk(state.game, "game");
+}
+
+// The engine's one commit sequence (apply and advance): run the step on a
+// copy, refuse whole or NaN-check, and hand back the next state. The
+// state given is never touched: a refusal or a numeric fault (a nonfinite
+// second, a NaN Decimal) returns it as it was.
+export type Transaction<R> = { state: GameState; result: R; fault?: undefined } | { state: GameState; result?: undefined; fault: string };
+
+export function transact<R>(state: GameState, step: (draft: GameState) => R, accepted: (result: R) => boolean = () => true): Transaction<R> {
+  const draft = cloneState(state);
+  try {
+    const result = step(draft);
+    if (!accepted(result)) return { state, result };
+    requireNoNaN(draft);
+    return { state: draft, result };
+  } catch (error) {
+    if (!(error instanceof NumFault)) throw error;
+    return { state, fault: error.detail };
+  }
 }

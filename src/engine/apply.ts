@@ -1,5 +1,4 @@
-import { NumFault } from "./num";
-import { cloneState, requireNoNaN, restoreState } from "./state";
+import { transact } from "./state";
 import { dismissSummary, endSession, pauseSession, recordSummaryReflection, resumeSession, signalTarget, startSession } from "./actions";
 import { addPracticeLog, archiveHabit, chooseHabitClass, createHabit, renameHabit, selectHabit, setHabitColor } from "./habits";
 import { createGoal, deleteGoal, editGoal, retainGoalChoice, rollGoalOccurrences } from "./goals";
@@ -39,6 +38,8 @@ export type Action =
 
 export interface ApplyResult {
   ok: boolean;
+  // The next state; on a refusal, the state given, untouched.
+  state: GameState;
   // The refusal's reason, in player-facing copy.
   reason?: string;
   // The id a create action made.
@@ -47,7 +48,9 @@ export interface ApplyResult {
   completions?: number;
 }
 
-function run(state: GameState, action: Action): ApplyResult {
+type Step = Omit<ApplyResult, "state">;
+
+function run(state: GameState, action: Action): Step {
   switch (action.type) {
     case "createHabit": {
       const made = createHabit(state, action.name, action.habitClass ?? null);
@@ -91,22 +94,12 @@ function refusalOnFault(action: Action): string {
   return "That change can't be made safely, so nothing changed.";
 }
 
-// The only way state changes. A refusal — an invalid action, or a numeric
-// fault (a nonfinite second, a NaN Decimal) — leaves the state exactly as it
-// was given.
+// The only way state changes. Pure: the state given is never touched. A
+// refusal — an invalid action, or a numeric fault (a nonfinite second, a
+// NaN Decimal) — returns it as it was, with the reason.
 export function apply(state: GameState, action: Action): ApplyResult {
-  const pristine = cloneState(state);
-  try {
-    const result = run(state, action);
-    if (!result.ok) {
-      restoreState(state, pristine);
-      return { ok: false, reason: result.reason ?? "That can't be done right now." };
-    }
-    requireNoNaN(state);
-    return result;
-  } catch (error) {
-    if (!(error instanceof NumFault)) throw error;
-    restoreState(state, pristine);
-    return { ok: false, reason: refusalOnFault(action) };
-  }
+  const done = transact(state, (draft) => run(draft, action), (step) => step.ok);
+  if (done.fault !== undefined) return { ok: false, state, reason: refusalOnFault(action) };
+  if (!done.result.ok) return { ok: false, state, reason: done.result.reason ?? "That can't be done right now." };
+  return { ...done.result, state: done.state };
 }

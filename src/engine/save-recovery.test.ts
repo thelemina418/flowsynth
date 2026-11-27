@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { applyIn } from "./fixtures";
 import { D } from "./num";
-import { apply } from "./apply";
 import { deserialize, recoverLostSave, serialize } from "./save";
 
 // The lost-money recovery (ADR-0082, issue #494) at the interim boundary
@@ -88,7 +88,7 @@ describe("the lost-money recovery (ADR-0082)", () => {
     expect(state.game.mode).toBe("flow");
     expect(state.game.session!.accounting).toEqual({ creditedSeconds: 300, poolSeconds: 600, pendingAwaySeconds: 0, events: [], provisionalNous: D(0) });
     // Settling the report credits the minutes, never the retired money.
-    expect(apply(state, { type: "settleHonestyReport", outcome: "full" }).ok).toBe(true);
+    expect(applyIn(state, { type: "settleHonestyReport", outcome: "full" }).ok).toBe(true);
     expect(state.game.session!.accounting.creditedSeconds).toBe(900);
     expect(state.records.habits[0]!.seconds).toBe(7_800);
   });

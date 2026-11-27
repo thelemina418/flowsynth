@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { apply } from "./apply";
-import { advance } from "./advance";
-import { fresh, habitOf, intentionOf } from "./fixtures";
+import { applyIn, advanceIn, fresh, habitOf, intentionOf } from "./fixtures";
 import { occurrenceKeyFor, occurrenceStartFor } from "./goals";
 import type { GoalSchedule } from "./types";
 
@@ -41,8 +39,8 @@ function localMidnightBefore(t: number): number {
 }
 
 function withHabit(s: ReturnType<typeof fresh>) {
-  const habit = habitOf(s, apply(s, { type: "createHabit", name: "Piano" }));
-  apply(s, { type: "selectHabit", id: habit.id });
+  const habit = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
+  applyIn(s, { type: "selectHabit", id: habit.id });
   return habit;
 }
 
@@ -86,11 +84,11 @@ describe("the declared calendar basis (issue #505)", () => {
     const boundary = localMidnightBefore(new Date(2026, 2, 9, 12).getTime());
     const s = fresh();
     const habit = withHabit(s);
-    const goal = intentionOf(s, apply(s, { type: "createIntention", habitId: habit.id, minutes: 60, schedule: "weekly", now: boundary - DAY_MS }));
-    apply(s, { type: "startSession", target: null, now: boundary - 600_000 });
-    advance(s, 1200, "flow");
-    apply(s, { type: "endSession", now: boundary + 600_000 });
-    apply(s, { type: "editIntention", id: goal.id, minutes: 60, schedule: "daily", now: boundary + 600_000 });
+    const goal = intentionOf(s, applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 60, schedule: "weekly", now: boundary - DAY_MS }));
+    applyIn(s, { type: "startSession", target: null, now: boundary - 600_000 });
+    advanceIn(s, 1200, "flow");
+    applyIn(s, { type: "endSession", now: boundary + 600_000 });
+    applyIn(s, { type: "editIntention", id: goal.id, minutes: 60, schedule: "daily", now: boundary + 600_000 });
     // Only the post-boundary share belongs to the new daily occurrence.
     expect(goal.progressSeconds).toBeCloseTo(600, 6);
   });

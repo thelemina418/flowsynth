@@ -20,7 +20,7 @@ export function sumResults(a: AdvanceResult, b: AdvanceResult): AdvanceResult {
   return { goalsCompleted: a.goalsCompleted + b.goalsCompleted, fault: a.fault ?? b.fault };
 }
 
-// Throws NumFault on an unrepresentable figure; the boundary restores.
+// Throws NumFault on an unrepresentable figure; the boundary refuses whole.
 export function walkFlow(state: GameState, seconds: number, sink: Sink): AdvanceResult {
   const result = emptyAdvanceResult();
   const session = state.game.session;

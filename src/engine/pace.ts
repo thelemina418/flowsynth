@@ -58,8 +58,9 @@ export const PROGRESSION_MILESTONES: MilestoneProbe[] = [
 
 // ── The scripted player's seams ───────────────────────────────────────────
 
-// What a tending hook may touch: the state to read, and the engine's two
-// doors to change it.
+// What a tending hook may touch: the current state to read, and the
+// engine's two doors to change it. Each door moves the turn to the state it
+// returns.
 export interface PaceTurn {
   readonly state: GameState;
   apply(action: Action): ApplyResult;
@@ -135,10 +136,10 @@ function must(result: ApplyResult, what: string): ApplyResult {
 }
 
 // One habit per open class, so every open class earns credit.
-function habitsForOpenClasses(state: GameState): void {
-  for (const habitClass of state.game.openClasses) {
-    if (state.records.habits.some((h) => h.habitClass === habitClass && !h.archived)) continue;
-    must(apply(state, { type: "createHabit", name: `${title(habitClass)} practice`, habitClass }), `a ${habitClass} habit`);
+function habitsForOpenClasses(turn: PaceTurn): void {
+  for (const habitClass of turn.state.game.openClasses) {
+    if (turn.state.records.habits.some((h) => h.habitClass === habitClass && !h.archived)) continue;
+    must(turn.apply({ type: "createHabit", name: `${title(habitClass)} practice`, habitClass }), `a ${habitClass} habit`);
   }
 }
 
@@ -155,11 +156,21 @@ export function runPace(script: PaceScript): PaceReport {
   const probes = script.milestones ?? PROGRESSION_MILESTONES;
   const tending: TendingHooks = { ...DEFAULT_TENDING, ...script.tending };
 
-  const state = createInitialState();
+  let state = createInitialState();
   const turn: PaceTurn = {
-    state,
-    apply: (action) => apply(state, action),
-    advance: (seconds, mode) => advance(state, seconds, mode),
+    get state() {
+      return state;
+    },
+    apply: (action) => {
+      const result = apply(state, action);
+      state = result.state;
+      return result;
+    },
+    advance: (seconds, mode) => {
+      const result = advance(state, seconds, mode);
+      state = result.state;
+      return result;
+    },
   };
   const reachedAt = new Map<string, number>();
   const observe = () => {
@@ -174,14 +185,14 @@ export function runPace(script: PaceScript): PaceReport {
   observe();
   while (creditedHoursOf(state) < script.creditedHours) {
     if (sessions >= MAX_SESSIONS) throw new Error("pace runner: no credited progress");
-    habitsForOpenClasses(state);
-    must(apply(state, { type: "selectHabit", id: nextHabitId(state, sessions) }), "selecting the habit");
-    must(apply(state, { type: "startSession", target: sessionSeconds, now }), "starting a session");
-    const flowed = advance(state, sessionSeconds, "flow");
+    habitsForOpenClasses(turn);
+    must(turn.apply({ type: "selectHabit", id: nextHabitId(state, sessions) }), "selecting the habit");
+    must(turn.apply({ type: "startSession", target: sessionSeconds, now }), "starting a session");
+    const flowed = turn.advance(sessionSeconds, "flow");
     if (flowed.fault) throw new Error(`pace runner: flow faulted on ${flowed.fault}`);
     now += sessionSeconds * 1000;
-    must(apply(state, { type: "endSession", now }), "ending the session");
-    must(apply(state, { type: "dismissSummary" }), "dismissing the summary");
+    must(turn.apply({ type: "endSession", now }), "ending the session");
+    must(turn.apply({ type: "dismissSummary" }), "dismissing the summary");
     sessions++;
     observe();
 
@@ -189,7 +200,7 @@ export function runPace(script: PaceScript): PaceReport {
     tending.buyCheapestFader(turn);
     tending.placeAllowance(turn);
     tending.patchChargeToNearestWall(turn);
-    advance(state, tendSeconds, "upgrade");
+    turn.advance(tendSeconds, "upgrade");
     observe();
     now += restMs;
   }

@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { D, eq } from "./num";
-import { apply } from "./apply";
-import { advance } from "./advance";
-import { fresh, giveHabit } from "./fixtures";
+import { applyIn, advanceIn, fresh, giveHabit } from "./fixtures";
 import { SAVE_VERSION } from "./constants";
 import { deserialize, serialize, SaveRefusedError } from "./save";
 import type { GameState } from "./types";
@@ -57,11 +55,11 @@ describe("persistence", () => {
   it("round-trips the full interim state byte-identical", () => {
     const s = fresh();
     const { habit } = giveHabit(s);
-    apply(s, { type: "createIntention", habitId: habit.id, minutes: 20, schedule: "daily", now: 1 });
-    apply(s, { type: "writeNote", text: "between sessions", now: 500 });
-    apply(s, { type: "startSession", target: 600, now: 1_000 });
-    advance(s, 123.25, "flow");
-    apply(s, { type: "writeNote", text: "in flow", now: 1_200 });
+    applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 20, schedule: "daily", now: 1 });
+    applyIn(s, { type: "writeNote", text: "between sessions", now: 500 });
+    applyIn(s, { type: "startSession", target: 600, now: 1_000 });
+    advanceIn(s, 123.25, "flow");
+    applyIn(s, { type: "writeNote", text: "in flow", now: 1_200 });
     const text = serialize(s, 1_000);
     const loaded = deserialize(text);
     expect(loaded.error).toBeUndefined();
@@ -76,27 +74,27 @@ describe("persistence", () => {
     const build = () => {
       const s = fresh();
       giveHabit(s);
-      apply(s, { type: "startSession", target: 600, now: 0 });
+      applyIn(s, { type: "startSession", target: 600, now: 0 });
       return s;
     };
     const straight = build();
-    advance(straight, 400, "flow");
+    advanceIn(straight, 400, "flow");
     const split = build();
-    advance(split, 150, "flow");
+    advanceIn(split, 150, "flow");
     const restored = deserialize(serialize(split)).state!;
-    advance(restored, 250, "flow");
+    advanceIn(restored, 250, "flow");
     expect(restored.game.session!.accounting).toEqual(straight.game.session!.accounting);
     expect(restored.records.habits).toEqual(straight.records.habits);
   });
 
   it("an unseen summary, its events, and its reflection survive a reload together (§8)", () => {
     const s = fresh();
-    apply(s, { type: "startSession", target: 600, now: 0 });
-    advance(s, 600, "flow");
-    advance(s, 300, "flow", "away", 0);
-    advance(s, 0, "flow");
-    apply(s, { type: "settleHonestyReport", outcome: "missed" });
-    apply(s, { type: "endSession", now: 5_000 });
+    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    advanceIn(s, 600, "flow");
+    advanceIn(s, 300, "flow", "away", 0);
+    advanceIn(s, 0, "flow");
+    applyIn(s, { type: "settleHonestyReport", outcome: "missed" });
+    applyIn(s, { type: "endSession", now: 5_000 });
     s.game.summary!.reflection = { text: "drifted", slider: 3 };
     const loaded = deserialize(serialize(s, 1_000));
     expect(loaded.error).toBeUndefined();
@@ -109,10 +107,10 @@ describe("persistence", () => {
   it("habits, the practice log, and session history survive a reload", () => {
     const s = fresh();
     const { habit } = giveHabit(s);
-    apply(s, { type: "startSession", target: 600, now: 1_000 });
-    advance(s, 600, "flow");
-    apply(s, { type: "endSession", now: 601_000 });
-    apply(s, { type: "logPractice", habitId: habit.id, minutes: 5, now: 700_000 });
+    applyIn(s, { type: "startSession", target: 600, now: 1_000 });
+    advanceIn(s, 600, "flow");
+    applyIn(s, { type: "endSession", now: 601_000 });
+    applyIn(s, { type: "logPractice", habitId: habit.id, minutes: 5, now: 700_000 });
     const loaded = deserialize(serialize(s)).state!;
     expect(loaded.records.habits).toEqual(s.records.habits);
     expect(loaded.records.practiceLog).toEqual(s.records.practiceLog);
@@ -166,7 +164,7 @@ describe("a v15 save's records (issues #15, #19)", () => {
     });
     // The pool still settles through the honesty report, banking the
     // provisional nous.
-    expect(apply(result.state!, { type: "settleHonestyReport", outcome: "full" }).ok).toBe(true);
+    expect(applyIn(result.state!, { type: "settleHonestyReport", outcome: "full" }).ok).toBe(true);
     expect(result.state!.game.session!.accounting.creditedSeconds).toBe(900);
     expect(eq(result.state!.game.nous, 30)).toBe(true);
   });
@@ -233,7 +231,7 @@ describe("the version gate", () => {
 
   it("exported saves load unchanged", () => {
     const s = fresh();
-    apply(s, { type: "writeNote", text: "portable", now: 1_000 });
+    applyIn(s, { type: "writeNote", text: "portable", now: 1_000 });
     const loaded = deserialize(serialize(s, 42));
     expect(loaded.error).toBeUndefined();
     expect(loaded.state!.records.notes[0]!.text).toBe("portable");
@@ -258,7 +256,7 @@ describe("serialization refuses what it cannot write (issue #486)", () => {
 
   it("a session's unrepresentable accounting refuses the save", () => {
     const s = fresh();
-    apply(s, { type: "startSession", target: null, now: 0 });
+    applyIn(s, { type: "startSession", target: null, now: 0 });
     s.game.session!.accounting.poolSeconds = Infinity;
     expect(() => serialize(s)).toThrow(/poolSeconds/);
   });
