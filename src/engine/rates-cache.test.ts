@@ -142,6 +142,22 @@ describe("recomputing the board's rates", () => {
     expect(counted).not.toHaveBeenCalled();
   });
 
+  it("recomputes nothing to take, complete or end a breather early (issue #41)", () => {
+    const s = acceptanceLayout();
+    begin(s, 1500, 0);
+    advanceIn(s, 1500, "flow");
+    applyIn(s, { type: "endSession", now: 0 });
+    applyIn(s, { type: "dismissSummary" });
+    counted.mockClear();
+    expect(applyIn(s, { type: "takeBreather", now: 0 }).ok).toBe(true);
+    expect(applyIn(s, { type: "endBreatherEarly" }).ok).toBe(true);
+    expect(applyIn(s, { type: "takeBreather", now: 0 }).ok).toBe(true);
+    advanceIn(s, 300, "breather");
+    expect(s.game.breather.result).not.toBeNull();
+    expect(applyIn(s, { type: "dismissBreatherResult" }).ok).toBe(true);
+    expect(counted).not.toHaveBeenCalled();
+  });
+
   it("recomputes once on load, from the layout, and never writes the rates to the save", () => {
     const s = acceptanceLayout();
     const text = serialize(s, 0);

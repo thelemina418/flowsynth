@@ -44,7 +44,7 @@ export function cableFrom(board: Board, source: Cell): Cable | undefined {
 }
 
 // The layout, cables included, is locked whenever time produces
-// (ADR-0001): in flow, paused, and the breather once chunk 04 adds it.
+// (ADR-0001): in flow, paused, and a breather (issue #41).
 export function locked(state: GameState): string | null {
   return state.game.mode === "upgrade" ? null : "The board is locked while a session runs.";
 }

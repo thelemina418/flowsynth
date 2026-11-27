@@ -66,7 +66,7 @@ describe("nothing accrues outside flow", () => {
     expect(s.game.nous.toNumber()).toBe(0);
   });
 
-  it("a breather hour is still a no-op", () => {
+  it("a breather hour outside a breather is a no-op (issue #41)", () => {
     const s = acceptanceLayout();
     start(s);
     const before = cloneState(s);

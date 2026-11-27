@@ -3,7 +3,7 @@ import { className } from "../../engine/habits";
 import { fmt } from "../../engine/num";
 import { classLevel, grantsOf } from "../../engine/levels";
 import { placedCount } from "../../engine/placement";
-import type { GameState, Habit, SessionState, SessionSummary } from "../../engine/types";
+import type { BreatherState, GameState, Habit, SessionState, SessionSummary } from "../../engine/types";
 
 // The flow screen's readouts (issue #39): the session class's line, the
 // Ready count and the ported console clock. Readouts, not sentences.
@@ -63,4 +63,20 @@ export function summaryLine(summary: SessionSummary): string {
   const practice = summary.habitClass === null ? `+${minutes} min` : `${className(summary.habitClass)} +${Math.floor(summary.classSeconds / 60 + 1e-9)} min`;
   const crossed = summary.levelAfter > summary.levelBefore ? ` → Lv ${summary.levelAfter}` : "";
   return `+${fmt(summary.nous)} ν · ${practice}${crossed}`;
+}
+
+// `10 min`: a breather's length, truncated, for `Breather banked · 10 min`
+// and `Take breather · 10 min` (issue #41).
+export function breatherMinutes(seconds: number): string {
+  return `${Math.floor(seconds / 60 + 1e-9)} min`;
+}
+
+// The calm screen's countdown, `9:41`: the time left, minutes unpadded.
+export function breatherClock(running: NonNullable<BreatherState["running"]>): string {
+  return formatClock(Math.ceil(running.seconds - running.elapsed - 1e-9)).replace(/^0(?=\d:)/, "");
+}
+
+// `Breather complete · +31 400 ν`. Chunk 05 appends the HP segment.
+export function breatherResultLine(result: NonNullable<BreatherState["result"]>): string {
+  return `Breather complete · +${fmt(result.nous)} ν`;
 }

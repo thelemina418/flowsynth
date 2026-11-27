@@ -1,4 +1,5 @@
 import { transact } from "./state";
+import { dismissBreatherResult, endBreatherEarly, takeBreather } from "./breather";
 import { dismissSummary, endSession, pauseSession, recordSummaryReflection, resumeSession, signalTarget, startSession } from "./actions";
 import { addPracticeLog, archiveHabit, chooseHabitClass, createHabit, renameHabit, selectHabit, setHabitColor } from "./habits";
 import { createIntention, deleteIntention, editIntention, retainIntentionChoice, rollIntentionOccurrences } from "./intentions";
@@ -30,6 +31,10 @@ export type Action =
   | { type: "settleHonestyReport"; outcome: HonestyOutcome }
   | { type: "reflect"; text?: string; slider?: number }
   | { type: "dismissSummary" }
+  // The breather (issue #41), between sessions.
+  | { type: "takeBreather"; now: number }
+  | { type: "endBreatherEarly" }
+  | { type: "dismissBreatherResult" }
   // Notes.
   | { type: "writeNote"; text: string; now: number }
   // Intentions and their calendar.
@@ -87,6 +92,10 @@ function run(state: GameState, action: Action): Step {
       return recordSummaryReflection(state, part);
     }
     case "dismissSummary": return dismissSummary(state);
+    // Taking, completing or ending a breather recomputes nothing.
+    case "takeBreather": return takeBreather(state, action.now);
+    case "endBreatherEarly": return endBreatherEarly(state);
+    case "dismissBreatherResult": return dismissBreatherResult(state);
     case "writeNote": return writeNote(state, action.text, action.now);
     case "createIntention": {
       const made = createIntention(state, { habitId: action.habitId, minutes: action.minutes, schedule: action.schedule, now: action.now });

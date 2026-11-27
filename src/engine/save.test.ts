@@ -203,7 +203,7 @@ describe("a v15 save's records (issue #19)", () => {
     // default (issue #40).
     expect(state.game.summary).toEqual({
       sessionNumber: 3, seconds: 1_500, plannedTarget: 1_500, honestyEvents: [], reflection: null, seen: false,
-      nous: D(0), habitClass: null, classSeconds: 0, levelBefore: 0, levelAfter: 0,
+      nous: D(0), habitClass: null, classSeconds: 0, levelBefore: 0, levelAfter: 0, breather: null,
     });
   });
 });

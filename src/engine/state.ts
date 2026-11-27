@@ -25,6 +25,7 @@ export function createInitialState(): GameState {
       mode: "upgrade",
       session: null,
       summary: null,
+      breather: { banked: null, running: null, result: null },
       openClasses: ["engineer", "producer"],
       legacyLine: null,
       board: openingBoard(),

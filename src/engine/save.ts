@@ -9,7 +9,7 @@ import { hasFacing, isModuleType } from "./modules";
 import { isCableType, newCableRefusal, type CableRoom } from "./cables";
 import { grantsOf } from "./levels";
 import { computeBoardRates } from "./rates";
-import type { Arc, Board, Cable, GameState, Habit, HabitClass, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
+import type { Arc, Board, BreatherState, Cable, GameState, Habit, HabitClass, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
 
 // The save boundary. Save v16 (issue #18) writes the nested GameState
 // (`records`, `game`) with every Decimal as num's save string, and reads it
@@ -205,10 +205,34 @@ function readSummary(raw: Partial<SessionSummary>): SessionSummary {
     classSeconds: finiteOr(raw.classSeconds, 0),
     levelBefore: finiteOr(raw.levelBefore, 0),
     levelAfter: finiteOr(raw.levelAfter, 0),
+    breather: positiveOr(raw.breather),
     plannedTarget: typeof raw.plannedTarget === "number" ? raw.plannedTarget : null,
     honestyEvents: Array.isArray(raw.honestyEvents) ? raw.honestyEvents : [],
     reflection: raw.reflection ?? null,
     seen: raw.seen === true,
+  };
+}
+
+// A saved length in seconds: a positive finite figure, or null.
+function positiveOr(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+// The breather (issue #41): each part defaults to none when missing or
+// unreadable. A running breather needs its length; a result its ν.
+function readBreather(raw: unknown): BreatherState {
+  const source = isRecord(raw) ? raw : {};
+  const banked = isRecord(source.banked) ? positiveOr(source.banked.seconds) : null;
+  const running = isRecord(source.running) ? source.running : null;
+  const length = running ? positiveOr(running.seconds) : null;
+  const result = isRecord(source.result) && readableNum(source.result.nous) ? source.result.nous : undefined;
+  return {
+    banked: banked === null ? null : { seconds: banked },
+    running:
+      running && length !== null
+        ? { seconds: length, elapsed: Math.min(length, Math.max(0, finiteOr(running.elapsed, 0))), startedAt: finiteOr(running.startedAt, 0) }
+        : null,
+    result: result === undefined ? null : { nous: readNum(result, D(0)) },
   };
 }
 
@@ -263,7 +287,7 @@ function readSave(text: string, recovery: boolean): LoadResult {
 // The one earlier version this build reads (issue #19 migrates it).
 const LEGACY_VERSION = 15;
 
-const MODES = ["upgrade", "flow", "paused"];
+const MODES = ["upgrade", "flow", "paused", "breather"];
 
 function readClassCredit(raw: unknown): Record<HabitClass, number> {
   const source = isRecord(raw) ? raw : {};
@@ -297,7 +321,7 @@ function readableNum(value: unknown): boolean {
 function lostNestedFigures(game: Record<string, unknown>): string[] {
   const lost: string[] = [];
   if (!readableNum(game.nous)) lost.push("game.nous");
-  if (game.mode !== "upgrade" && isRecord(game.session)) {
+  if ((game.mode === "flow" || game.mode === "paused") && isRecord(game.session)) {
     // A session without its accounting lost its practice facts too.
     if (!isRecord(game.session.accounting)) lost.push("game.session.accounting");
     else if (!readableNum(game.session.accounting.provisionalNous)) lost.push("game.session.accounting.provisionalNous");
@@ -325,7 +349,12 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
   }
   if (lost.length && !recovery) return needsRecovery(lost);
   const fresh = createInitialState();
-  const flowing = game.mode !== "upgrade" && isRecord(game.session);
+  const flowing = (game.mode === "flow" || game.mode === "paused") && isRecord(game.session);
+  const breather = readBreather(game.breather);
+  // A breather mode needs its running breather; without one the game
+  // lands between sessions.
+  const mode = flowing ? (game.mode as GameState["game"]["mode"]) : game.mode === "breather" && breather.running ? "breather" : "upgrade";
+  if (mode !== "breather") breather.running = null;
   const intentions = records.intentions as GameState["records"]["intentions"];
   normalizeIntentions(intentions);
   const board = readBoard(game.board);
@@ -353,9 +382,10 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
     },
     game: {
       nous: readLostable(game.nous),
-      mode: flowing ? (game.mode as GameState["game"]["mode"]) : "upgrade",
+      mode,
       session: flowing ? readSession(game.session as Partial<SessionState>) : null,
       summary: isRecord(game.summary) ? readSummary(game.summary as Partial<SessionSummary>) : null,
+      breather,
       openClasses,
       legacyLine: typeof game.legacyLine === "string" ? game.legacyLine : null,
       board,
@@ -489,8 +519,9 @@ function readV15(raw: Record<string, unknown>, recovery: boolean): LoadResult {
       mode: flowing ? (raw.mode as GameState["game"]["mode"]) : "upgrade",
       session: flowing ? readSession(raw.session as Partial<SessionState>) : null,
       // Only a summary the player has yet to see carries its practice
-      // facts across; a dismissed one is the retired game's leftover.
-      summary: isRecord(raw.summary) && raw.summary.seen !== true ? readSummary(raw.summary as Partial<SessionSummary>) : null,
+      // facts across; a dismissed one is the retired game's leftover. The
+      // retired game's breather allowance banks nothing here.
+      summary: isRecord(raw.summary) && raw.summary.seen !== true ? { ...readSummary(raw.summary as Partial<SessionSummary>), breather: null } : null,
     },
   };
   const recovered = recovery && lost.length > 0 ? { fromVersion: LEGACY_VERSION, lost } : undefined;

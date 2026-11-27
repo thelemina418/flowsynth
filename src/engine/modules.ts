@@ -50,6 +50,9 @@ interface ModuleSpec {
   name: string;
   // ν/s in flow before any factor.
   base: number;
+  // ν/s in a breather before any factor, where it differs from `base`
+  // (issue #41): Release wakes.
+  breatherBase?: number;
   pattern: Pattern | null;
   // A facing the player turns in upgrade mode (issue #31).
   faces?: true;
@@ -76,8 +79,8 @@ const MODULES: Record<ModuleType, ModuleSpec> = {
   // The next two cells in one direction hold oscillators: the Saw ends a
   // straight line of three.
   saw: { category: "oscillator", name: "Saw", base: 2, pattern: { paths: [[0], [0, 0]], partner: OSCILLATOR, strength: 2 } },
-  // No pattern, and nothing in flow; its breather output is chunk 04's.
-  release: { category: "oscillator", name: "Release", base: 0, pattern: null },
+  // No pattern, and nothing in flow; 6 ν/s in a breather (issue #41).
+  release: { category: "oscillator", name: "Release", base: 0, breatherBase: 6, pattern: null },
   // Modulators make charge, not ν: no base and no pattern.
   // 1 charge/s, +0.1 per credited Producer hour up to 3, to the 2 cells in
   // a straight line in its facing.
@@ -128,6 +131,10 @@ export function moduleName(module: ModuleType): string {
 
 export function baseRate(module: ModuleType): number {
   return MODULES[module].base;
+}
+
+export function breatherBaseRate(module: ModuleType): number {
+  return MODULES[module].breatherBase ?? MODULES[module].base;
 }
 
 export function hasFacing(module: ModuleType): boolean {
