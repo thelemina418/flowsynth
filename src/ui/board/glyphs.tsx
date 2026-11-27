@@ -1,0 +1,26 @@
+import type { ModuleType } from "../../engine/types";
+
+// Each module type's glyph (philosophy.md: every hue is paired with a
+// glyph). The type is told by glyph and nameplate, never by hue. Paths are
+// drawn in an 18 × 8 box centred on the origin, as stroked waveforms.
+const PATHS: Record<ModuleType, string> = {
+  sine: "M -9 0 C -6.5 -8 -2.5 -8 0 0 S 6.5 8 9 0",
+  triangle: "M -9 4 L -4.5 -4 L 0 4 L 4.5 -4 L 9 4",
+  square: "M -9 4 L -9 -4 L 0 -4 L 0 4 L 9 4 L 9 -4",
+  saw: "M -9 4 L -1 -4 L -1 4 L 8 -4 L 8 4",
+  release: "M -9 -4 Q -5 4 9 4",
+};
+
+// The glyph inside the board's SVG, at a cell's centre.
+export function Glyph({ module, x, y }: { module: ModuleType; x: number; y: number }) {
+  return <path class="glyph" data-glyph={module} d={PATHS[module]} transform={`translate(${x} ${y})`} />;
+}
+
+// The glyph as a standalone icon, for the tray.
+export function GlyphIcon({ module }: { module: ModuleType }) {
+  return (
+    <svg class="glyph-icon" data-glyph={module} viewBox="-11 -6 22 12" aria-hidden="true">
+      <path class="glyph" d={PATHS[module]} />
+    </svg>
+  );
+}

@@ -36,6 +36,10 @@ function cleanName(name: string): string {
 
 const CLASS_NAMES: Record<HabitClass, string> = { engineer: "Engineer", producer: "Producer", mixer: "Mixer", roadie: "Roadie" };
 
+export function className(habitClass: HabitClass): string {
+  return CLASS_NAMES[habitClass];
+}
+
 function classOpen(state: GameState, habitClass: HabitClass): boolean {
   return state.game.openClasses.includes(habitClass);
 }

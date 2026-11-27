@@ -67,3 +67,63 @@ DRY 0.0h–250.0h: 250.0h with no new milestone
 ```
 
 As expected: there is no board yet, so nothing past the two starting classes can be reached. The whole 250 h stretch is flagged dry.
+
+## Chunk 02: Board
+
+Issues #24–#28 (parent #23), on `integration/spec-02-board`.
+
+### Built
+
+- `hex.ts`: pure axial geometry (distance, rings, neighbours in one fixed direction order, rotation and mirroring of offsets, the 91-cell lifetime board, flat-top pixel layout). `board.ts` derives each cell's kind (open, wall, dark) from the owned cells and the arc, and `map.ts` is the placeholder authored map: Shale at (−1,1), Flint at (2,−1) opening Roadie.
+- `game.board` holds the owned cells, the arc (Sketch, radius 2) and the placements. `game.allowance` (2 oscillators) and `game.arrived` (Sine, Triangle) are plain facts chunk 04 will grant. Save v16 reads them additively; an older v16 save loads the opening board.
+- `apply` gains `placeModule`, `moveModule` and `removeModule` (`placement.ts`), refused outside upgrade mode, onto walls, dark or occupied cells, beyond allowance, or for a type that hasn't arrived.
+- Patterns as data in `modules.ts`, tested in all six rotations and their mirrors (`resonance.ts`). `rates.ts` computes `BoardRates` once per layout change and on load, with identity legs for charge, faders and pressure. Flow credits `rates.total` per second through the trust layer.
+- The board in SVG (`src/ui/board/`): flat-top plates, walls as unlit stone with Shale's initial and Flint's Roadie mark, dark cells as broken outlines, modules with hue and glyph, the tray, drag and click-to-pick with keyboard, and engraved resonance outlines that pulse in flow.
+- The Hex detail panel (#27): a fixed panel under the board, empty until a cell is clicked, at most five lines read from the cached `BoardRates`, opened by click, keyboard or touch and dismissed by Escape or a tap away.
+- The pace runner's placement hook (#28): `placeAllowanceGreedily` fills the allowance through `apply`, and the report prints the board's layout, ν/s and the era's ν.
+
+### Improvised
+
+- **The tray (#25).** Until chunk 04's allowance chips, the tray beside the board shows one entry per arrived type (`Sine`, `Triangle`). Any arrived type can be placed while oscillator allowance remains. Once allowance is spent the entries stay, muted, rather than disappearing.
+- **Move onto an occupied cell swaps (#25).** Moving a placed module onto another occupied open cell swaps the two in one action.
+- **Removing (#25).** A placed module returns to unplaced by picking it and clicking (or dropping on) the tray.
+- **Invalid saved placements (#25).** A placement whose type is unknown, whose cell isn't an owned open cell, or whose cell already holds a module returns to unplaced instead of failing the load. A save without allowance or arrived types loads the opening's (2 oscillators; Sine and Triangle).
+- **Refusal copy (#25).** A refused placement keeps the pick and shows its reason in one quiet line under the board (`That cell is a wall.`, `Oscillator allowance is full.`, `The board is locked while a session runs.`).
+- **Patterns as direction paths (#26).** Each partner cell in a pattern is a path of steps through the six directions, relative to the oscillator, and every step asks one adjacency function (`adjacent` in `engine/resonance.ts`). Chunk 08's Sync cables extend that function. Square's threshold is the same data: all six sides, with `atLeast: 4`, and its partners are the occupied sides.
+- **Rates are not persisted (#26).** `game.rates` is left out of the save text. The reader recomputes it once from the loaded layout, and the v15 migration computes it once from the opening board. A fresh state carries empty rates, since the opening board holds no module.
+- **The acceptance hour (#26).** The ticket gives one trusted hour on the acceptance layout as 3.5 × 3600 ν. That figure is the two Triangles' share. The Sine makes its base 1 ν/s too, so the board totals 4.5 ν/s and the hour yields 4.5 × 3600. The test asserts both.
+- **One outline per set of cells (#26).** Instances that cover the same cells, such as the acceptance layout's two Triangles, draw one outline, since two would coincide. The outline is the union's boundary, drawn in the gutter between plates with a dark undercut for the engraving. It pulses by stroke opacity over 3.2 s in flow, and holds still under `prefers-reduced-motion`.
+- **No flow clock in the shell yet (#26).** Nothing in this chunk starts a session from the page, so the shell has no flow ticker. The ν readout and the outlines read the state signal, so they rise and pulse as soon as flow time passes through `advance`. Chunk 04's flow screen adds the clock.
+- **Hex detail placement and clicks (#27).** The Hex detail sits under the board, full stage width, with its five-line lane reserved, so it never moves the board and draws nothing until the first click. Every cell click (and Enter or Space on a focused cell) reads that cell. In upgrade mode the same click still picks or places, and after a placement the panel reads the cell the module landed on. In flow, pause and breathers it only reads. Escape and a tap away empty it and cancel any pick together. A tap inside the panel keeps both.
+- **Keyboard reach (#27).** The board is one tab stop (roving focus), starting at (0,0) and then wherever focus last sat. The arrow keys move between cells, dark ones included, so every cell reads from the keyboard without 91 tab stops. Up and down step along a column. Flat-top hexes have no straight left or right neighbour, so left and right zig-zag along a drawn row (from an even column east steps down-right, from an odd column up-right), and a step left undoes a step right. Focus stops at the lifetime board's edge.
+- **Dark cells as targets (#25).** During a pick, dark cells carry the muted invalid-target outline like walls.
+- **The board keeps the touch floor (#24).** The board scales with its width only, so on a desktop width every cell stays at least 44px across its flats and a short window scrolls. Below 680px the tray drops under the board; at phone width the board only has to fit.
+- **Hex detail copy (#27).** Each oscillator type says what closes its resonance (Sine `between`, Triangle `closes`, Square `held by`, Saw `ends`) and what it needs when it isn't resonating. A placeholder wall reads `Wall`, a dark cell `Dark cell · beyond this arc`, and a Release `No resonance pattern`. Rates and factors show two decimals with at least one (`1.0`, `1.75`), truncated like every shown figure. The inspected cell keeps a thin ink outline.
+- **Placeholder walls carry no initial (#24).** Only Shale and Flint are named in this chunk, so only they carry an initial (and Flint the Roadie mark). Every other wall inside Sketch's radius is nameless unlit stone until chunk 05 authors the map.
+- **The pace runner's greedy placement (#28).** In upgrade mode before the first session, and again after each session, the scripted player fills its remaining allowance one oscillator at a time. Each candidate (every arrived type on every owned cell) is tried through `apply`, which is pure, and the one that most raises `rates.total` is applied. Ties keep the first candidate in arrived-type, then owned-cell order, so on the opening's allowance of 2, where nothing can resonate, it places two Sines at (0,0) and (1,0). It never moves a placed oscillator. With allowance 3 the third oscillator closes a resonance (`pace.test.ts`). `runPace` takes an optional `start` state so tests can grant what chunk 04 will. ν/s prints as the Hex detail shows it (`fmtRate` in `num.ts`: two decimals with at least one, truncated like every shown figure).
+
+### Pace runner
+
+At the end of the chunk, `npm run pace` (250 credited hours):
+
+```
+Pace run: 300 sessions, 250.0h credited
+Board: 2 oscillators, 2.0 ν/s — Sine (0,0), Sine (1,0)
+Era ν: 1.8e6
+
+Milestone                         Reached       Target
+--------------------------------  ------------  -------------------------------------------
+Engineer opens                    0.0h          at the start (0h)
+Producer opens                    0.0h          at the start (0h)
+Roadie opens                      not reached   first contact with Flint (Sketch, 0–15h)
+Mixer opens                       not reached   conquering the marked Schist (Demo, 15–60h)
+First Shale conquered             not reached*  Sketch, 0–15h (ring 1)
+...
+Master finished (Encore opens)    not reached*  250h
+
+* the engine has no such fact yet
+
+DRY 0.0h–250.0h: 250.0h with no new milestone
+```
+
+The board makes nous now: the player lays out the two Sines before the first session, so 2 ν/s over every credited second, 2 × 250 h × 3600 = 1.8e6 ν. The allowance never grows (chunk 04 grants it), so the opening layout can't resonate and the rate stays flat. Nothing spends nous and no wall can be conquered yet, so no further milestone is reachable and the whole run is still flagged dry.

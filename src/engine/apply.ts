@@ -3,6 +3,8 @@ import { dismissSummary, endSession, pauseSession, recordSummaryReflection, resu
 import { addPracticeLog, archiveHabit, chooseHabitClass, createHabit, renameHabit, selectHabit, setHabitColor } from "./habits";
 import { createIntention, deleteIntention, editIntention, retainIntentionChoice, rollIntentionOccurrences } from "./intentions";
 import { writeNote } from "./notes";
+import { relayout, type PlacementAction } from "./placement";
+import { computeBoardRates } from "./rates";
 import { settleHonestyReport } from "./trust";
 import type { GameState, IntentionSchedule, HabitClass, HabitColor, HonestyOutcome } from "./types";
 
@@ -34,7 +36,9 @@ export type Action =
   | { type: "editIntention"; id: string; minutes: number; schedule: IntentionSchedule["kind"]; now: number }
   | { type: "deleteIntention"; id: string }
   | { type: "retainIntention"; id: string }
-  | { type: "rollIntentions"; now: number };
+  | { type: "rollIntentions"; now: number }
+  // The board, in upgrade mode only (issue #25).
+  | PlacementAction;
 
 export interface ApplyResult {
   ok: boolean;
@@ -86,7 +90,18 @@ function run(state: GameState, action: Action): Step {
     case "rollIntentions":
       rollIntentionOccurrences(state, action.now);
       return { ok: true };
+    case "placeModule":
+    case "moveModule":
+    case "removeModule":
+      return relaid(state, relayout(state, action));
   }
+}
+
+// A layout change recomputes the board's rates once (issue #26); a
+// refusal changed nothing, so it recomputes nothing.
+function relaid(state: GameState, step: Step): Step {
+  if (step.ok) state.game.rates = computeBoardRates(state.game.board);
+  return step;
 }
 
 function refusalOnFault(action: Action): string {

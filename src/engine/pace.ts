@@ -1,7 +1,10 @@
 import { advance } from "./advance";
 import { apply, type Action, type ApplyResult } from "./apply";
 import { createInitialState } from "./state";
-import type { AdvanceMode, AdvanceResult, GameState, HabitClass } from "./types";
+import { cellKey } from "./hex";
+import { moduleName } from "./modules";
+import { fmt, fmtRate, gt, type Num } from "./num";
+import type { AdvanceMode, AdvanceResult, GameState, HabitClass, Placement } from "./types";
 
 // The pace runner (spec chunk 01, `npm run pace`): a scripted reasonable
 // player driven only through `apply` and `advance`. It reports the credited
@@ -80,9 +83,34 @@ export interface TendingHooks {
 export const DEFAULT_TENDING: TendingHooks = {
   takeBankedBreathers: () => {},
   buyCheapestFader: () => {},
-  placeAllowance: () => {},
+  placeAllowance: placeAllowanceGreedily,
   patchChargeToNearestWall: () => {},
 };
+
+// Fill the allowance one oscillator at a time, each where it most raises
+// the board's total ν/s (spec chunk 02, issue #28). Every candidate is tried
+// through `apply` on the current state, which is pure, so a trial changes
+// nothing; only the best is applied through the turn. Ties keep the first
+// candidate in arrived-type then owned-cell order, so the run is
+// deterministic. Placed oscillators are never moved: a later chunk may
+// teach the player to rearrange.
+export function placeAllowanceGreedily(turn: PaceTurn): void {
+  for (;;) {
+    const { game } = turn.state;
+    let best: { action: Action; total: Num } | null = null;
+    for (const module of game.arrived) {
+      for (const cell of game.board.open) {
+        const action: Action = { type: "placeModule", module, cell };
+        const trial = apply(turn.state, action);
+        if (!trial.ok) continue;
+        const total = trial.state.game.rates.total;
+        if (best === null || gt(total, best.total)) best = { action, total };
+      }
+    }
+    if (best === null) return;
+    must(turn.apply(best.action), "placing an oscillator");
+  }
+}
 
 // ── The run ───────────────────────────────────────────────────────────────
 
@@ -96,6 +124,9 @@ export interface PaceScript {
   tendMinutes?: number;
   milestones?: MilestoneProbe[];
   tending?: Partial<TendingHooks>;
+  // The state the player starts from; a fresh start when absent. Tests use
+  // it to grant what later chunks will (a larger allowance, say).
+  start?: GameState;
 }
 
 export interface MilestoneRow {
@@ -117,6 +148,11 @@ export interface PaceReport {
   creditedHours: number;
   sessions: number;
   milestones: MilestoneRow[];
+  // The board at the end of the run: its layout and total ν/s.
+  placements: Placement[];
+  rate: Num;
+  // The era's nous at the end of the run.
+  nous: Num;
   // Every stretch longer than DRY_STRETCH_HOURS with no new milestone,
   // including the one from the last milestone to the end of the run.
   dryStretches: DryStretch[];
@@ -156,7 +192,7 @@ export function runPace(script: PaceScript): PaceReport {
   const probes = script.milestones ?? PROGRESSION_MILESTONES;
   const tending: TendingHooks = { ...DEFAULT_TENDING, ...script.tending };
 
-  let state = createInitialState();
+  let state = script.start ?? createInitialState();
   const turn: PaceTurn = {
     get state() {
       return state;
@@ -182,6 +218,10 @@ export function runPace(script: PaceScript): PaceReport {
 
   let now = START_EPOCH_MS;
   let sessions = 0;
+  observe();
+  // A fresh start is upgrade mode: the player lays out the allowance
+  // before the first session, so that session already makes nous.
+  tending.placeAllowance(turn);
   observe();
   while (creditedHoursOf(state) < script.creditedHours) {
     if (sessions >= MAX_SESSIONS) throw new Error("pace runner: no credited progress");
@@ -216,6 +256,9 @@ export function runPace(script: PaceScript): PaceReport {
       reachedAtHours: reachedAt.get(p.id) ?? null,
       tracked: p.reached !== undefined,
     })),
+    placements: state.game.board.placements.map((p) => ({ cell: { q: p.cell.q, r: p.cell.r }, module: p.module })),
+    rate: state.game.rates.total,
+    nous: state.game.nous,
     dryStretches: dryStretches([...reachedAt.values()], creditedHours),
   };
 }
@@ -242,8 +285,11 @@ export function formatPaceReport(report: PaceReport): string {
   const head = ["Milestone", "Reached", "Target"];
   const widths = head.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i]!.length)));
   const line = (cells: string[]) => cells.map((c, i) => c.padEnd(widths[i]!)).join("  ").trimEnd();
+  const layout = report.placements.map((p) => `${moduleName(p.module)} (${cellKey(p.cell)})`).join(", ");
   const out = [
     `Pace run: ${report.sessions} sessions, ${hours(report.creditedHours)} credited`,
+    `Board: ${report.placements.length} oscillators, ${fmtRate(report.rate)} ν/s${layout ? ` — ${layout}` : ""}`,
+    `Era ν: ${fmt(report.nous)}`,
     "",
     line(head),
     line(widths.map((w) => "-".repeat(w))),

@@ -1,10 +1,12 @@
 import { advance, type Advanced } from "./advance";
 import { apply, type ApplyResult } from "./apply";
+import { isOpen } from "./board";
+import type { Cell } from "./hex";
 import { isNum } from "./num";
 import { createInitialState } from "./state";
 import type { Presence } from "./trust";
 import { DEFAULT_HABIT_COLOR } from "./habits";
-import type { AdvanceMode, GameState, Intention, Habit, HabitClass } from "./types";
+import type { AdvanceMode, GameState, Intention, Habit, HabitClass, ModuleType } from "./types";
 
 // The test harness. The engine's doors are pure; a test that walks one
 // state through many steps holds one object instead, so these run the pure
@@ -57,6 +59,20 @@ export function giveHabit(state: GameState, name = "Piano", habitClass?: HabitCl
   if (!created.ok || !created.id) throw new Error(`fixture habit failed: ${created.reason}`);
   if (!applyIn(state, { type: "selectHabit", id: created.id }).ok) throw new Error("fixture habit select failed");
   return { habit: state.records.habits.find((h) => h.id === created.id)! };
+}
+
+// Oscillator allowance and arrived types beyond the opening, as chunk 04's
+// class levels will grant them (issue #25).
+export function giveOscillators(state: GameState, grant: { allowance?: number; arrive?: ModuleType[] }): void {
+  if (grant.allowance !== undefined) state.game.allowance.oscillator = grant.allowance;
+  for (const module of grant.arrive ?? []) if (!state.game.arrived.includes(module)) state.game.arrived.push(module);
+}
+
+// Owned open cells beyond the opening, as chunk 05's conquest will add
+// them (issue #26). Owning a cell is not a layout change: no module moves,
+// so the rates stay as they are.
+export function ownCells(state: GameState, cells: Cell[]): void {
+  for (const cell of cells) if (!isOpen(state.game.board, cell)) state.game.board.open.push({ q: cell.q, r: cell.r });
 }
 
 // A complete hand-built habit shape for tests that push habits directly.

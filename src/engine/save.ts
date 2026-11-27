@@ -3,7 +3,11 @@ import { normalizeIntentions } from "./intentions";
 import { normalizeHabitColor } from "./habits";
 import { SAVE_VERSION } from "./constants";
 import { D, fromSave, isNum, NumFault, toSave, type Num } from "./num";
-import type { GameState, Habit, HabitClass, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
+import { ARCS, openingBoard } from "./board";
+import { cellKey, LIFETIME_RADIUS, ring, type Cell } from "./hex";
+import { isModuleType } from "./modules";
+import { computeBoardRates } from "./rates";
+import type { Arc, Board, GameState, Habit, HabitClass, ModuleCategory, ModuleType, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
 
 // The save boundary. Save v16 (issue #18) writes the nested GameState
 // (`records`, `game`) with every Decimal as num's save string, and reads it
@@ -96,8 +100,12 @@ function encode(value: unknown, path: string): unknown {
 }
 
 // `savedAt` is the caller's wall clock: the engine never reads one.
+// The board's rates are derived from the layout (issue #26): the save
+// holds the layout, never the rates, and the reader recomputes them.
 export function serialize(state: GameState, savedAt: number): string {
-  const file: SaveFile = { app: "flowsynth", version: SAVE_VERSION, savedAt, state: encode(state, "save.state") };
+  const { rates: _derived, ...game } = state.game;
+  const saved = { records: state.records, game };
+  const file: SaveFile = { app: "flowsynth", version: SAVE_VERSION, savedAt, state: encode(saved, "save.state") };
   assertSerializable(file, "save");
   return JSON.stringify(file, null, 2);
 }
@@ -312,6 +320,7 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
   const flowing = game.mode !== "upgrade" && isRecord(game.session);
   const intentions = records.intentions as GameState["records"]["intentions"];
   normalizeIntentions(intentions);
+  const board = readBoard(game.board);
   const state: GameState = {
     records: {
       habits: (records.habits as Habit[]).map(readHabit),
@@ -334,10 +343,74 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
         ? game.openClasses.map(readClass).filter((c): c is HabitClass => c !== null)
         : fresh.game.openClasses,
       legacyLine: typeof game.legacyLine === "string" ? game.legacyLine : null,
+      board,
+      allowance: readAllowance(game.allowance, fresh.game.allowance),
+      arrived: readArrived(game.arrived, fresh.game.arrived),
+      // Recomputed once from the layout; a saved rate is never read.
+      rates: computeBoardRates(board),
     },
   };
   const recovered = recovery && lost.length > 0 ? { fromVersion: version, lost } : undefined;
   return { state, ...(recovered && { recovered }) };
+}
+
+function readCell(value: unknown): Cell | null {
+  if (!isRecord(value) || !Number.isInteger(value.q) || !Number.isInteger(value.r)) return null;
+  const cell = { q: value.q as number, r: value.r as number };
+  return ring(cell) <= LIFETIME_RADIUS ? cell : null;
+}
+
+// The board (issue #24) is an additive v16 field: a save written before it
+// has none and loads the opening board. Cells the lifetime board can't hold
+// are dropped; a board with no readable cell is the opening board, never an
+// invented one.
+function readBoard(raw: unknown): Board {
+  const opening = openingBoard();
+  if (!isRecord(raw) || !Array.isArray(raw.open)) return opening;
+  const seen = new Set<string>();
+  const open: Cell[] = [];
+  for (const item of raw.open) {
+    const cell = readCell(item);
+    if (cell === null || seen.has(cellKey(cell))) continue;
+    seen.add(cellKey(cell));
+    open.push(cell);
+  }
+  if (open.length === 0) return opening;
+  const arc = typeof raw.arc === "string" && (ARCS as readonly string[]).includes(raw.arc) ? (raw.arc as Arc) : opening.arc;
+  return { open, arc, placements: readPlacements(raw.placements, seen) };
+}
+
+// Placements (issue #25): a placement whose type is unknown, or whose cell
+// isn't an owned open cell (or already holds a module), returns to
+// unplaced rather than failing the load. Allowance is a count, so nothing
+// is lost.
+function readPlacements(raw: unknown, owned: Set<string>): Placement[] {
+  if (!Array.isArray(raw)) return [];
+  const taken = new Set<string>();
+  const placements: Placement[] = [];
+  for (const item of raw) {
+    if (!isRecord(item) || !isModuleType(item.module)) continue;
+    const cell = readCell(item.cell);
+    if (cell === null || !owned.has(cellKey(cell)) || taken.has(cellKey(cell))) continue;
+    taken.add(cellKey(cell));
+    placements.push({ cell, module: item.module });
+  }
+  return placements;
+}
+
+function readAllowance(raw: unknown, opening: Record<ModuleCategory, number>): Record<ModuleCategory, number> {
+  const allowance = { ...opening };
+  if (!isRecord(raw)) return allowance;
+  for (const category of Object.keys(allowance) as ModuleCategory[]) {
+    const count = raw[category];
+    if (Number.isInteger(count) && (count as number) >= 0) allowance[category] = count as number;
+  }
+  return allowance;
+}
+
+function readArrived(raw: unknown, opening: ModuleType[]): ModuleType[] {
+  if (!Array.isArray(raw)) return [...opening];
+  return raw.filter(isModuleType).filter((module, index, all) => all.indexOf(module) === index);
 }
 
 function needsRecovery(lost: string[]): LoadResult {
@@ -387,6 +460,8 @@ function readV15(raw: Record<string, unknown>, recovery: boolean): LoadResult {
     },
     game: {
       ...fresh.game,
+      // The migration starts from the opening board, and its rates.
+      rates: computeBoardRates(fresh.game.board),
       legacyLine: legacyLineOf(raw.modules),
       mode: flowing ? (raw.mode as GameState["game"]["mode"]) : "upgrade",
       session: flowing ? readSession(raw.session as Partial<SessionState>) : null,

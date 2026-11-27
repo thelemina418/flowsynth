@@ -1,4 +1,5 @@
 import type { Num } from "./num";
+import type { Cell } from "./hex";
 
 // The single serialisable GameState (spec chunk 01, issue #17). It has two
 // parts: the real-life records, which nothing in the game ever resets, and
@@ -173,7 +174,69 @@ export interface Records {
   nextId: number;
 }
 
-// The game state: minimal in chunk 01.
+// The macro stages (GLOSSARY: Arc). Each sets the board's reach.
+export type Arc = "sketch" | "demo" | "record" | "master" | "encore";
+
+// The module categories (GLOSSARY: Category). Only Oscillators exist in
+// chunk 02; Modulators arrive in chunk 03, Effects and Arms later.
+export type ModuleCategory = "oscillator";
+
+// The oscillator types (mechanics-sketch.md). Square, Saw and Release are
+// declared now; chunk 04 makes them arrive.
+export type OscillatorType = "sine" | "triangle" | "square" | "saw" | "release";
+
+// Every module type. Chunk 03 widens it with the modulator types.
+export type ModuleType = OscillatorType;
+
+// One module on one owned open cell (issue #25).
+export interface Placement {
+  cell: Cell;
+  module: ModuleType;
+}
+
+// The board (spec chunk 02): the owned open cells, the current arc and the
+// placements. Cell kinds are derived (engine/board.ts). An open cell holds
+// at most one module; an unplaced module is simply absent.
+export interface Board {
+  open: Cell[];
+  arc: Arc;
+  placements: Placement[];
+}
+
+// One satisfied instance of an oscillator's pattern (issue #26): a distinct
+// set of partner cells, each with the module it holds.
+export interface ResonanceInstance {
+  partners: Placement[];
+}
+
+// One placed oscillator's rate (mechanics-sketch.md, Rates):
+// rate = base × resonance × charge × faders × (1 − pressure). Charge,
+// faders and pressure are identity legs until chunks 03, 05 and 06 fill
+// them in.
+export interface OscillatorRate {
+  cell: Cell;
+  module: OscillatorType;
+  base: Num;
+  // The pattern's R (0 for a type with no pattern).
+  strength: Num;
+  instances: ResonanceInstance[];
+  resonance: Num;
+  charge: Num;
+  faders: Num;
+  pressure: Num;
+  rate: Num;
+}
+
+// The board's rates (issue #26): one pure computation of the layout,
+// cached on the game state, recomputed after a layout change and on load,
+// never persisted and never computed per tick. Oscillators are in
+// placement order.
+export interface BoardRates {
+  oscillators: OscillatorRate[];
+  total: Num;
+}
+
+// The game state.
 export interface Game {
   nous: Num;
   mode: Mode;
@@ -185,6 +248,15 @@ export interface Game {
   // The Almanac's legacy line (`Legacy era · <n> modules · archived`),
   // written once by the v15 migration; null on a fresh start.
   legacyLine: string | null;
+  board: Board;
+  // How many modules of each category may be placed at once (GLOSSARY:
+  // Allowance). Plain facts here; chunk 04's class levels grant them.
+  allowance: Record<ModuleCategory, number>;
+  // The module types the player has, in arrival order. Sine and Triangle
+  // at the start; chunk 04 adds the rest.
+  arrived: ModuleType[];
+  // Derived from the board, never saved (engine/rates.ts).
+  rates: BoardRates;
 }
 
 export interface GameState {

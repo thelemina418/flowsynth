@@ -1,0 +1,75 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { applyIn, advanceIn, fresh, giveHabit, giveOscillators } from "./fixtures";
+import { computeBoardRates } from "./rates";
+import { deserialize, serialize } from "./save";
+import { cloneState } from "./state";
+import type { GameState } from "./types";
+
+// Rates are analytic (spec chunk 02, issue #26): computed once per layout
+// change, never per tick. The wrapper keeps the real computation and
+// counts its calls.
+vi.mock("./rates", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./rates")>();
+  return { ...real, computeBoardRates: vi.fn(real.computeBoardRates) };
+});
+
+const counted = vi.mocked(computeBoardRates);
+
+function acceptanceLayout(): GameState {
+  const s = fresh();
+  giveOscillators(s, { allowance: 3 });
+  counted.mockClear();
+  applyIn(s, { type: "placeModule", module: "sine", cell: { q: 0, r: 0 } });
+  applyIn(s, { type: "placeModule", module: "triangle", cell: { q: 1, r: 0 } });
+  applyIn(s, { type: "placeModule", module: "triangle", cell: { q: 0, r: 1 } });
+  return s;
+}
+
+// A block body: mockClear returns the mock, and a function returned from
+// beforeEach would run as its teardown.
+beforeEach(() => {
+  counted.mockClear();
+});
+
+describe("recomputing the board's rates", () => {
+  it("recomputes once for each layout change: place, move, remove", () => {
+    const s = acceptanceLayout();
+    expect(counted).toHaveBeenCalledTimes(3);
+    counted.mockClear();
+    applyIn(s, { type: "moveModule", from: { q: 0, r: 0 }, to: { q: 1, r: -1 } });
+    expect(counted).toHaveBeenCalledTimes(1);
+    applyIn(s, { type: "removeModule", cell: { q: 1, r: -1 } });
+    expect(counted).toHaveBeenCalledTimes(2);
+  });
+
+  it("recomputes nothing for a refused placement or an action that leaves the layout alone", () => {
+    const s = acceptanceLayout();
+    counted.mockClear();
+    applyIn(s, { type: "placeModule", module: "sine", cell: { q: -1, r: 1 } });
+    applyIn(s, { type: "createHabit", name: "Piano" });
+    expect(counted).not.toHaveBeenCalled();
+  });
+
+  it("recomputes zero times across any number of flow advances", () => {
+    const s = acceptanceLayout();
+    giveHabit(s, "Piano", "engineer");
+    applyIn(s, { type: "startSession", target: null, now: 0 });
+    counted.mockClear();
+    for (let i = 0; i < 500; i++) advanceIn(s, 1, "flow");
+    advanceIn(s, 600, "flow", "away");
+    advanceIn(s, 0, "flow");
+    expect(counted).not.toHaveBeenCalled();
+    expect(s.game.nous.toNumber()).toBeGreaterThan(0);
+  });
+
+  it("recomputes once on load, from the layout, and never writes the rates to the save", () => {
+    const s = acceptanceLayout();
+    const text = serialize(s, 0);
+    expect(text).not.toMatch(/rates|resonance|instances/);
+    counted.mockClear();
+    const loaded = deserialize(text).state!;
+    expect(counted).toHaveBeenCalledTimes(1);
+    expect(loaded.game.rates).toEqual(cloneState(s.game.rates));
+    expect(loaded.game.rates.total.toNumber()).toBe(4.5);
+  });
+});

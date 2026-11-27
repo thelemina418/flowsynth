@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { D, pow } from "./num";
-import { applyIn, advanceIn, fresh, giveHabit } from "./fixtures";
+import { applyIn, advanceIn, fresh, giveHabit, giveOscillators } from "./fixtures";
 import { SAVE_VERSION } from "./constants";
 import { deserialize, recoverLostSave, serialize, SaveRefusedError } from "./save";
 
@@ -66,6 +66,104 @@ describe("save v16", () => {
     expect(deserialize("[]").error).toBe("This file is not a FlowSynth save.");
     expect(deserialize(v16((st) => { delete st.records.habits; })).error).toBe("The save data is incomplete.");
     expect(deserialize(v16((st) => { st.game.mode = "weird"; })).error).toMatch(/unknown session mode/);
+  });
+});
+
+// The board is an additive v16 field (issue #24): SAVE_VERSION stays 16.
+describe("the board in a v16 save", () => {
+  it("round-trips the owned cells and the arc", () => {
+    const s = flowing();
+    s.game.board.open.push({ q: -1, r: 1 }, { q: 0, r: 3 });
+    s.game.board.arc = "demo";
+    const loaded = deserialize(serialize(s, 1_000));
+    expect(loaded.error).toBeUndefined();
+    expect(loaded.state).toEqual(s);
+    expect(loaded.state!.game.board).toEqual({ open: [...fresh().game.board.open, { q: -1, r: 1 }, { q: 0, r: 3 }], arc: "demo", placements: [] });
+  });
+
+  it("a v16 save written before the board loads the opening board", () => {
+    const loaded = deserialize(v16((st) => { delete st.game.board; }));
+    expect(loaded.error).toBeUndefined();
+    expect(loaded.state).toEqual(flowing());
+    expect(loaded.state!.game.board).toEqual(fresh().game.board);
+  });
+
+  it("an unreadable board loads the opening board rather than an invented one", () => {
+    for (const bad of [null, "board", { open: "x", arc: "sketch" }, { open: [{ q: 0 }], arc: "sketch" }, { open: [], arc: "sketch" }]) {
+      const loaded = deserialize(v16((st) => { st.game.board = bad; }));
+      expect(loaded.state!.game.board, JSON.stringify(bad)).toEqual(fresh().game.board);
+    }
+    const unknownArc = deserialize(v16((st) => { (st.game.board as { arc: string }).arc = "bootleg"; }));
+    expect(unknownArc.state!.game.board.arc).toBe("sketch");
+  });
+});
+
+// Placements, allowance and arrived types (issue #25) are additive v16
+// fields too.
+describe("placements in a v16 save", () => {
+  function laidOut() {
+    const s = fresh();
+    giveOscillators(s, { allowance: 3, arrive: ["square"] });
+    applyIn(s, { type: "placeModule", module: "triangle", cell: { q: 1, r: 0 } });
+    applyIn(s, { type: "placeModule", module: "sine", cell: { q: 0, r: 0 } });
+    applyIn(s, { type: "placeModule", module: "square", cell: { q: 1, r: -1 } });
+    return s;
+  }
+
+  function saved(mutate: (game: Record<string, unknown> & { board: { placements: unknown[] } }) => void): string {
+    const file = JSON.parse(serialize(laidOut(), 1_000));
+    mutate(file.state.game);
+    return JSON.stringify(file);
+  }
+
+  it("round-trips the layout, the allowance and the arrived types exactly", () => {
+    const s = laidOut();
+    const loaded = deserialize(serialize(s, 1_000));
+    expect(loaded.error).toBeUndefined();
+    expect(loaded.state).toEqual(s);
+    expect(loaded.state!.game.board.placements).toEqual([
+      { cell: { q: 1, r: 0 }, module: "triangle" },
+      { cell: { q: 0, r: 0 }, module: "sine" },
+      { cell: { q: 1, r: -1 }, module: "square" },
+    ]);
+    expect(loaded.state!.game.allowance).toEqual({ oscillator: 3 });
+    expect(loaded.state!.game.arrived).toEqual(["sine", "triangle", "square"]);
+  });
+
+  it("a v16 save written before placements loads an empty board and the opening allowance", () => {
+    const loaded = deserialize(saved((game) => {
+      delete (game.board as Record<string, unknown>).placements;
+      delete game.allowance;
+      delete game.arrived;
+    }));
+    expect(loaded.error).toBeUndefined();
+    expect(loaded.state!.game.board.placements).toEqual([]);
+    expect(loaded.state!.game.allowance).toEqual({ oscillator: 2 });
+    expect(loaded.state!.game.arrived).toEqual(["sine", "triangle"]);
+  });
+
+  it("returns a placement with an unknown type, or off an owned open cell, to unplaced", () => {
+    const loaded = deserialize(saved((game) => {
+      game.board.placements.push(
+        { cell: { q: 0, r: 1 }, module: "kazoo" },
+        { cell: { q: -1, r: 1 }, module: "sine" },
+        { cell: { q: 4, r: 0 }, module: "sine" },
+        { cell: { q: 0, r: 0 }, module: "triangle" },
+        { cell: { q: 0 }, module: "sine" },
+        "sine",
+      );
+    }));
+    expect(loaded.error).toBeUndefined();
+    expect(loaded.state).toEqual(laidOut());
+  });
+
+  it("reads unreadable allowance or arrived types as the opening's", () => {
+    const loaded = deserialize(saved((game) => {
+      game.allowance = { oscillator: -1 };
+      game.arrived = ["sine", "kazoo", "sine"];
+    }));
+    expect(loaded.state!.game.allowance).toEqual({ oscillator: 2 });
+    expect(loaded.state!.game.arrived).toEqual(["sine"]);
   });
 });
 
