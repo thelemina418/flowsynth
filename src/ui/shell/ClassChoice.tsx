@@ -35,7 +35,6 @@ export function ClassChoice({ habit, liveSeconds, open, error, onChoose }: Props
           </button>
         ))}
       </div>
-      <p class="muted">Chosen once. Its credited flow counts toward that class.</p>
       {error !== null && <p class="shell-error" role="alert">{error}</p>}
     </section>
   );
