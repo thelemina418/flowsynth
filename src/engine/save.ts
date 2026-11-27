@@ -6,6 +6,7 @@ import { D, fromSave, isNum, NumFault, toSave, type Num } from "./num";
 import { ARCS, openingBoard } from "./board";
 import { hexKey, LIFETIME_RADIUS, ring, type Hex } from "./hex";
 import { isModuleType } from "./modules";
+import { computeBoardRates } from "./rates";
 import type { Arc, Board, GameState, Habit, HabitClass, ModuleCategory, ModuleType, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
 
 // The save boundary. Save v16 (issue #18) writes the nested GameState
@@ -99,8 +100,12 @@ function encode(value: unknown, path: string): unknown {
 }
 
 // `savedAt` is the caller's wall clock: the engine never reads one.
+// The board's rates are derived from the layout (issue #26): the save
+// holds the layout, never the rates, and the reader recomputes them.
 export function serialize(state: GameState, savedAt: number): string {
-  const file: SaveFile = { app: "flowsynth", version: SAVE_VERSION, savedAt, state: encode(state, "save.state") };
+  const { rates: _derived, ...game } = state.game;
+  const saved = { records: state.records, game };
+  const file: SaveFile = { app: "flowsynth", version: SAVE_VERSION, savedAt, state: encode(saved, "save.state") };
   assertSerializable(file, "save");
   return JSON.stringify(file, null, 2);
 }
@@ -315,6 +320,7 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
   const flowing = game.mode !== "upgrade" && isRecord(game.session);
   const intentions = records.intentions as GameState["records"]["intentions"];
   normalizeIntentions(intentions);
+  const board = readBoard(game.board);
   const state: GameState = {
     records: {
       habits: (records.habits as Habit[]).map(readHabit),
@@ -337,9 +343,11 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
         ? game.openClasses.map(readClass).filter((c): c is HabitClass => c !== null)
         : fresh.game.openClasses,
       legacyLine: typeof game.legacyLine === "string" ? game.legacyLine : null,
-      board: readBoard(game.board),
+      board,
       allowance: readAllowance(game.allowance, fresh.game.allowance),
       arrived: readArrived(game.arrived, fresh.game.arrived),
+      // Recomputed once from the layout; a saved rate is never read.
+      rates: computeBoardRates(board),
     },
   };
   const recovered = recovery && lost.length > 0 ? { fromVersion: version, lost } : undefined;
@@ -452,6 +460,8 @@ function readV15(raw: Record<string, unknown>, recovery: boolean): LoadResult {
     },
     game: {
       ...fresh.game,
+      // The migration starts from the opening board, and its rates.
+      rates: computeBoardRates(fresh.game.board),
       legacyLine: legacyLineOf(raw.modules),
       mode: flowing ? (raw.mode as GameState["game"]["mode"]) : "upgrade",
       session: flowing ? readSession(raw.session as Partial<SessionState>) : null,

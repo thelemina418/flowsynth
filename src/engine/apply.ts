@@ -4,6 +4,7 @@ import { addPracticeLog, archiveHabit, chooseHabitClass, createHabit, renameHabi
 import { createIntention, deleteIntention, editIntention, retainIntentionChoice, rollIntentionOccurrences } from "./intentions";
 import { writeNote } from "./notes";
 import { moveModule, placeModule, removeModule } from "./placement";
+import { computeBoardRates } from "./rates";
 import { settleHonestyReport } from "./trust";
 import type { Hex } from "./hex";
 import type { GameState, IntentionSchedule, HabitClass, HabitColor, HonestyOutcome, ModuleType } from "./types";
@@ -92,10 +93,17 @@ function run(state: GameState, action: Action): Step {
     case "rollIntentions":
       rollIntentionOccurrences(state, action.now);
       return { ok: true };
-    case "placeModule": return placeModule(state, action.module, action.cell);
-    case "moveModule": return moveModule(state, action.from, action.to);
-    case "removeModule": return removeModule(state, action.cell);
+    case "placeModule": return relaid(state, placeModule(state, action.module, action.cell));
+    case "moveModule": return relaid(state, moveModule(state, action.from, action.to));
+    case "removeModule": return relaid(state, removeModule(state, action.cell));
   }
+}
+
+// A layout change recomputes the board's rates once (issue #26); a
+// refusal changed nothing, so it recomputes nothing.
+function relaid(state: GameState, step: Step): Step {
+  if (step.ok) state.game.rates = computeBoardRates(state.game.board);
+  return step;
 }
 
 function refusalOnFault(action: Action): string {

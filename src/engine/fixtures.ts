@@ -1,5 +1,7 @@
 import { advance, type Advanced } from "./advance";
 import { apply, type ApplyResult } from "./apply";
+import { isOpen } from "./board";
+import type { Hex } from "./hex";
 import { isNum } from "./num";
 import { createInitialState } from "./state";
 import type { Presence } from "./trust";
@@ -64,6 +66,13 @@ export function giveHabit(state: GameState, name = "Piano", habitClass?: HabitCl
 export function giveOscillators(state: GameState, grant: { allowance?: number; arrive?: ModuleType[] }): void {
   if (grant.allowance !== undefined) state.game.allowance.oscillator = grant.allowance;
   for (const module of grant.arrive ?? []) if (!state.game.arrived.includes(module)) state.game.arrived.push(module);
+}
+
+// Owned open cells beyond the opening, as chunk 05's conquest will add
+// them (issue #26). Owning a cell is not a layout change: no module moves,
+// so the rates stay as they are.
+export function ownCells(state: GameState, cells: Hex[]): void {
+  for (const cell of cells) if (!isOpen(state.game.board, cell)) state.game.board.open.push({ q: cell.q, r: cell.r });
 }
 
 // A complete hand-built habit shape for tests that push habits directly.

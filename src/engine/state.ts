@@ -1,5 +1,6 @@
 import { D, isNum, isNaNNum, NumFault } from "./num";
 import { openingBoard } from "./board";
+import { noRates } from "./rates";
 import type { GameState } from "./types";
 
 // A fresh start: empty real-life records, and a game state with no nous,
@@ -29,6 +30,8 @@ export function createInitialState(): GameState {
       board: openingBoard(),
       allowance: { oscillator: 2 },
       arrived: ["sine", "triangle"],
+      // The opening board holds no module, so it makes nothing.
+      rates: noRates(),
     },
   };
 }

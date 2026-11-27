@@ -203,6 +203,39 @@ export interface Board {
   placements: Placement[];
 }
 
+// One satisfied instance of an oscillator's pattern (issue #26): a distinct
+// set of partner cells, each with the module it holds.
+export interface ResonanceInstance {
+  partners: Placement[];
+}
+
+// One placed oscillator's rate (mechanics-sketch.md, Rates):
+// rate = base × resonance × charge × faders × (1 − pressure). Charge,
+// faders and pressure are identity legs until chunks 03, 05 and 06 fill
+// them in.
+export interface OscillatorRate {
+  cell: Hex;
+  module: OscillatorType;
+  base: Num;
+  // The pattern's R (0 for a type with no pattern).
+  strength: Num;
+  instances: ResonanceInstance[];
+  resonance: Num;
+  charge: Num;
+  faders: Num;
+  pressure: Num;
+  rate: Num;
+}
+
+// The board's rates (issue #26): one pure computation of the layout,
+// cached on the game state, recomputed after a layout change and on load,
+// never persisted and never computed per tick. Oscillators are in
+// placement order.
+export interface BoardRates {
+  oscillators: OscillatorRate[];
+  total: Num;
+}
+
 // The game state.
 export interface Game {
   nous: Num;
@@ -222,6 +255,8 @@ export interface Game {
   // The module types the player has, in arrival order. Sine and Triangle
   // at the start; chunk 04 adds the rest.
   arrived: ModuleType[];
+  // Derived from the board, never saved (engine/rates.ts).
+  rates: BoardRates;
 }
 
 export interface GameState {
