@@ -27,6 +27,8 @@ export function createInitialState(): GameState {
       openClasses: ["engineer", "producer"],
       legacyLine: null,
       board: openingBoard(),
+      allowance: { oscillator: 2 },
+      arrived: ["sine", "triangle"],
     },
   };
 }

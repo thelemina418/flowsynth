@@ -5,7 +5,8 @@ import { SAVE_VERSION } from "./constants";
 import { D, fromSave, isNum, NumFault, toSave, type Num } from "./num";
 import { ARCS, openingBoard } from "./board";
 import { hexKey, LIFETIME_RADIUS, ring, type Hex } from "./hex";
-import type { Arc, Board, GameState, Habit, HabitClass, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
+import { isModuleType } from "./modules";
+import type { Arc, Board, GameState, Habit, HabitClass, ModuleCategory, ModuleType, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
 
 // The save boundary. Save v16 (issue #18) writes the nested GameState
 // (`records`, `game`) with every Decimal as num's save string, and reads it
@@ -337,6 +338,8 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
         : fresh.game.openClasses,
       legacyLine: typeof game.legacyLine === "string" ? game.legacyLine : null,
       board: readBoard(game.board),
+      allowance: readAllowance(game.allowance, fresh.game.allowance),
+      arrived: readArrived(game.arrived, fresh.game.arrived),
     },
   };
   const recovered = recovery && lost.length > 0 ? { fromVersion: version, lost } : undefined;
@@ -366,7 +369,40 @@ function readBoard(raw: unknown): Board {
   }
   if (open.length === 0) return opening;
   const arc = typeof raw.arc === "string" && (ARCS as readonly string[]).includes(raw.arc) ? (raw.arc as Arc) : opening.arc;
-  return { open, arc };
+  return { open, arc, placements: readPlacements(raw.placements, seen) };
+}
+
+// Placements (issue #25): a placement whose type is unknown, or whose cell
+// isn't an owned open cell (or already holds a module), returns to
+// unplaced rather than failing the load. Allowance is a count, so nothing
+// is lost.
+function readPlacements(raw: unknown, owned: Set<string>): Placement[] {
+  if (!Array.isArray(raw)) return [];
+  const taken = new Set<string>();
+  const placements: Placement[] = [];
+  for (const item of raw) {
+    if (!isRecord(item) || !isModuleType(item.module)) continue;
+    const cell = readCell(item.cell);
+    if (cell === null || !owned.has(hexKey(cell)) || taken.has(hexKey(cell))) continue;
+    taken.add(hexKey(cell));
+    placements.push({ cell, module: item.module });
+  }
+  return placements;
+}
+
+function readAllowance(raw: unknown, opening: Record<ModuleCategory, number>): Record<ModuleCategory, number> {
+  const allowance = { ...opening };
+  if (!isRecord(raw)) return allowance;
+  for (const category of Object.keys(allowance) as ModuleCategory[]) {
+    const count = raw[category];
+    if (Number.isInteger(count) && (count as number) >= 0) allowance[category] = count as number;
+  }
+  return allowance;
+}
+
+function readArrived(raw: unknown, opening: ModuleType[]): ModuleType[] {
+  if (!Array.isArray(raw)) return [...opening];
+  return raw.filter(isModuleType).filter((module, index, all) => all.indexOf(module) === index);
 }
 
 function needsRecovery(lost: string[]): LoadResult {

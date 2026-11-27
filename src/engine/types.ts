@@ -177,12 +177,30 @@ export interface Records {
 // The macro stages (GLOSSARY: Arc). Each sets the board's reach.
 export type Arc = "sketch" | "demo" | "record" | "master" | "encore";
 
-// The board (spec chunk 02, issue #24): the owned open cells and the
-// current arc. Cell kinds are derived (engine/board.ts); placements arrive
-// with issue #25.
+// The module categories (GLOSSARY: Category). Only Oscillators exist in
+// chunk 02; Modulators arrive in chunk 03, Effects and Arms later.
+export type ModuleCategory = "oscillator";
+
+// The oscillator types (mechanics-sketch.md). Square, Saw and Release are
+// declared now; chunk 04 makes them arrive.
+export type OscillatorType = "sine" | "triangle" | "square" | "saw" | "release";
+
+// Every module type. Chunk 03 widens it with the modulator types.
+export type ModuleType = OscillatorType;
+
+// One module on one owned open cell (issue #25).
+export interface Placement {
+  cell: Hex;
+  module: ModuleType;
+}
+
+// The board (spec chunk 02): the owned open cells, the current arc and the
+// placements. Cell kinds are derived (engine/board.ts). An open cell holds
+// at most one module; an unplaced module is simply absent.
 export interface Board {
   open: Hex[];
   arc: Arc;
+  placements: Placement[];
 }
 
 // The game state.
@@ -198,6 +216,12 @@ export interface Game {
   // written once by the v15 migration; null on a fresh start.
   legacyLine: string | null;
   board: Board;
+  // How many modules of each category may be placed at once (GLOSSARY:
+  // Allowance). Plain facts here; chunk 04's class levels grant them.
+  allowance: Record<ModuleCategory, number>;
+  // The module types the player has, in arrival order. Sine and Triangle
+  // at the start; chunk 04 adds the rest.
+  arrived: ModuleType[];
 }
 
 export interface GameState {
