@@ -1,4 +1,4 @@
-// Vitest globalSetup: use the same fail-fast gate as standalone recorders.
+// Vitest globalSetup: the fail-fast supported-runtime gate.
 import { requireRuntimeEnvironment } from "./runtime.mjs";
 
 export default async function runtimeGuard() {

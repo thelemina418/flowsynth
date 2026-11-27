@@ -62,7 +62,7 @@ export async function runPreflight(argv) {
     console.log("  ACCEPT — runtime, calendar zone, and UI storage are ready for checks and evidence.\n");
     return 0;
   }
-  console.log(`  REJECT (${report.reason}) — fix the environment before running checks or recording evidence.`);
+  console.log(`  REJECT (${report.reason}) — fix the environment before running checks.`);
   for (const line of report.diagnostics.flatMap((block) => block.split("\n"))) {
     console.log(`  ${line}`);
   }

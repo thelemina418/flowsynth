@@ -152,14 +152,14 @@ export function checkRuntimeEnvironment(input = {}) {
   return report;
 }
 
-// The same fail-fast gate protects suites and standalone recorders. Check
+// The same fail-fast gate protects the suite and the npm scripts. Check
 // the runtime before importing the storage harness or compiling an engine.
 export async function requireRuntimeEnvironment(root = process.cwd()) {
   let report = checkRuntimeEnvironment({ root });
   if (report.ok) report = checkRuntimeEnvironment({ root, storage: await probeStorageCapability() });
   if (!report.ok) {
     throw new Error([
-      "runtime preflight failed — checks and recordings require the supported environment.",
+      "runtime preflight failed — checks require the supported environment.",
       `  declared ${report.declared ?? "(missing)"} · effective ${report.effective} · timezone ${report.timeZone} · storage ${report.storage.detail}`,
       ...report.diagnostics,
     ].join("\n"));
