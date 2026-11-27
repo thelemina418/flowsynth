@@ -10,23 +10,15 @@ Canonical defaults: role name = label string (`needs-triage`, `needs-info`, `rea
 
 ### Domain docs
 
-Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root (`docs/adr/README.md` says which ADRs still bind). The design target is `docs/design/` and `docs/spec/`. See `docs/agents/domain.md`.
 
-### Issue briefs
+## Design reset
 
-Briefs for implementation agents carry intent, priorities, non-goals, and one-place rules — never bare element lists. See `docs/agents/briefs.md`.
+The game is being rebuilt from `docs/spec/00-overview.md`, one chunk at a time, in sequence. `docs/design/philosophy.md` binds every surface. Where a spec is silent, philosophy decides, not defaults.
 
-### Verification records
+## Process
 
-Work against acceptance criteria maps every criterion to a named test or recorded verification in one completion record; review checks the mapping, never the suite count. See `docs/agents/verification.md`.
-
-## Review workflow
-
-Implementation and targeted checks first, then a preliminary source/spec review whose findings are resolved together as one revision, then the source freeze, and only then the final recordings, captures, and acceptance: the preliminary review and the final acceptance are different gates, and neither substitutes for the other. A required source fix after the freeze invalidates the affected evidence by the standing rules and regenerates it honestly — it is never relabeled as current. See `docs/agents/review-workflow.md`.
-
-## UI surfaces
-
-When changing or reviewing a UI surface (panel, sheet, readout, control, or its copy), read `docs/instrument-standards.md` first and judge the changed surface against the pinned prototype there; record checks that cannot run as unavailable.
+Implement, run `npm run check` and `npm test`, and take one browser look for UI chunks. The pace runner (`npm run pace`) is consulted, not used as a gate on commits. The old review-workflow, verification, recording and visual-evidence gates are retired (archived after spec chunk 01).
 
 ## Checks
 
