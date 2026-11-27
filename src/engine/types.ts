@@ -65,9 +65,11 @@ export interface SessionSummary {
 
 export type SessionMode = "planned" | "open-ended";
 
-// The goals-advanced snapshot (§9), captured at close.
-export interface GoalAdvanceSnapshot {
-  goal?: Goal;
+// The goals-advanced snapshot (§9), captured at close. Saved fields keep
+// their pre-Intention names (goalId, goal, goalsAdvanced, the session's
+// goalSeconds): a v15 save writes them, and v16 reads them as written.
+export interface IntentionAdvanceSnapshot {
+  goal?: Intention;
   goalId: string;
   seconds: number;
 }
@@ -83,7 +85,7 @@ export interface SessionRecord {
   creditedSeconds: number;
   honestyEvents: HonestyEvent[];
   reflection: SessionReflection | null;
-  goalsAdvanced: GoalAdvanceSnapshot[];
+  goalsAdvanced: IntentionAdvanceSnapshot[];
 }
 
 export interface NoteEntry {
@@ -120,22 +122,22 @@ export interface PracticeEntry {
   at: number;
 }
 
-export interface GoalCondition {
+export interface IntentionCondition {
   kind: "habit-minutes";
   habitId: string | null;
   minutes: number;
 }
 
-export type GoalSchedule = { kind: "once" } | { kind: "daily" } | { kind: "weekly" };
+export type IntentionSchedule = { kind: "once" } | { kind: "daily" } | { kind: "weekly" };
 
-export interface Goal {
-  // Retired goals retain their facts for session history but never run.
+export interface Intention {
+  // Retired intentions retain their facts for session history but never run.
   retired?: true;
   // A carried-over row awaiting the player's retain-one choice (issue #445).
   pendingChoice?: true;
   id: string;
-  condition: GoalCondition;
-  schedule: GoalSchedule;
+  condition: IntentionCondition;
+  schedule: IntentionSchedule;
   occurrenceKey: string;
   progressSeconds: number;
   completed: boolean;
@@ -161,7 +163,7 @@ export interface Records {
   sessionRecords: SessionRecord[];
   notes: NoteEntry[];
   // The player's Intentions (the old goals) and their schedules.
-  intentions: Goal[];
+  intentions: Intention[];
   // Class credit: credited flow seconds per class. Live credited time only;
   // manual log entries never add to it. Levels are chunk 04's.
   classCredit: Record<HabitClass, number>;
@@ -191,7 +193,7 @@ export interface GameState {
 }
 
 export interface AdvanceResult {
-  goalsCompleted: number;
+  intentionsCompleted: number;
   // The numeric-fault refusal (issue #486): set when the update was
   // refused whole; names the figure that refused.
   fault?: string | undefined;

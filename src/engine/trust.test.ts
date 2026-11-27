@@ -325,7 +325,7 @@ describe("the honesty report", () => {
     expect(s.game.session!.accounting.events).toHaveLength(2);
   });
 
-  it("credited provisional time accrues the habit and goals only when the report credits it", () => {
+  it("credited provisional time accrues the habit and intentions only when the report credits it", () => {
     const s = fresh();
     s.records.habits.push(plainHabit("h1"));
     s.records.activeHabitId = "h1";
@@ -341,7 +341,7 @@ describe("the honesty report", () => {
     });
     applyIn(s, { type: "startSession", target: null, now: 0 });
     away(s, 900);
-    // Provisional time sits: no habit seconds, no goal progress.
+    // Provisional time sits: no habit seconds, no intention progress.
     expect(s.records.habits[0]!.seconds).toBe(0);
     expect(s.records.intentions[0]!.progressSeconds).toBe(0);
     applyIn(s, { type: "settleHonestyReport", outcome: "full" });

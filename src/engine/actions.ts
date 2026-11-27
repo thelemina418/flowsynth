@@ -1,6 +1,6 @@
 import { EPS, REFLECTION_SLIDER_MIN, REFLECTION_SLIDER_NEUTRAL, REFLECTION_SLIDER_POSITIONS } from "./constants";
 import { logSessionPractice } from "./habits";
-import { rollGoalOccurrences } from "./goals";
+import { rollIntentionOccurrences } from "./intentions";
 import { freshAccounting } from "./trust";
 import type { GameState, SessionReflection } from "./types";
 
@@ -51,11 +51,11 @@ export function endSession(state: GameState, now: number = 0): ActionResult {
   state.game.session = null;
   state.records.sessionsCompleted++;
   logSessionPractice(state, credited, now);
-  rollGoalOccurrences(state, now);
+  rollIntentionOccurrences(state, now);
   const events = (session?.accounting.events ?? []).map((event) => ({ ...event }));
   // The session record (§9): one append-only entry at close, whatever the
   // length or mode. The goals-advanced ledger snapshots from the session,
-  // so deleting or replacing a goal never rewrites history.
+  // so deleting or replacing an intention never rewrites history.
   state.records.sessionRecords.push({
     sessionNumber: state.records.sessionsCompleted,
     startedAt: session && session.startedAt > 0 ? session.startedAt : now,
@@ -67,8 +67,8 @@ export function endSession(state: GameState, now: number = 0): ActionResult {
     honestyEvents: events,
     reflection: null,
     goalsAdvanced: Object.entries(session?.goalSeconds ?? {}).map(([goalId, seconds]) => {
-      const goal = state.records.intentions.find((row) => row.id === goalId);
-      return { goalId, seconds, ...(goal ? { goal: structuredClone(goal) } : {}) };
+      const intention = state.records.intentions.find((row) => row.id === goalId);
+      return { goalId, seconds, ...(intention ? { goal: structuredClone(intention) } : {}) };
     }),
   });
   state.game.summary = {

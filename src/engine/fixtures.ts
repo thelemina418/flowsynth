@@ -4,7 +4,7 @@ import { isNum } from "./num";
 import { createInitialState } from "./state";
 import type { Presence } from "./trust";
 import { DEFAULT_HABIT_COLOR } from "./habits";
-import type { AdvanceMode, GameState, Goal, Habit, HabitClass } from "./types";
+import type { AdvanceMode, GameState, Intention, Habit, HabitClass } from "./types";
 
 // The test harness. The engine's doors are pure; a test that walks one
 // state through many steps holds one object instead, so these run the pure
@@ -71,8 +71,8 @@ export function habitOf(state: GameState, made: ApplyResult): Habit {
   return habit;
 }
 
-export function intentionOf(state: GameState, made: ApplyResult): Goal {
-  const goal = state.records.intentions.find((g) => g.id === made.id);
-  if (!goal) throw new Error(`no Intention was made: ${made.reason}`);
-  return goal;
+export function intentionOf(state: GameState, made: ApplyResult): Intention {
+  const intention = state.records.intentions.find((g) => g.id === made.id);
+  if (!intention) throw new Error(`no Intention was made: ${made.reason}`);
+  return intention;
 }

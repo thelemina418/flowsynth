@@ -1,6 +1,6 @@
 import { EPS } from "./constants";
 import { requireFinite } from "./num";
-import { accrueGoalProgress, rollGoalOccurrences } from "./goals";
+import { accrueIntentionProgress, rollIntentionOccurrences } from "./intentions";
 import type { GameState, Habit, HabitClass, HabitColor, PracticeEntry } from "./types";
 
 export type { Habit, PracticeEntry };
@@ -14,7 +14,7 @@ export type { Habit, PracticeEntry };
 
 // The six-token palette (issue #312, re-owned by the habit with issue
 // #445, ADR-0075), vermillion default. The choice is made in the habit
-// editor and read from habit state everywhere after — the goal inherits
+// editor and read from habit state everywhere after — the intention inherits
 // it, so there is no legend and no second place to set it.
 export const HABIT_COLORS: readonly HabitColor[] = ["vermillion", "amber", "green", "cyan", "indigo", "violet"];
 export const DEFAULT_HABIT_COLOR: HabitColor = "vermillion";
@@ -75,7 +75,7 @@ export function renameHabit(state: GameState, id: string, name: string): { ok: b
 }
 
 // The palette's landing (issue #445): the editor's swatch row re-colors
-// the habit — identity alone, never its class — and every goal read
+// the habit — identity alone, never its class — and every intention read
 // inherits the pick. Upgrade mode only, like every habit mutation; the
 // key must be one of the six.
 export function setHabitColor(state: GameState, id: string, color: HabitColor): { ok: boolean; reason?: string } {
@@ -129,7 +129,7 @@ export function selectHabit(state: GameState, id: string | null): { ok: boolean;
   return { ok: true };
 }
 
-// Manual practice log: advances the habit's credited time and its goal
+// Manual practice log: advances the habit's credited time and its intention
 // conditions (§2.3).
 export function addPracticeLog(
   state: GameState,
@@ -141,8 +141,8 @@ export function addPracticeLog(
   const habit = state.records.habits.find((h) => h.id === habitId && !h.archived);
   if (!habit) return { ok: false, reason: "Habit not found." };
   if (!(minutes > 0)) return { ok: false, reason: "Log a positive number of minutes." };
-  rollGoalOccurrences(state, now);
-  const completions = accrueGoalProgress(state, habitId, minutes * 60);
+  rollIntentionOccurrences(state, now);
+  const completions = accrueIntentionProgress(state, habitId, minutes * 60);
   habit.seconds += minutes * 60;
   state.records.practiceLog.push({
     id: `p${state.records.nextId++}`,
@@ -167,7 +167,7 @@ export function accrueLivePractice(state: GameState, seconds: number): void {
   }
 }
 
-// Called from endSession: one practice-log entry per session for goal
+// Called from endSession: one practice-log entry per session for intention
 // evaluation. Timestamps come from the caller; tests pass explicit values.
 export function logSessionPractice(state: GameState, seconds: number, now: number): void {
   const habit = state.records.habits.find((h) => h.id === state.records.activeHabitId);

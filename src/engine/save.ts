@@ -1,5 +1,5 @@
 import { createInitialState } from "./state";
-import { normalizeGoals } from "./goals";
+import { normalizeIntentions } from "./intentions";
 import { normalizeHabitColor } from "./habits";
 import { SAVE_VERSION } from "./constants";
 import { D, fromSave, isNum, NumFault, toSave, type Num } from "./num";
@@ -311,7 +311,7 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
   const fresh = createInitialState();
   const flowing = game.mode !== "upgrade" && isRecord(game.session);
   const intentions = records.intentions as GameState["records"]["intentions"];
-  normalizeGoals(intentions);
+  normalizeIntentions(intentions);
   const state: GameState = {
     records: {
       habits: (records.habits as Habit[]).map(readHabit),
@@ -371,7 +371,7 @@ function readV15(raw: Record<string, unknown>, recovery: boolean): LoadResult {
   if (lost.length && !recovery) return needsRecovery(lost);
   const fresh = createInitialState();
   const intentions = raw.goals as GameState["records"]["intentions"];
-  normalizeGoals(intentions);
+  normalizeIntentions(intentions);
   const state: GameState = {
     records: {
       habits: (raw.habits as Habit[]).map((habit) => readHabit({ ...habit, habitClass: null })),

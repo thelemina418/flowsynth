@@ -1,5 +1,5 @@
 // Issue #505: the targeted calendar regression runner. The engine's calendar
-// basis is the host's local calendar — goal occurrence days read it — so
+// basis is the host's local calendar — intention occurrence days read it — so
 // the calendar-sensitive regressions run
 // under UTC and a DST-observing zone, the two bases the repository declares,
 // and establish the intended behavior in each. Targeted by design: the two
@@ -19,9 +19,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 // The calendar-sensitive regressions: the engine's calendar-basis cases
-// (zone-invariant by construction) and the goals suite, whose local-calendar
+// (zone-invariant by construction) and the intentions suite, whose local-calendar
 // accounting every case exercises through local-day-constructed stamps.
-export const CALENDAR_TEST_FILES = ["src/engine/calendar.test.ts", "src/engine/goals.test.ts"];
+export const CALENDAR_TEST_FILES = ["src/engine/calendar.test.ts", "src/engine/intentions.test.ts"];
 
 // UTC — CI's basis — and a DST-observing zone, where a calendar day is 23 or
 // 25 hours at the transitions the regressions cross.

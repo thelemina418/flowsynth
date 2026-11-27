@@ -1,7 +1,7 @@
 import { EPS } from "./constants";
 import { requireFinite } from "./num";
 import { accrueLivePractice } from "./habits";
-import { accrueGoalProgress } from "./goals";
+import { accrueIntentionProgress } from "./intentions";
 import type { AdvanceResult, GameState } from "./types";
 
 // The flow walk: time moves the session's practice facts. Trusted time —
@@ -13,11 +13,11 @@ import type { AdvanceResult, GameState } from "./types";
 export type Sink = "trusted" | "provisional";
 
 export function emptyAdvanceResult(): AdvanceResult {
-  return { goalsCompleted: 0 };
+  return { intentionsCompleted: 0 };
 }
 
 export function sumResults(a: AdvanceResult, b: AdvanceResult): AdvanceResult {
-  return { goalsCompleted: a.goalsCompleted + b.goalsCompleted, fault: a.fault ?? b.fault };
+  return { intentionsCompleted: a.intentionsCompleted + b.intentionsCompleted, fault: a.fault ?? b.fault };
 }
 
 // Throws NumFault on an unrepresentable figure; the boundary refuses whole.
@@ -34,7 +34,7 @@ export function walkFlow(state: GameState, seconds: number, sink: Sink): Advance
   accounting.creditedSeconds = requireFinite(accounting.creditedSeconds + seconds, "the credited practice time");
   if (seconds > EPS) {
     accrueLivePractice(state, seconds);
-    result.goalsCompleted += accrueGoalProgress(state, state.records.activeHabitId, seconds);
+    result.intentionsCompleted += accrueIntentionProgress(state, state.records.activeHabitId, seconds);
   }
   return result;
 }

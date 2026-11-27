@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { applyIn, advanceIn, fresh, habitOf, intentionOf } from "./fixtures";
-import { occurrenceKeyFor, occurrenceStartFor } from "./goals";
-import type { GoalSchedule } from "./types";
+import { occurrenceKeyFor, occurrenceStartFor } from "./intentions";
+import type { IntentionSchedule } from "./types";
 
 // The calendar-basis regressions (issue #505). The engine's calendar basis
-// is the host's local calendar — goal occurrence days read it — and that
+// is the host's local calendar — intention occurrence days read it — and that
 // basis is declared, not discovered:
 // these cases hold under UTC and under a DST-observing zone alike (the
-// targeted runner, `npm run test:calendar`, executes this file and the goals
+// targeted runner, `npm run test:calendar`, executes this file and the intentions
 // suite under both). The expectations are derived from the raw UTC offset —
-// an independent construction — so the goals primitives can never disagree
+// an independent construction — so the intentions primitives can never disagree
 // with themselves without failing here, and the fixed-figure assertions are
 // identical in both zones by design.
 
@@ -56,7 +56,7 @@ describe("the declared calendar basis (issue #505)", () => {
       Date.UTC(2026, 2, 9, 12, 30, 0),
       Date.UTC(2026, 10, 1, 21, 0, 0),
     ];
-    const schedule: GoalSchedule = { kind: "daily" };
+    const schedule: IntentionSchedule = { kind: "daily" };
     for (const now of stamps) {
       const start = occurrenceStartFor(schedule, now, 0);
       expect(start).toBe(localMidnightBefore(now));
@@ -68,7 +68,7 @@ describe("the declared calendar basis (issue #505)", () => {
 
   it("weekly occurrences begin on the local Monday", () => {
     const stamps = [Date.UTC(2026, 2, 8, 22, 0, 0), Date.UTC(2026, 10, 1, 12, 0, 0)];
-    const schedule: GoalSchedule = { kind: "weekly" };
+    const schedule: IntentionSchedule = { kind: "weekly" };
     for (const now of stamps) {
       const start = occurrenceStartFor(schedule, now, 0);
       expect(new Date(start).getDay()).toBe(1); // Monday, in local terms
@@ -84,12 +84,12 @@ describe("the declared calendar basis (issue #505)", () => {
     const boundary = localMidnightBefore(new Date(2026, 2, 9, 12).getTime());
     const s = fresh();
     const habit = withHabit(s);
-    const goal = intentionOf(s, applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 60, schedule: "weekly", now: boundary - DAY_MS }));
+    const intention = intentionOf(s, applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 60, schedule: "weekly", now: boundary - DAY_MS }));
     applyIn(s, { type: "startSession", target: null, now: boundary - 600_000 });
     advanceIn(s, 1200, "flow");
     applyIn(s, { type: "endSession", now: boundary + 600_000 });
-    applyIn(s, { type: "editIntention", id: goal.id, minutes: 60, schedule: "daily", now: boundary + 600_000 });
+    applyIn(s, { type: "editIntention", id: intention.id, minutes: 60, schedule: "daily", now: boundary + 600_000 });
     // Only the post-boundary share belongs to the new daily occurrence.
-    expect(goal.progressSeconds).toBeCloseTo(600, 6);
+    expect(intention.progressSeconds).toBeCloseTo(600, 6);
   });
 });

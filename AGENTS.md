@@ -27,6 +27,6 @@ Fresh worktrees carry no `node_modules` — run `npm install` before your first 
 - `npm run check` — the typecheck (tsc).
 - `npm test` — the full suite: engine and UI projects in one run (UI files serially with isolation; engine files in parallel). An unchanged revision owes one `npm run check` and one `npm test`; a further full run needs a source change, a failure, or an unresolved concern since the last one.
 - Targeted iteration: `npm test -- <file> -t '<name>'` for one case, `npm test -- --project ui` for the UI files alone. Any source change invalidates earlier runs — finish each revision with targeted reruns for the touched area, then one full pass.
-- `npm run test:calendar` — the calendar-sensitive regressions (`src/engine/calendar.test.ts`, `src/engine/goals.test.ts`) run targeted under UTC and a DST-observing zone (ADR-0080). Owed when touching goal occurrence boundaries; run in CI on every push.
+- `npm run test:calendar` — the calendar-sensitive regressions (`src/engine/calendar.test.ts`, `src/engine/intentions.test.ts`) run targeted under UTC and a DST-observing zone (ADR-0080). Owed when touching intention occurrence boundaries; run in CI on every push.
 - `npm run build` — typecheck plus the static bundle in `dist/`.
 - The browser look: `npm run dev` picks a free port and prints the served worktree, commit, source cleanliness and URL, and tees logs to `.dev/server.log`.

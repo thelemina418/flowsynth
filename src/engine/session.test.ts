@@ -12,7 +12,7 @@ function credited(state: ReturnType<typeof fresh>, seconds: number): number {
 describe("session rules", () => {
   it("credits nothing in upgrade mode or while paused", () => {
     const s = fresh();
-    expect({ ...advanceIn(s, 100, "flow"), state: undefined }).toEqual({ goalsCompleted: 0 });
+    expect({ ...advanceIn(s, 100, "flow"), state: undefined }).toEqual({ intentionsCompleted: 0 });
     applyIn(s, { type: "startSession", target: 600, now: 0 });
     applyIn(s, { type: "pauseSession" });
     expect(credited(s, 100)).toBe(0);

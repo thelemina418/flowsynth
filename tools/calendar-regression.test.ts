@@ -14,9 +14,9 @@ const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 describe("the calendar regression runner (issue #505)", () => {
   it("targets a narrow set of existing calendar-sensitive files", () => {
-    // Targeted: goals' local-calendar primitives and the engine's own
+    // Targeted: intentions' local-calendar primitives and the engine's own
     // calendar cases. No UI files, no whole-suite duplication.
-    expect(CALENDAR_TEST_FILES).toEqual(["src/engine/calendar.test.ts", "src/engine/goals.test.ts"]);
+    expect(CALENDAR_TEST_FILES).toEqual(["src/engine/calendar.test.ts", "src/engine/intentions.test.ts"]);
     for (const file of CALENDAR_TEST_FILES) {
       expect(existsSync(path.join(repoRoot, file)), `${file} exists`).toBe(true);
     }

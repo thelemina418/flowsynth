@@ -29,7 +29,7 @@ describe("the advance walk refuses what it cannot represent (issue #486)", () =>
     expect(serialize(s, 1000)).toBe(before);
   });
 
-  it("credited time past the range refuses the span, habit and goal untouched", () => {
+  it("credited time past the range refuses the span, habit and intention untouched", () => {
     const s = fresh();
     const { habit } = giveHabit(s);
     expect(applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 5, schedule: "once", now: 1 }).ok).toBe(true);
@@ -50,7 +50,7 @@ describe("the advance walk refuses what it cannot represent (issue #486)", () =>
     const s = flowState();
     s.game.session!.elapsed = EDGE;
     applyIn(s, { type: "pauseSession" });
-    expect({ ...advanceIn(s, EDGE, "flow"), state: undefined }).toEqual({ goalsCompleted: 0 });
+    expect({ ...advanceIn(s, EDGE, "flow"), state: undefined }).toEqual({ intentionsCompleted: 0 });
   });
 });
 

@@ -1,7 +1,7 @@
 import { DRIFT_NOISE_SECONDS, EPS, RECONCILIATION_FLOOR_SECONDS } from "./constants";
 import { add, D, gt, requireFinite, requireNotNaN } from "./num";
 import { accrueLivePractice } from "./habits";
-import { accrueGoalProgress } from "./goals";
+import { accrueIntentionProgress } from "./intentions";
 import { emptyAdvanceResult, sumResults, walkFlow } from "./walk";
 import type { AdvanceResult, GameState, HonestyOutcome, SessionAccounting } from "./types";
 
@@ -122,7 +122,7 @@ export function settleHonestyReport(state: GameState, outcome: HonestyOutcome): 
   if (credit > EPS) {
     accounting.creditedSeconds = requireFinite(accounting.creditedSeconds + credit, "the credited practice time");
     accrueLivePractice(state, credit);
-    completions = accrueGoalProgress(state, state.records.activeHabitId, credit);
+    completions = accrueIntentionProgress(state, state.records.activeHabitId, credit);
   }
   const held = requireNotNaN(accounting.provisionalNous, "the provisional nous");
   if (outcome !== "missed" && gt(held, 0)) {

@@ -103,24 +103,24 @@ describe("the session record", () => {
     expect(s.records.sessionRecords[0]!.reflection).toEqual({ text: "steady", slider: 5 });
   });
 
-  it("goals advanced snapshot at close: deleting the goal never rewrites history", () => {
+  it("intentions advanced snapshot at close: deleting the intention never rewrites history", () => {
     const s = fresh();
     const habit = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
     applyIn(s, { type: "selectHabit", id: habit.id });
-    const goal = intentionOf(s, applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 5, schedule: "once", now: START }));
+    const intention = intentionOf(s, applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 5, schedule: "once", now: START }));
     applyIn(s, { type: "startSession", target: null, now: START });
     practice(s, 120);
     applyIn(s, { type: "endSession", now: END });
-    expect(s.records.sessionRecords[0]!.goalsAdvanced).toMatchObject([{ goalId: goal.id, seconds: 120 }]);
-    applyIn(s, { type: "deleteIntention", id: goal.id });
-    expect(s.records.sessionRecords[0]!.goalsAdvanced).toMatchObject([{ goalId: goal.id, seconds: 120 }]);
+    expect(s.records.sessionRecords[0]!.goalsAdvanced).toMatchObject([{ goalId: intention.id, seconds: 120 }]);
+    applyIn(s, { type: "deleteIntention", id: intention.id });
+    expect(s.records.sessionRecords[0]!.goalsAdvanced).toMatchObject([{ goalId: intention.id, seconds: 120 }]);
   });
 
   it("credited provisional time from the honesty report joins the goals-advanced snapshot", () => {
     const s = fresh();
     const habit = habitOf(s, applyIn(s, { type: "createHabit", name: "Piano" }));
     applyIn(s, { type: "selectHabit", id: habit.id });
-    const goal = intentionOf(s, applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 40, schedule: "once", now: START }));
+    const intention = intentionOf(s, applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 40, schedule: "once", now: START }));
     applyIn(s, { type: "startSession", target: 1800, now: START });
     practice(s, 1800);
     advanceIn(s, 600, "flow", "away", 0);
@@ -128,7 +128,7 @@ describe("the session record", () => {
     applyIn(s, { type: "settleHonestyReport", outcome: "full" });
     applyIn(s, { type: "endSession", now: END });
     // 30 presence minutes + 10 credited from the report complete the 40.
-    expect(s.records.sessionRecords[0]!.goalsAdvanced).toMatchObject([{ goalId: goal.id, seconds: 2400 }]);
+    expect(s.records.sessionRecords[0]!.goalsAdvanced).toMatchObject([{ goalId: intention.id, seconds: 2400 }]);
   });
 
   it("manual practice logs never join a session's goals-advanced snapshot", () => {

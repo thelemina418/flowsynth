@@ -1,10 +1,10 @@
 import { transact } from "./state";
 import { dismissSummary, endSession, pauseSession, recordSummaryReflection, resumeSession, signalTarget, startSession } from "./actions";
 import { addPracticeLog, archiveHabit, chooseHabitClass, createHabit, renameHabit, selectHabit, setHabitColor } from "./habits";
-import { createGoal, deleteGoal, editGoal, retainGoalChoice, rollGoalOccurrences } from "./goals";
+import { createIntention, deleteIntention, editIntention, retainIntentionChoice, rollIntentionOccurrences } from "./intentions";
 import { writeNote } from "./notes";
 import { settleHonestyReport } from "./trust";
-import type { GameState, GoalSchedule, HabitClass, HabitColor, HonestyOutcome } from "./types";
+import type { GameState, IntentionSchedule, HabitClass, HabitColor, HonestyOutcome } from "./types";
 
 // Every player intent and every boundary event that changes state, as one
 // discriminated union. `now` is wall-clock epoch ms, passed in so the
@@ -30,8 +30,8 @@ export type Action =
   // Notes.
   | { type: "writeNote"; text: string; now: number }
   // Intentions and their calendar.
-  | { type: "createIntention"; habitId: string | null; minutes: number; schedule: GoalSchedule["kind"]; now: number }
-  | { type: "editIntention"; id: string; minutes: number; schedule: GoalSchedule["kind"]; now: number }
+  | { type: "createIntention"; habitId: string | null; minutes: number; schedule: IntentionSchedule["kind"]; now: number }
+  | { type: "editIntention"; id: string; minutes: number; schedule: IntentionSchedule["kind"]; now: number }
   | { type: "deleteIntention"; id: string }
   | { type: "retainIntention"; id: string }
   | { type: "rollIntentions"; now: number };
@@ -77,14 +77,14 @@ function run(state: GameState, action: Action): Step {
     case "dismissSummary": return dismissSummary(state);
     case "writeNote": return writeNote(state, action.text, action.now);
     case "createIntention": {
-      const made = createGoal(state, { habitId: action.habitId, minutes: action.minutes, schedule: action.schedule, now: action.now });
-      return made.ok ? { ok: true, id: made.goal!.id } : { ok: false, reason: made.reason! };
+      const made = createIntention(state, { habitId: action.habitId, minutes: action.minutes, schedule: action.schedule, now: action.now });
+      return made.ok ? { ok: true, id: made.intention!.id } : { ok: false, reason: made.reason! };
     }
-    case "editIntention": return editGoal(state, action.id, { minutes: action.minutes, schedule: action.schedule }, action.now);
-    case "deleteIntention": return deleteGoal(state, action.id);
-    case "retainIntention": return retainGoalChoice(state, action.id);
+    case "editIntention": return editIntention(state, action.id, { minutes: action.minutes, schedule: action.schedule }, action.now);
+    case "deleteIntention": return deleteIntention(state, action.id);
+    case "retainIntention": return retainIntentionChoice(state, action.id);
     case "rollIntentions":
-      rollGoalOccurrences(state, action.now);
+      rollIntentionOccurrences(state, action.now);
       return { ok: true };
   }
 }
