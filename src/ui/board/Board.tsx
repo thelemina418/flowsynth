@@ -15,11 +15,11 @@ import {
   type ScreenDirection,
 } from "../../engine/hex";
 import { wallAt } from "../../engine/map";
-import { categoryOf, moduleName } from "../../engine/modules";
+import { moduleName } from "../../engine/modules";
 import { moduleAt } from "../../engine/placement";
-import type { Board as BoardState, BoardRates, HabitClass, ModuleType } from "../../engine/types";
+import type { Board as BoardState, BoardRates, HabitClass, Placement } from "../../engine/types";
 import { startDrag } from "./drag";
-import { Glyph } from "./glyphs";
+import { ModuleFace } from "./ModuleFace";
 import type { Placing, Target } from "./placing";
 import { Resonances } from "./Resonances";
 import { round } from "./svg";
@@ -32,6 +32,7 @@ import { round } from "./svg";
 // Every cell carries data-cell, data-kind and data-ring, the seams later
 // tickets (resonance outlines, Hex detail) hang off. A placed module is a
 // faceplate in its category hue with its glyph and nameplate (issue #25);
+// a modulator's face adds its facing pointer and jack (issue #31);
 // a pick's targets carry data-target (valid: clear outline, invalid:
 // muted outline) and the picked module data-picked (a firm inset).
 // Resonance outlines (issue #26) are one layer drawn over the cells.
@@ -87,7 +88,7 @@ const CLASS_MARKS: Partial<Record<HabitClass, (x: number, y: number) => JSX.Elem
 interface BoardCellProps {
   cell: Cell;
   kind: CellKind;
-  module: ModuleType | undefined;
+  placement: Placement | undefined;
   picked: boolean;
   inspected: boolean;
   target: Target | undefined;
@@ -102,7 +103,7 @@ interface BoardCellProps {
   onPointerDown: ((event: PointerEvent) => void) | undefined;
 }
 
-function BoardCell({ cell, kind, module, picked, inspected, target, roving, onActivate, onFocus, onPointerDown }: BoardCellProps) {
+function BoardCell({ cell, kind, placement, picked, inspected, target, roving, onActivate, onFocus, onPointerDown }: BoardCellProps) {
   const center = toPixel(cell, SIZE);
   // Every cell takes focus, dark ones too, so the Hex detail opens from
   // the keyboard on any of them.
@@ -129,18 +130,10 @@ function BoardCell({ cell, kind, module, picked, inspected, target, roving, onAc
   const targetOutline = target && <polygon class="cell-target" points={points(center, FACE)} />;
   if (kind === "open") {
     return (
-      <g {...common(module ? moduleName(module) : "Open cell")} onPointerDown={onPointerDown}>
+      <g {...common(placement ? moduleName(placement.module) : "Open cell")} onPointerDown={onPointerDown}>
         <polygon class="cell-face" points={points(center, FACE)} />
         <polygon class="cell-engrave" points={points(center, ENGRAVE)} />
-        {module && (
-          <g class="module" data-module={module} data-category={categoryOf(module)}>
-            <polygon class="module-face" points={points(center, MODULE)} />
-            <Glyph module={module} x={round(center.x)} y={round(center.y - 4)} />
-            <text class="module-name" x={round(center.x)} y={round(center.y + 13)} text-anchor="middle">
-              {moduleName(module)}
-            </text>
-          </g>
-        )}
+        {placement && <ModuleFace placement={placement} center={center} size={MODULE} />}
         {targetOutline}
       </g>
     );
@@ -209,20 +202,20 @@ export function Board({ board, rates, flowing, placing, inspected, onCell, onDro
   return (
     <svg ref={svg} class="board" viewBox={VIEW_BOX} role="group" aria-label="Board" onKeyDown={onKeyDown}>
       {boardCells(board).map(({ cell, kind }) => {
-        const module = kind === "open" ? moduleAt(board, cell)?.module : undefined;
+        const placement = kind === "open" ? moduleAt(board, cell) : undefined;
         return (
           <BoardCell
             key={cellKey(cell)}
             cell={cell}
             kind={kind}
-            module={module}
+            placement={placement}
             picked={pick?.from === "cell" && sameCell(pick.cell, cell)}
             inspected={inspected !== null && sameCell(inspected, cell)}
             target={targets.get(cellKey(cell))}
             roving={roving === cellKey(cell)}
             onActivate={() => onCell(cell)}
             onFocus={() => setRoving(cellKey(cell))}
-            onPointerDown={!locked && module ? (event) => startDrag(event, { begin: () => placing.pickCell(cell), drop: onDrop }) : undefined}
+            onPointerDown={!locked && placement ? (event) => startDrag(event, { begin: () => placing.pickCell(cell), drop: onDrop }) : undefined}
           />
         );
       })}

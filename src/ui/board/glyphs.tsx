@@ -9,6 +9,8 @@ const PATHS: Record<ModuleType, string> = {
   square: "M -9 4 L -9 -4 L 0 -4 L 0 4 L 9 4 L 9 -4",
   saw: "M -9 4 L -1 -4 L -1 4 L 8 -4 L 8 4",
   release: "M -9 -4 Q -5 4 9 4",
+  // A disc on its axle.
+  flywheel: "M -4 0 A 4 4 0 1 0 4 0 A 4 4 0 1 0 -4 0 M -9 0 L -4 0 M 4 0 L 9 0 M 0 -4 L 0 4",
 };
 
 // The glyph inside the board's SVG, at a cell's centre.

@@ -74,6 +74,13 @@ describe("the v15 → v16 migration (issue #19)", () => {
     expect(board.open.map((c) => `${c.q},${c.r}`).sort()).toEqual(["0,0", "0,1", "1,-1", "1,0"]);
   });
 
+  it("arrives with the Flywheel unplaced and one Modulator allowance (issue #31)", () => {
+    const { game } = migrated();
+    expect(game.arrived).toContain("flywheel");
+    expect(game.allowance.modulator).toBe(1);
+    expect(game.board.placements).toEqual([]);
+  });
+
   it("the migrated state saves as v16 and reloads exactly", () => {
     const text = serialize(migrated(), 2_000);
     expect(JSON.parse(text).version).toBe(16);

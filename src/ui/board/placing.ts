@@ -1,7 +1,8 @@
 import { computed, signal, type ReadonlySignal } from "@preact/signals";
 import type { Action, ApplyResult } from "../../engine/apply";
 import { cellKey, lifetimeCells, sameCell, type Cell } from "../../engine/hex";
-import { moduleAt, placementRefusal, trayRefusal, type PlacementAction } from "../../engine/placement";
+import { hasFacing } from "../../engine/modules";
+import { moduleAt, placementRefusal, trayRefusal, type PlacementAction, type Turn } from "../../engine/placement";
 import type { GameState, ModuleType } from "../../engine/types";
 
 // The pick (issue #25): what the player is holding between a click on a
@@ -84,7 +85,11 @@ export class Placing {
       return;
     }
     if (pick.from === "cell" && sameCell(pick.cell, cell)) {
-      this.clear();
+      // A click on the picked modulator turns it and keeps the pick
+      // (issue #31); on any other module it drops the pick.
+      const module = moduleAt(this.state.value.game.board, cell)?.module;
+      if (module && hasFacing(module)) this.rotate(cell, "clockwise");
+      else this.clear();
       return;
     }
     this.run(actionOnto(pick, cell));
@@ -101,6 +106,23 @@ export class Placing {
     if (this.locked.value || !moduleAt(this.state.value.game.board, cell)) return;
     this.note.value = null;
     this.held.value = { from: "cell", cell: { q: cell.q, r: cell.r } };
+  }
+
+  // Turns the module on the cell (issue #31): the picked modulator by click
+  // or R, or with nothing picked the one in the Hex detail. The pick, if
+  // any, stays; a refusal (an oscillator, an empty cell) only leaves its
+  // note when something was picked, so a stray R stays quiet.
+  rotate(cell: Cell, turn: Turn): void {
+    if (this.locked.value) return;
+    const result = this.commit({ type: "rotateModule", cell, turn });
+    this.note.value = result.ok || !this.pick.value ? null : (result.reason ?? null);
+  }
+
+  // The cell R turns: the picked placed module, else the inspected one.
+  rotationCell(inspected: Cell | null): Cell | null {
+    const pick = this.pick.value;
+    if (pick?.from === "cell") return pick.cell;
+    return pick ? null : inspected;
   }
 
   private run(action: Action): void {

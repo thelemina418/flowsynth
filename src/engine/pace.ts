@@ -2,7 +2,7 @@ import { advance } from "./advance";
 import { apply, type Action, type ApplyResult } from "./apply";
 import { createInitialState } from "./state";
 import { cellKey } from "./hex";
-import { moduleName } from "./modules";
+import { isOscillator, moduleName } from "./modules";
 import { fmt, fmtRate, gt, type Num } from "./num";
 import type { AdvanceMode, AdvanceResult, GameState, HabitClass, Placement } from "./types";
 
@@ -93,12 +93,13 @@ export const DEFAULT_TENDING: TendingHooks = {
 // nothing; only the best is applied through the turn. Ties keep the first
 // candidate in arrived-type then owned-cell order, so the run is
 // deterministic. Placed oscillators are never moved: a later chunk may
-// teach the player to rearrange.
+// teach the player to rearrange. Modulators wait for issue #35, which
+// teaches the runner to place and aim them.
 export function placeAllowanceGreedily(turn: PaceTurn): void {
   for (;;) {
     const { game } = turn.state;
     let best: { action: Action; total: Num } | null = null;
-    for (const module of game.arrived) {
+    for (const module of game.arrived.filter(isOscillator)) {
       for (const cell of game.board.open) {
         const action: Action = { type: "placeModule", module, cell };
         const trial = apply(turn.state, action);

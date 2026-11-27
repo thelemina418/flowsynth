@@ -1,8 +1,8 @@
 import { cellKind } from "../../engine/board";
-import { sameCell, type Cell } from "../../engine/hex";
+import { FACING_NAMES, sameCell, type Cell } from "../../engine/hex";
 import { className } from "../../engine/habits";
 import { wallAt } from "../../engine/map";
-import { categoryName, categoryOf, moduleName } from "../../engine/modules";
+import { categoryName, categoryOf, hasFacing, moduleName } from "../../engine/modules";
 import { moduleAt } from "../../engine/placement";
 import { fmtRate } from "../../engine/num";
 import type { Board, BoardRates, ModuleType, OscillatorRate, OscillatorType } from "../../engine/types";
@@ -41,8 +41,11 @@ export function hexDetail(board: Board, rates: BoardRates, cell: Cell): DetailLi
   }
   const oscillator = rates.oscillators.find((o) => sameCell(o.cell, cell));
   if (!oscillator) {
-    const module = moduleAt(board, cell)?.module;
-    return module ? [{ text: nameLine(module) }] : [{ text: "Open cell" }];
+    const placed = moduleAt(board, cell);
+    if (!placed) return [{ text: "Open cell" }];
+    // A modulator names its facing in compass words (issue #31).
+    const facing = hasFacing(placed.module) ? ` · facing ${FACING_NAMES[placed.facing ?? 0]}` : "";
+    return [{ text: nameLine(placed.module) + facing }];
   }
   return oscillatorLines(oscillator);
 }

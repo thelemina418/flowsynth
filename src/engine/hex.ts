@@ -31,6 +31,22 @@ function at(q: number, r: number): Cell {
 // clockwise, which is what rotate(_, 1) does.
 export const DIRECTIONS: readonly Cell[] = [at(1, -1), at(1, 0), at(0, 1), at(-1, 1), at(-1, 0), at(0, -1)];
 
+// A facing (spec chunk 03, issue #31): one of the six DIRECTIONS, by index.
+// On the flat-top board they read as compass words.
+export type Facing = 0 | 1 | 2 | 3 | 4 | 5;
+
+export const FACING_NAMES: readonly string[] = ["NE", "SE", "S", "SW", "NW", "N"];
+
+export function isFacing(value: unknown): value is Facing {
+  return Number.isInteger(value) && (value as number) >= 0 && (value as number) < 6;
+}
+
+// The facing turned k × 60° clockwise (k may be negative), as rotate turns
+// a cell.
+export function turnFacing(facing: Facing, k: number): Facing {
+  return ((((facing + k) % 6) + 6) % 6) as Facing;
+}
+
 // A stable string key for maps and sets.
 export function cellKey(cell: Cell): string {
   return `${cell.q},${cell.r}`;

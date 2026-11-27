@@ -126,6 +126,23 @@
   stroke-width: 2;
 }
 
+/* A modulator (issue #31): the Modulator hue, a pointer notched into the
+   face toward its facing, and a small jack where a cable plugs in. */
+.module[data-category="modulator"] .module-face { stroke: var(--hue-modulator); }
+
+.module-pointer {
+  fill: var(--ink);
+  stroke: var(--panel-deep);
+  stroke-width: 0.8;
+  stroke-linejoin: miter;
+}
+
+.module-jack {
+  fill: var(--panel-deep);
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+
 .module-name {
   fill: var(--ink);
   font: 600 8.5px var(--font-condensed);

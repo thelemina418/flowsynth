@@ -36,9 +36,9 @@ const key = (k: string) => act(() => { document.dispatchEvent(new KeyboardEvent(
 const placed = (shell: Shell) => shell.state.value.game.board.placements.map((p) => `${p.module}@${p.cell.q},${p.cell.r}`).sort();
 
 describe("the tray", () => {
-  it("shows one entry per type the player has: Sine and Triangle", () => {
+  it("shows one entry per type the player has: Sine, Triangle and the Flywheel", () => {
     mount();
-    expect(tray().map((b) => b.textContent)).toEqual(["Sine", "Triangle"]);
+    expect(tray().map((b) => b.textContent)).toEqual(["Sine", "Triangle", "Flywheel"]);
     for (const button of tray()) {
       expect(button.disabled).toBe(false);
       expect(button.querySelector("svg[data-glyph]")).not.toBeNull();
@@ -113,13 +113,16 @@ describe("click-to-pick, click-to-place", () => {
     expect(placed(shell)).toEqual(["triangle@1,-1"]);
   });
 
-  it("mutes the tray once allowance is full", () => {
+  it("mutes the oscillator entries once oscillator allowance is full", () => {
     mount();
     click(entry("Sine"));
     click(cell("0,0"));
     click(entry("Sine"));
     click(cell("1,0"));
-    expect(tray().every((b) => b.disabled)).toBe(true);
+    expect(entry("Sine").disabled).toBe(true);
+    expect(entry("Triangle").disabled).toBe(true);
+    // Allowance is counted per category (issue #31).
+    expect(entry("Flywheel").disabled).toBe(false);
   });
 
   it("places from the keyboard: an open cell is a focusable target", () => {

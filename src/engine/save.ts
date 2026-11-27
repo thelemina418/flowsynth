@@ -4,8 +4,8 @@ import { normalizeHabitColor } from "./habits";
 import { SAVE_VERSION } from "./constants";
 import { D, fromSave, isNum, NumFault, toSave, type Num } from "./num";
 import { ARCS, openingBoard } from "./board";
-import { cellKey, LIFETIME_RADIUS, ring, type Cell } from "./hex";
-import { isModuleType } from "./modules";
+import { cellKey, isFacing, LIFETIME_RADIUS, ring, type Cell } from "./hex";
+import { hasFacing, isModuleType } from "./modules";
 import { computeBoardRates } from "./rates";
 import type { Arc, Board, GameState, Habit, HabitClass, ModuleCategory, ModuleType, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
 
@@ -383,7 +383,8 @@ function readBoard(raw: unknown): Board {
 // Placements (issue #25): a placement whose type is unknown, or whose cell
 // isn't an owned open cell (or already holds a module), returns to
 // unplaced rather than failing the load. Allowance is a count, so nothing
-// is lost.
+// is lost. A module with a facing (issue #31) reads it, NE when it is
+// missing or invalid; a module without one never carries one.
 function readPlacements(raw: unknown, owned: Set<string>): Placement[] {
   if (!Array.isArray(raw)) return [];
   const taken = new Set<string>();
@@ -393,7 +394,8 @@ function readPlacements(raw: unknown, owned: Set<string>): Placement[] {
     const cell = readCell(item.cell);
     if (cell === null || !owned.has(cellKey(cell)) || taken.has(cellKey(cell))) continue;
     taken.add(cellKey(cell));
-    placements.push({ cell, module: item.module });
+    const facing = isFacing(item.facing) ? item.facing : 0;
+    placements.push({ cell, module: item.module, ...(hasFacing(item.module) && { facing }) });
   }
   return placements;
 }
@@ -408,9 +410,12 @@ function readAllowance(raw: unknown, opening: Record<ModuleCategory, number>): R
   return allowance;
 }
 
+// The saved arrival order, then any type the opening holds that the save
+// lacks: a type that arrives at the start is never missing, so a chunk-02
+// save gains the Flywheel (issue #31).
 function readArrived(raw: unknown, opening: ModuleType[]): ModuleType[] {
-  if (!Array.isArray(raw)) return [...opening];
-  return raw.filter(isModuleType).filter((module, index, all) => all.indexOf(module) === index);
+  const saved = Array.isArray(raw) ? raw.filter(isModuleType) : [];
+  return [...saved, ...opening].filter((module, index, all) => all.indexOf(module) === index);
 }
 
 function needsRecovery(lost: string[]): LoadResult {

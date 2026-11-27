@@ -71,10 +71,12 @@ describe("the board on a fresh start", () => {
     mountFresh();
     const readout = host.querySelector(".nous-readout")!;
     expect(readout.textContent).toBe("ν 0");
-    // The tray (issue #25): Sine and Triangle, unplaced.
-    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Sine", "Triangle"]);
+    // The tray (issues #25, #31): Sine, Triangle and the Flywheel, unplaced.
+    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Sine", "Triangle", "Flywheel"]);
     const visible = [...host.querySelectorAll("p, span, text, h2, h3, button")].filter((el) => !el.closest(".sr-only") && !el.querySelector("p, span, text")).map((el) => el.textContent);
-    expect(visible.sort()).toEqual(["F", "S", "Sine", "Triangle", "ν 0"].sort());
+    expect(visible.sort()).toEqual(["F", "S", "Sine", "Triangle", "Flywheel", "ν 0"].sort());
+    // The Hex detail is empty.
+    expect(host.querySelector("[data-hex-detail]")!.textContent).toBe("");
   });
 
   it("carries no tooltips", () => {
