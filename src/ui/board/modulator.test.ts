@@ -32,7 +32,7 @@ function mount(storage = memorySaveStorage()): { shell: Shell; storage: ReturnTy
   return { shell, storage };
 }
 
-const tray = () => [...host.querySelectorAll<HTMLButtonElement>(".tray button")];
+const tray = () => [...host.querySelectorAll<HTMLButtonElement>(".tray button[data-module]")];
 const entry = (name: string) => tray().find((b) => b.textContent === name)!;
 const cell = (key: string) => host.querySelector<SVGGElement>(`[data-cell="${key}"]`)!;
 const click = (el: Element) => act(() => { el.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
@@ -179,7 +179,7 @@ describe("the Flywheel's reach and charge", () => {
     press("r");
     expect(reached()).toEqual(["1,0", "2,0"]);
     // The outline carries no number.
-    for (const key of reached()) expect(cell(key!).querySelector(".cell-reach")!.textContent).toBe("");
+    for (const key of reached()) expect(host.querySelector(`.outlines .cell-reach[data-for="${key}"]`)!.textContent).toBe("");
     // An oscillator's pick outlines nothing.
     press("Escape");
     click(entry("Sine"));

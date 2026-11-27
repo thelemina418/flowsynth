@@ -84,6 +84,23 @@ describe("recomputing the board's rates", () => {
     expect(counted).not.toHaveBeenCalled();
   });
 
+  it("recomputes once each for a patch, a repatch and an unplug, and nothing for a refused one (issue #33)", () => {
+    const s = acceptanceLayout();
+    applyIn(s, { type: "removeModule", cell: { q: 0, r: 1 } });
+    applyIn(s, { type: "placeModule", module: "flywheel", cell: { q: 0, r: 1 } });
+    counted.mockClear();
+    expect(applyIn(s, { type: "patchCable", cable: "patch", source: { q: 0, r: 1 }, target: { q: 1, r: 0 } }).ok).toBe(true);
+    expect(counted).toHaveBeenCalledTimes(1);
+    expect(applyIn(s, { type: "repatchCable", source: { q: 0, r: 1 }, target: { q: 0, r: 0 } }).ok).toBe(true);
+    expect(counted).toHaveBeenCalledTimes(2);
+    expect(applyIn(s, { type: "unplugCable", source: { q: 0, r: 1 } }).ok).toBe(true);
+    expect(counted).toHaveBeenCalledTimes(3);
+    counted.mockClear();
+    applyIn(s, { type: "unplugCable", source: { q: 0, r: 1 } });
+    applyIn(s, { type: "patchCable", cable: "patch", source: { q: 0, r: 0 }, target: { q: 1, r: 0 } });
+    expect(counted).not.toHaveBeenCalled();
+  });
+
   it("recomputes once on load, from the layout, and never writes the rates to the save", () => {
     const s = acceptanceLayout();
     const text = serialize(s, 0);

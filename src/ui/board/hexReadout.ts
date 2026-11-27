@@ -1,4 +1,5 @@
 import { cellKind } from "../../engine/board";
+import { cableFrom } from "../../engine/cables";
 import { FACING_NAMES, sameCell, type Cell } from "../../engine/hex";
 import { className } from "../../engine/habits";
 import { wallAt } from "../../engine/map";
@@ -43,19 +44,27 @@ export function hexDetail(board: Board, rates: BoardRates, cell: Cell): DetailLi
   const oscillator = rates.oscillators.find((o) => sameCell(o.cell, cell));
   if (oscillator) return oscillatorLines(oscillator);
   const modulator = rates.modulators.find((m) => sameCell(m.cell, cell));
-  if (modulator) return modulatorLines(modulator);
+  if (modulator) return modulatorLines(board, modulator);
   const placed = moduleAt(board, cell);
   if (!placed) return [{ text: "Open cell" }];
   return [{ text: nameLine(placed.module) }];
 }
 
 // A modulator names its facing in compass words (issue #31), then its
-// output and the oscillators its reach charges, nearest first (issue #32).
-function modulatorLines(m: ModulatorRate): DetailLine[] {
+// output and the oscillators its reach charges, nearest first (issue #32),
+// or, once patched, its Patch's target (issue #33).
+function modulatorLines(board: Board, m: ModulatorRate): DetailLine[] {
   const facing = m.facing === null ? "" : ` · facing ${FACING_NAMES[m.facing]}`;
+  const name = { text: nameLine(m.module) + facing };
+  if (cableFrom(board, m.cell)) {
+    const holds = m.deliveries[0]!.holds;
+    // Wall targets, and their names, are issue #34's.
+    const target = holds === "empty" ? "Open cell" : holds === "wall" || holds === "dark" ? "Wall" : moduleName(holds);
+    return [name, { text: `${fmtRate(m.output)} charge/s · patched → ${target}`, effect: true }];
+  }
   const charged = m.deliveries.flatMap((d) => (isChargedBy(d.holds) ? [moduleName(d.holds)] : []));
   const reach = charged.length === 0 ? "no module in reach" : `reach → ${charged.join(", ")}`;
-  return [{ text: nameLine(m.module) + facing }, { text: `${fmtRate(m.output)} charge/s · ${reach}`, effect: true }];
+  return [name, { text: `${fmtRate(m.output)} charge/s · ${reach}`, effect: true }];
 }
 
 // Only an oscillator takes anything from charge in chunk 03.

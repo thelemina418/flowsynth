@@ -20,6 +20,17 @@ export function Glyph({ module, x, y }: { module: ModuleType; x: number; y: numb
   return <path class="glyph" data-glyph={module} d={PATHS[module]} transform={`translate(${x} ${y})`} />;
 }
 
+// A cable's tray icon (issue #33): a slack cord between a jack and a plug.
+export function CableIcon() {
+  return (
+    <svg class="glyph-icon" data-glyph="cable" viewBox="-11 -6 22 12" aria-hidden="true">
+      <path class="glyph" d="M -8 -2 Q 0 7 8 -2" />
+      <circle class="glyph" cx="-8" cy="-2" r="1.8" />
+      <circle class="glyph" cx="8" cy="-2" r="1.8" />
+    </svg>
+  );
+}
+
 // The glyph as a standalone icon, for the tray.
 export function GlyphIcon({ module }: { module: ModuleType }) {
   return (

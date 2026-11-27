@@ -1,5 +1,5 @@
 import { cellKind } from "./board";
-import { addCell, cellKey, DIRECTIONS, type Cell } from "./hex";
+import { addCell, cellKey, DIRECTIONS, sameCell, type Cell } from "./hex";
 import { add, D, min, mul, pow, sub, type Num } from "./num";
 import { baseRate, hasFacing, isOscillator, outputOf, patternOf, reachOf } from "./modules";
 import { moduleAt } from "./placement";
@@ -52,7 +52,7 @@ export function noRates(): BoardRates {
 }
 
 export function computeBoardRates(board: Board, producerSeconds: number): BoardRates {
-  // Every module in a reach receives the full output; only an oscillator
+  // Every module in a reach (or at a Patch's target) receives the full output; only an oscillator
   // takes anything from it, and several deliveries sum before the log.
   const modulators: ModulatorRate[] = [];
   const received = new Map<string, Num>();
@@ -60,7 +60,11 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
     const module = placement.module;
     if (isOscillator(module)) continue;
     const output = modulatorOutput(module, producerSeconds);
-    const deliveries: ChargeDelivery[] = reachCells(placement).map((cell) => ({ cell, holds: holdsAt(board, cell) }));
+    // A patched modulator delivers to its cable's target alone, in place
+    // of its reach (issue #33).
+    const cable = board.cables.find((c) => sameCell(c.source, placement.cell));
+    const cells = cable ? [{ q: cable.target.q, r: cable.target.r }] : reachCells(placement);
+    const deliveries: ChargeDelivery[] = cells.map((cell) => ({ cell, holds: holdsAt(board, cell) }));
     for (const delivery of deliveries) {
       if (delivery.holds === "empty" || delivery.holds === "wall" || delivery.holds === "dark" || !isOscillator(delivery.holds)) continue;
       const key = cellKey(delivery.cell);

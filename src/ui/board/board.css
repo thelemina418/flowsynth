@@ -154,10 +154,42 @@
   stroke-width: 3.2;
 }
 
+/* The pick and reach outlines are one layer over the cells and cords
+   (issue #33), each tagged with its cell. */
+.outlines { pointer-events: none; }
 .cell-target { fill: none; pointer-events: none; }
-.cell[data-target="valid"] .cell-target { stroke: var(--ink); stroke-width: 2; }
-.cell[data-target="invalid"] .cell-target { stroke: var(--line-soft); stroke-width: 1; stroke-dasharray: 2 3; }
-.cell[data-picked] .cell-target { stroke: var(--ink); stroke-width: 3; stroke-dasharray: none; }
+.cell-target[data-target="valid"] { stroke: var(--ink); stroke-width: 2; }
+.cell-target[data-target="invalid"] { stroke: var(--line-soft); stroke-width: 1; stroke-dasharray: 2 3; }
+.cell-target[data-picked] { stroke: var(--ink); stroke-width: 3; stroke-dasharray: none; }
+
+/* Cords (issue #33): thin, slightly slack patch cords in the source's
+   category hue, above the cells and under the outlines. A would-be cord
+   over an invalid target is muted. The plug sits at the target end; its
+   hit circle is invisible and live only while nothing is picked. Beads of
+   charge light travel the cords in flow; reduced motion draws none. */
+.cords { pointer-events: none; }
+
+.cord {
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  filter: drop-shadow(0 1px 0 var(--panel-deep));
+}
+
+.cord[data-category="modulator"] { stroke: var(--hue-modulator); }
+.cord[data-category="oscillator"] { stroke: var(--hue-oscillator); }
+.cord[data-would-be] { stroke-dasharray: 5 3; }
+.cord[data-muted] { stroke: var(--line-soft); stroke-width: 1.2; filter: none; }
+
+.plug-hit { fill: transparent; stroke: none; }
+.plug[data-live] { pointer-events: auto; cursor: pointer; touch-action: none; }
+.plug-body { fill: var(--panel-deep); stroke: var(--ink); stroke-width: 1.2; }
+
+.bead { fill: var(--charge); }
+
+@media (prefers-reduced-motion: reduce) {
+  .bead { display: none; }
+}
 
 /* Reach (issue #32): a picked or inspected modulator's reach cells, one
    clear outline in Charge Green's light register and no number. */

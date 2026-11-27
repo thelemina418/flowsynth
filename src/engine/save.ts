@@ -6,8 +6,9 @@ import { D, fromSave, isNum, NumFault, toSave, type Num } from "./num";
 import { ARCS, openingBoard } from "./board";
 import { cellKey, isFacing, LIFETIME_RADIUS, ring, type Cell } from "./hex";
 import { hasFacing, isModuleType } from "./modules";
+import { isCableType, newCableRefusal } from "./cables";
 import { computeBoardRates } from "./rates";
-import type { Arc, Board, GameState, Habit, HabitClass, ModuleCategory, ModuleType, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
+import type { Arc, Board, Cable, CableType, Game, GameState, Habit, HabitClass, ModuleCategory, ModuleType, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
 
 // The save boundary. Save v16 (issue #18) writes the nested GameState
 // (`records`, `game`) with every Decimal as num's save string, and reads it
@@ -321,6 +322,9 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
   const intentions = records.intentions as GameState["records"]["intentions"];
   normalizeIntentions(intentions);
   const board = readBoard(game.board);
+  const cableAllowance = Number.isInteger(game.cableAllowance) && (game.cableAllowance as number) >= 0 ? (game.cableAllowance as number) : fresh.game.cableAllowance;
+  const arrivedCables = readArrivedCables(game.arrivedCables, fresh.game.arrivedCables);
+  board.cables = readCables(isRecord(game.board) ? game.board.cables : undefined, { board, cableAllowance, arrivedCables });
   const classCredit = readClassCredit(records.classCredit);
   const state: GameState = {
     records: {
@@ -347,6 +351,8 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
       board,
       allowance: readAllowance(game.allowance, fresh.game.allowance),
       arrived: readArrived(game.arrived, fresh.game.arrived),
+      cableAllowance,
+      arrivedCables,
       // Recomputed once from the layout; a saved rate is never read.
       rates: computeBoardRates(board, classCredit.producer),
     },
@@ -378,7 +384,7 @@ function readBoard(raw: unknown): Board {
   }
   if (open.length === 0) return opening;
   const arc = typeof raw.arc === "string" && (ARCS as readonly string[]).includes(raw.arc) ? (raw.arc as Arc) : opening.arc;
-  return { open, arc, placements: readPlacements(raw.placements, seen) };
+  return { open, arc, placements: readPlacements(raw.placements, seen), cables: [] };
 }
 
 // Placements (issue #25): a placement whose type is unknown, or whose cell
@@ -399,6 +405,31 @@ function readPlacements(raw: unknown, owned: Set<string>): Placement[] {
     placements.push({ cell, module: item.module, ...(hasFacing(item.module) && { facing }) });
   }
   return placements;
+}
+
+// Cables (issue #33), read in saved order onto the placed board: a cable
+// whose type is unknown, whose source isn't a placed modulator or already
+// carries an earlier cable, whose target is dark, a wall or its own
+// source, that is longer than 3, crosses a cable read before it, or is
+// over the allowance, is unplugged back to the allowance rather than
+// failing the load: the rules a new cable is patched by.
+function readCables(raw: unknown, game: Pick<Game, "board" | "cableAllowance" | "arrivedCables">): Cable[] {
+  if (!Array.isArray(raw)) return [];
+  for (const item of raw) {
+    if (!isRecord(item) || !isCableType(item.type)) continue;
+    const source = readCell(item.source);
+    const target = readCell(item.target);
+    if (source === null || target === null) continue;
+    const cable: Cable = { type: item.type, source, target };
+    if (newCableRefusal(game, cable) === null) game.board.cables.push(cable);
+  }
+  return game.board.cables;
+}
+
+// The saved cable types, then any the opening holds that the save lacks.
+function readArrivedCables(raw: unknown, opening: CableType[]): CableType[] {
+  const saved = Array.isArray(raw) ? raw.filter(isCableType) : [];
+  return [...saved, ...opening].filter((type, index, all) => all.indexOf(type) === index);
 }
 
 function readAllowance(raw: unknown, opening: Record<ModuleCategory, number>): Record<ModuleCategory, number> {
