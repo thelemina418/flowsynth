@@ -100,10 +100,9 @@ export function jackRefusal(board: Board, source: Cell): string | null {
 }
 
 // Why the cable can't run from its source to its target, crossings aside.
+// An open cell or a wall inside the current arc is a target (issue #34).
 function routeRefusal(board: Board, cable: Cable): string | null {
-  const kind = cellKind(board, cable.target);
-  if (kind === "dark") return "That cell is dark.";
-  if (kind === "wall") return "That cell is a wall.";
+  if (cellKind(board, cable.target) === "dark") return "That cell is dark.";
   if (sameCell(cable.source, cable.target)) return "A cable can't end where it starts.";
   if (distance(cable.source, cable.target) > CABLE_LENGTH) return `That cable is longer than ${CABLE_LENGTH}.`;
   return null;

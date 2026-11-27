@@ -2,9 +2,10 @@ import { cellKind } from "./board";
 import { addCell, cellKey, DIRECTIONS, sameCell, type Cell } from "./hex";
 import { add, D, min, mul, pow, sub, type Num } from "./num";
 import { baseRate, hasFacing, isOscillator, outputOf, patternOf, reachOf } from "./modules";
+import { wallAt } from "./map";
 import { moduleAt } from "./placement";
 import { instancesOf } from "./resonance";
-import type { Board, BoardRates, ChargeDelivery, ModulatorRate, ModulatorType, OscillatorRate, Placement, ReachHolds } from "./types";
+import type { Board, BoardRates, ChargeDelivery, ModulatorRate, ModulatorType, OscillatorRate, Placement, ReachHolds, WallRate } from "./types";
 
 // The board's rates (spec chunk 02, issue #26; mechanics-sketch.md,
 // Rates). One pure function of the layout and the credited Producer time
@@ -48,7 +49,7 @@ function holdsAt(board: Board, cell: Cell): ReachHolds {
 
 // A board with no module placed.
 export function noRates(): BoardRates {
-  return { oscillators: [], modulators: [], total: D(0) };
+  return { oscillators: [], modulators: [], walls: [], total: D(0) };
 }
 
 export function computeBoardRates(board: Board, producerSeconds: number): BoardRates {
@@ -56,6 +57,9 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
   // takes anything from it, and several deliveries sum before the log.
   const modulators: ModulatorRate[] = [];
   const received = new Map<string, Num>();
+  // Damage per wall cell, from Patches only (issue #34): reach onto a wall
+  // does nothing.
+  const damage = new Map<string, { cell: Cell; damage: Num }>();
   for (const placement of board.placements) {
     const module = placement.module;
     if (isOscillator(module)) continue;
@@ -65,6 +69,11 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
     const cable = board.cables.find((c) => sameCell(c.source, placement.cell));
     const cells = cable ? [{ q: cable.target.q, r: cable.target.r }] : reachCells(placement);
     const deliveries: ChargeDelivery[] = cells.map((cell) => ({ cell, holds: holdsAt(board, cell) }));
+    if (cable && deliveries[0]!.holds === "wall") {
+      const key = cellKey(cable.target);
+      const wall = damage.get(key) ?? { cell: { q: cable.target.q, r: cable.target.r }, damage: D(0) };
+      damage.set(key, { ...wall, damage: add(wall.damage, output) });
+    }
     for (const delivery of deliveries) {
       if (delivery.holds === "empty" || delivery.holds === "wall" || delivery.holds === "dark" || !isOscillator(delivery.holds)) continue;
       const key = cellKey(delivery.cell);
@@ -108,5 +117,10 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
     });
     total = add(total, rate);
   }
-  return { oscillators, modulators, total };
+  const walls: WallRate[] = [...damage.values()].map(({ cell, damage }) => {
+    const authored = wallAt(cell).regen;
+    const regen = authored === null ? null : D(authored);
+    return { cell, damage, regen, net: regen === null ? damage : sub(damage, regen) };
+  });
+  return { oscillators, modulators, walls, total };
 }

@@ -274,6 +274,16 @@ export interface ModulatorRate {
   deliveries: ChargeDelivery[];
 }
 
+// One wall a Patch targets (issue #34): the patched charge into it as
+// damage at 1:1, its regen from the authored map (null for a placeholder)
+// and net = damage − regen. A rate only: nothing applies it until chunk 05.
+export interface WallRate {
+  cell: Cell;
+  damage: Num;
+  regen: Num | null;
+  net: Num;
+}
+
 // The board's rates (issue #26): one pure computation of the layout and
 // the credited Producer time, cached on the game state. Recomputed after
 // a layout or facing change, on load and when a flow session ends (issue
@@ -282,6 +292,8 @@ export interface ModulatorRate {
 export interface BoardRates {
   oscillators: OscillatorRate[];
   modulators: ModulatorRate[];
+  // Walls in the order a Patch first targets them.
+  walls: WallRate[];
   total: Num;
 }
 
