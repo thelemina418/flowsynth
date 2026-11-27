@@ -192,6 +192,7 @@ function readSession(raw: Partial<SessionState>): SessionState {
     targetSignaled: raw.targetSignaled === true,
     startedAt: finiteOr(raw.startedAt, 0),
     goalSeconds: isRecord(raw.goalSeconds) ? raw.goalSeconds : {},
+    nousMade: readLostable(raw.nousMade),
   };
 }
 
@@ -199,6 +200,11 @@ function readSummary(raw: Partial<SessionSummary>): SessionSummary {
   return {
     sessionNumber: finiteOr(raw.sessionNumber, 0),
     seconds: finiteOr(raw.seconds, 0),
+    nous: readLostable(raw.nous),
+    habitClass: readClass(raw.habitClass),
+    classSeconds: finiteOr(raw.classSeconds, 0),
+    levelBefore: finiteOr(raw.levelBefore, 0),
+    levelAfter: finiteOr(raw.levelAfter, 0),
     plannedTarget: typeof raw.plannedTarget === "number" ? raw.plannedTarget : null,
     honestyEvents: Array.isArray(raw.honestyEvents) ? raw.honestyEvents : [],
     reflection: raw.reflection ?? null,

@@ -127,6 +127,7 @@ export function settleHonestyReport(state: GameState, outcome: HonestyOutcome): 
   const held = requireNotNaN(accounting.provisionalNous, "the provisional nous");
   if (outcome !== "missed" && gt(held, 0)) {
     state.game.nous = requireNotNaN(add(state.game.nous, held), "nous");
+    session.nousMade = requireNotNaN(add(session.nousMade, held), "the session's nous");
   }
   accounting.events.push({ awaySeconds: pool, outcome });
   accounting.poolSeconds = 0;

@@ -37,6 +37,7 @@ export function walkFlow(state: GameState, seconds: number, sink: Sink): Advance
     return result;
   }
   state.game.nous = requireNotNaN(add(state.game.nous, made), "nous");
+  session.nousMade = requireNotNaN(add(session.nousMade, made), "the session's nous");
   accounting.creditedSeconds = requireFinite(accounting.creditedSeconds + seconds, "the credited practice time");
   if (seconds > EPS) {
     accrueLivePractice(state, seconds);

@@ -212,3 +212,27 @@
   .flow-clock { min-width: 0; }
   .session-clock { font-size: 28px; min-width: 0; }
 }
+
+/* The honesty report (issue #40): ported from the old console's ruled
+   folio. The readout leads; each answer is a full-width row carrying its
+   consequence. */
+.honesty-readout { display: grid; gap: 6px; border-top: 1px solid var(--line-soft); padding-top: 8px; }
+.honesty-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.honesty-choices { display: grid; gap: 6px; }
+.honesty-choice {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  text-align: left;
+  height: auto;
+  min-height: 44px;
+  padding: 8px 12px;
+}
+.honesty-consequence { font-size: 12px; font-weight: 400; color: var(--muted); }
+
+/* The summary (issue #40): one line and one control. */
+.summary-line { font-size: 18px; }
+.summary-actions { display: flex; justify-content: flex-end; }
+@media (max-width: 420px) {
+  .summary-line { font-size: 15px; }
+}

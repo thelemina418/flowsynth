@@ -35,14 +35,14 @@ export interface ClassLevel {
   next: number;
 }
 
-function levelOfSeconds(seconds: number): ClassLevel {
+export function classLevelOf(seconds: number): ClassLevel {
   let level = 0;
   while (seconds >= thresholdHours(level + 1) * HOUR) level++;
   return { level, current: level === 0 ? 0 : thresholdHours(level) * HOUR, next: thresholdHours(level + 1) * HOUR };
 }
 
 export function classLevel(state: GameState, habitClass: HabitClass): ClassLevel {
-  return levelOfSeconds(state.records.classCredit[habitClass]);
+  return classLevelOf(state.records.classCredit[habitClass]);
 }
 
 // What one level grants.
