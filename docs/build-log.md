@@ -98,9 +98,9 @@ Issues #24–#28 (parent #23), on `integration/spec-02-board`.
 - **Keyboard reach (#27).** The board is one tab stop (roving focus), starting at (0,0) and then wherever focus last sat. The arrow keys move between cells, dark ones included, so every cell reads from the keyboard without 91 tab stops. Up and down step along a column. Flat-top hexes have no straight left or right neighbour, so left and right zig-zag along a drawn row (from an even column east steps down-right, from an odd column up-right), and a step left undoes a step right. Focus stops at the lifetime board's edge.
 - **Dark cells as targets (#25).** During a pick, dark cells carry the muted invalid-target outline like walls.
 - **The board keeps the touch floor (#24).** The board scales with its width only, so on a desktop width every cell stays at least 44px across its flats and a short window scrolls. Below 640px the tray drops under the board; at phone width the board only has to fit.
-- **Hex detail copy (#27).** Each oscillator type says what closes its resonance (Sine `between`, Triangle `closes`, Square `held by`, Saw `ends`) and what it needs when it isn't resonating. A placeholder wall reads `Wall`, a dark cell `Dark cell · beyond this arc`, and a Release `No resonance pattern`. Rates and factors show two decimals with at least one (`1.0`, `1.75`). The inspected cell keeps a thin ink outline.
+- **Hex detail copy (#27).** Each oscillator type says what closes its resonance (Sine `between`, Triangle `closes`, Square `held by`, Saw `ends`) and what it needs when it isn't resonating. A placeholder wall reads `Wall`, a dark cell `Dark cell · beyond this arc`, and a Release `No resonance pattern`. Rates and factors show two decimals with at least one (`1.0`, `1.75`), truncated like every shown figure. The inspected cell keeps a thin ink outline.
 - **Placeholder walls carry no initial (#24).** Only Shale and Flint are named in this chunk, so only they carry an initial (and Flint the Roadie mark). Every other wall inside Sketch's radius is nameless unlit stone until chunk 05 authors the map.
-- **The pace runner's greedy placement (#28).** After each session the scripted player fills its remaining allowance one oscillator at a time. Each candidate (every arrived type on every owned cell) is tried through `apply`, which is pure, and the one that most raises `rates.total` is applied. Ties keep the first candidate in arrived-type, then owned-cell order, so on the opening's allowance of 2, where nothing can resonate, it places two Sines at (0,0) and (1,0). It never moves a placed oscillator. With allowance 3 the third oscillator closes a resonance (`pace.test.ts`). `runPace` takes an optional `start` state so tests can grant what chunk 04 will. ν/s prints to two decimals, truncated like the game's display.
+- **The pace runner's greedy placement (#28).** In upgrade mode before the first session, and again after each session, the scripted player fills its remaining allowance one oscillator at a time. Each candidate (every arrived type on every owned cell) is tried through `apply`, which is pure, and the one that most raises `rates.total` is applied. Ties keep the first candidate in arrived-type, then owned-cell order, so on the opening's allowance of 2, where nothing can resonate, it places two Sines at (0,0) and (1,0). It never moves a placed oscillator. With allowance 3 the third oscillator closes a resonance (`pace.test.ts`). `runPace` takes an optional `start` state so tests can grant what chunk 04 will. ν/s prints as the Hex detail shows it (`fmtRate` in `num.ts`: two decimals with at least one, truncated like every shown figure).
 
 ### Pace runner
 
@@ -108,8 +108,8 @@ At the end of the chunk, `npm run pace` (250 credited hours):
 
 ```
 Pace run: 300 sessions, 250.0h credited
-Board: 2 oscillators, 2.00 ν/s — Sine (0,0), Sine (1,0)
-Era ν: 1.79e6
+Board: 2 oscillators, 2.0 ν/s — Sine (0,0), Sine (1,0)
+Era ν: 1.8e6
 
 Milestone                         Reached       Target
 --------------------------------  ------------  -------------------------------------------
@@ -126,4 +126,4 @@ Master finished (Encore opens)    not reached*  250h
 DRY 0.0h–250.0h: 250.0h with no new milestone
 ```
 
-The board makes nous now: 2 ν/s from the end of the first session, so 2 × (250 h − 50 min) × 3600 ≈ 1.79e6 ν. The allowance never grows (chunk 04 grants it), so the opening layout can't resonate and the rate stays flat. Nothing spends nous and no wall can be conquered yet, so no further milestone is reachable and the whole run is still flagged dry.
+The board makes nous now: the player lays out the two Sines before the first session, so 2 ν/s over every credited second, 2 × 250 h × 3600 = 1.8e6 ν. The allowance never grows (chunk 04 grants it), so the opening layout can't resonate and the rate stays flat. Nothing spends nous and no wall can be conquered yet, so no further milestone is reachable and the whole run is still flagged dry.

@@ -4,7 +4,7 @@ import { className } from "../../engine/habits";
 import { wallAt } from "../../engine/map";
 import { categoryName, categoryOf, moduleName } from "../../engine/modules";
 import { moduleAt } from "../../engine/placement";
-import { fmt, type Num } from "../../engine/num";
+import { fmtRate } from "../../engine/num";
 import type { Board, BoardRates, ModuleType, OscillatorRate, OscillatorType } from "../../engine/types";
 
 // The Hex detail's readout (issue #27; philosophy.md, Words rule 2): the
@@ -62,15 +62,8 @@ function oscillatorLines(o: OscillatorRate): DetailLine[] {
   } else {
     const shapes = [...new Set(o.instances.map((i) => i.partners.map((p) => moduleName(p.module)).sort().join("–")))];
     lines.push({ text: `Resonating ×${count} · ${words.verb} ${shapes.join(", ")}`, effect: true });
-    lines.push({ text: `${rate(o.base)} ν/s base · ×${rate(o.resonance)} resonance` });
+    lines.push({ text: `${fmtRate(o.base)} ν/s base · ×${fmtRate(o.resonance)} resonance` });
   }
-  lines.push({ text: `${rate(o.rate)} ν/s` });
+  lines.push({ text: `${fmtRate(o.rate)} ν/s` });
   return lines;
-}
-
-// Rates and factors to two decimals with at least one (1.0, 1.75, 4.5);
-// from a thousand up, the game's usual figures.
-function rate(value: Num): string {
-  if (value.gte(1000)) return fmt(value);
-  return value.toNumber().toFixed(2).replace(/(\.\d)0$/, "$1");
 }

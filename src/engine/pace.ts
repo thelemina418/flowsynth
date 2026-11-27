@@ -3,7 +3,7 @@ import { apply, type Action, type ApplyResult } from "./apply";
 import { createInitialState } from "./state";
 import { cellKey } from "./hex";
 import { moduleName } from "./modules";
-import { fmt, gt, type Num } from "./num";
+import { fmt, fmtRate, gt, type Num } from "./num";
 import type { AdvanceMode, AdvanceResult, GameState, HabitClass, Placement } from "./types";
 
 // The pace runner (spec chunk 01, `npm run pace`): a scripted reasonable
@@ -219,6 +219,10 @@ export function runPace(script: PaceScript): PaceReport {
   let now = START_EPOCH_MS;
   let sessions = 0;
   observe();
+  // A fresh start is upgrade mode: the player lays out the allowance
+  // before the first session, so that session already makes nous.
+  tending.placeAllowance(turn);
+  observe();
   while (creditedHoursOf(state) < script.creditedHours) {
     if (sessions >= MAX_SESSIONS) throw new Error("pace runner: no credited progress");
     habitsForOpenClasses(turn);
@@ -271,9 +275,6 @@ function dryStretches(reached: number[], endHours: number): DryStretch[] {
 // ── Printing ──────────────────────────────────────────────────────────────
 
 const hours = (h: number) => `${h.toFixed(1)}h`;
-// Two decimals, truncated as the game's display truncates (num.ts), so a
-// printed rate never exceeds the rate behind it.
-const perSecond = (rate: Num) => (Math.floor(rate.toNumber() * 100 + 1e-6) / 100).toFixed(2);
 
 export function formatPaceReport(report: PaceReport): string {
   const rows = report.milestones.map((m) => [
@@ -287,7 +288,7 @@ export function formatPaceReport(report: PaceReport): string {
   const layout = report.placements.map((p) => `${moduleName(p.module)} (${cellKey(p.cell)})`).join(", ");
   const out = [
     `Pace run: ${report.sessions} sessions, ${hours(report.creditedHours)} credited`,
-    `Board: ${report.placements.length} oscillators, ${perSecond(report.rate)} ν/s${layout ? ` — ${layout}` : ""}`,
+    `Board: ${report.placements.length} oscillators, ${fmtRate(report.rate)} ν/s${layout ? ` — ${layout}` : ""}`,
     `Era ν: ${fmt(report.nous)}`,
     "",
     line(head),

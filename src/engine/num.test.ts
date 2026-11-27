@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  abs, add, cmp, D, div, eq, floor, fmt, fromSave, gt, gte, log10, lt, lte, max, min, mul, neg,
+  abs, add, cmp, D, div, eq, floor, fmt, fmtRate, fromSave, gt, gte, log10, lt, lte, max, min, mul, neg,
   NumFault, pow, requireNotNaN, sub, toSave,
 } from "./num";
 import type { Num } from "./num";
@@ -126,6 +126,25 @@ describe("fmt", () => {
     expect(fmt(D(Number.NaN))).toBe("NaN");
     expect(fmt(D(Number.POSITIVE_INFINITY))).toBe("∞");
     expect(fmt(D(Number.NEGATIVE_INFINITY))).toBe("-∞");
+  });
+});
+
+describe("fmtRate", () => {
+  it("shows a rate or factor to two decimals with at least one", () => {
+    expect(fmtRate(D(1))).toBe("1.0");
+    expect(fmtRate(D(1.75))).toBe("1.75");
+    expect(fmtRate(D(4.5))).toBe("4.5");
+    expect(fmtRate(D(0))).toBe("0.0");
+  });
+
+  it("truncates like every shown figure, so it never exceeds the rate behind it", () => {
+    expect(fmtRate(D(2.999))).toBe("2.99");
+    expect(fmtRate(D(1.0049))).toBe("1.0");
+    expect(fmtRate(D(3).sub(1e-12))).toBe("3.0");
+  });
+
+  it("reads as the game's usual figures from a thousand up", () => {
+    expect(fmtRate(D(12_480.6))).toBe("12\u2009480");
   });
 });
 

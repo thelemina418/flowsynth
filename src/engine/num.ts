@@ -108,6 +108,15 @@ export function fmt(value: Num): string {
   return value.sign < 0 && text !== "0" ? `-${text}` : text;
 }
 
+// A rate (ν/s) or factor: two decimals with at least one (1.0, 1.75, 4.5),
+// truncated like every shown figure; from a thousand up, fmt's figures.
+// The Hex detail and the pace report both read rates through this.
+export function fmtRate(value: Num): string {
+  if (value.gte(1000)) return fmt(value);
+  const hundredths = Math.floor(value.toNumber() * 100 + NUDGE);
+  return (hundredths / 100).toFixed(2).replace(/(\.\d)0$/, "$1");
+}
+
 // The save form of a Decimal: its own components, written so nothing is
 // recomputed on the way back. An optional minus, one `e` per layer, then the
 // magnitude in JavaScript's shortest round-trip form: 12480, -0.1,
