@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { creditedHoursOf, runPace, type MilestoneProbe } from "./pace";
+import { giveOscillators } from "./fixtures";
+import { creditedHoursOf, formatPaceReport, runPace, type MilestoneProbe } from "./pace";
+import { createInitialState } from "./state";
 
 // The pace runner (spec chunk 01, issue #20): a scripted reasonable player
 // driven through `apply` and `advance`. Its numbers are consulted, never
@@ -63,5 +65,42 @@ describe("the tending seams", () => {
       },
     });
     expect(calls).toEqual(["breathers", "fader", "allowance", "patch"]);
+  });
+});
+
+describe("placing the allowance", () => {
+  it("places the opening allowance, and the report gives the board's ν/s and the era's ν", () => {
+    // Two oscillators of base 1 that don't resonate make 2 ν/s. The first
+    // session runs on an empty board, so ν is 2 ν/s over the other three
+    // 50-minute sessions: 2 × 9000 s.
+    const report = runPace({ creditedHours: 3 });
+    expect(report.sessions).toBe(4);
+    expect(report.placements).toHaveLength(2);
+    expect(report.rate.toNumber()).toBeCloseTo(2);
+    expect(report.nous.toNumber()).toBeCloseTo(18_000);
+  });
+
+  it("finds a resonating layout given allowance 3", () => {
+    // Three oscillators of base 1 make exactly 3 ν/s unless one resonates.
+    const start = createInitialState();
+    giveOscillators(start, { allowance: 3 });
+    const report = runPace({ creditedHours: 3, start });
+    expect(report.placements).toHaveLength(3);
+    expect(report.rate.toNumber()).toBeGreaterThan(3);
+  });
+
+  it("prints the board's ν/s and the era's ν", () => {
+    const text = formatPaceReport(runPace({ creditedHours: 3 }));
+    expect(text).toContain("Board: 2 oscillators, 2.00 ν/s");
+    expect(text).toContain("Era ν: 18 000");
+  });
+
+  it("yields the same report for the same script", () => {
+    const script = () => {
+      const start = createInitialState();
+      giveOscillators(start, { allowance: 3 });
+      return { creditedHours: 5, start };
+    };
+    expect(formatPaceReport(runPace(script()))).toBe(formatPaceReport(runPace(script())));
   });
 });
