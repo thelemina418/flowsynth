@@ -30,6 +30,8 @@ export function createInitialState(): GameState {
       board: openingBoard(),
       allowance: { oscillator: 2, modulator: 1 },
       arrived: ["sine", "triangle", "flywheel"],
+      cableAllowance: 1,
+      arrivedCables: ["patch"],
       // The opening board holds no module, so it makes nothing.
       rates: noRates(),
     },

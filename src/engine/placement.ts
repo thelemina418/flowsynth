@@ -96,6 +96,12 @@ export function placementRefusal(state: GameState, action: PlacementAction): str
   }
 }
 
+// The cable plugged into the jack on `cell`, if any, returns to the
+// allowance.
+function unplugFrom(board: Board, cell: Cell): void {
+  board.cables = board.cables.filter((cable) => !sameCell(cable.source, cell));
+}
+
 // Applies a placement action to the draft state, once the rules allow it.
 export function relayout(state: GameState, action: PlacementAction): PlacementResult {
   const reason = placementRefusal(state, action);
@@ -108,8 +114,13 @@ export function relayout(state: GameState, action: PlacementAction): PlacementRe
       break;
     case "moveModule": {
       // A move onto an occupied open cell swaps the two modules.
+      // A patched modulator that moves, either way, unplugs its cable
+      // back to the allowance (issue #33); a cable aimed at a cell stays
+      // aimed at it.
       const moving = moduleAt(board, action.from)!;
       const other = moduleAt(board, action.to);
+      unplugFrom(board, action.from);
+      if (other) unplugFrom(board, action.to);
       if (other) other.cell = { q: action.from.q, r: action.from.r };
       moving.cell = { q: action.to.q, r: action.to.r };
       break;
@@ -117,6 +128,7 @@ export function relayout(state: GameState, action: PlacementAction): PlacementRe
     case "removeModule": {
       const placed = moduleAt(board, action.cell)!;
       board.placements = board.placements.filter((placement) => placement !== placed);
+      unplugFrom(board, action.cell);
       break;
     }
     case "rotateModule": {

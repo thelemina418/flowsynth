@@ -209,6 +209,22 @@ export interface Board {
   open: Cell[];
   arc: Arc;
   placements: Placement[];
+  // The placed cables (issue #33), in placement order. A cable occupies no
+  // cell.
+  cables: Cable[];
+}
+
+// The cable types (GLOSSARY: Cable). Patch arrives at the start; Mult,
+// Inverter and Sync are later chunks'.
+export type CableType = "patch";
+
+// One cable (issue #33): from the jack of the modulator on `source` to the
+// `target` cell, within length 3 and crossing no other cable. A Patch
+// carries the source's whole output to the target in place of its reach.
+export interface Cable {
+  type: CableType;
+  source: Cell;
+  target: Cell;
 }
 
 // One satisfied instance of an oscillator's pattern (issue #26): a distinct
@@ -288,6 +304,10 @@ export interface Game {
   // The module types the player has, in arrival order. Sine and Triangle
   // at the start; chunk 04 adds the rest.
   arrived: ModuleType[];
+  // How many cables may be placed at once (issue #33), separate from the
+  // module categories, and the cable types the player has.
+  cableAllowance: number;
+  arrivedCables: CableType[];
   // Derived from the board, never saved (engine/rates.ts).
   rates: BoardRates;
 }

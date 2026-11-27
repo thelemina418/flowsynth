@@ -27,7 +27,7 @@ export const OPENING_CELLS: readonly Cell[] = [
 ];
 
 export function openingBoard(): Board {
-  return { open: OPENING_CELLS.map((cell) => ({ q: cell.q, r: cell.r })), arc: "sketch", placements: [] };
+  return { open: OPENING_CELLS.map((cell) => ({ q: cell.q, r: cell.r })), arc: "sketch", placements: [], cables: [] };
 }
 
 export function isOpen(board: Board, cell: Cell): boolean {

@@ -78,3 +78,20 @@ describe("the Hex detail readout", () => {
     }
   });
 });
+
+describe("a patched modulator's readout (issue #33)", () => {
+  function patched(target: Cell): GameState {
+    const s = laid([["flywheel", 0, 0], ["triangle", 0, 1]]);
+    const result = apply(s, { type: "patchCable", cable: "patch", source: { q: 0, r: 0 }, target });
+    expect(result.ok, result.reason).toBe(true);
+    return result.state;
+  }
+
+  it("names the Patch's target in place of the reach", () => {
+    expect(texts(patched({ q: 0, r: 1 }), { q: 0, r: 0 })).toEqual(["Flywheel · Modulator · facing NE", "1.0 charge/s · patched → Triangle"]);
+  });
+
+  it("names an empty target as an open cell", () => {
+    expect(texts(patched({ q: 1, r: 0 }), { q: 0, r: 0 })).toEqual(["Flywheel · Modulator · facing NE", "1.0 charge/s · patched → Open cell"]);
+  });
+});

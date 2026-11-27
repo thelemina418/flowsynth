@@ -28,7 +28,7 @@ function mount(storage = memorySaveStorage()): { shell: Shell; storage: ReturnTy
   return { shell, storage };
 }
 
-const tray = () => [...host.querySelectorAll<HTMLButtonElement>(".tray button")];
+const tray = () => [...host.querySelectorAll<HTMLButtonElement>(".tray button[data-module]")];
 const entry = (name: string) => tray().find((b) => b.textContent === name)!;
 const cell = (key: string) => host.querySelector<SVGGElement>(`[data-cell="${key}"]`)!;
 const click = (el: Element) => act(() => { el.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
@@ -66,7 +66,7 @@ describe("click-to-pick, click-to-place", () => {
     for (const k of ["0,0", "1,0", "0,1", "1,-1"]) expect(cell(k).getAttribute("data-target")).toBe("valid");
     expect(cell("-1,1").getAttribute("data-target")).toBe("invalid");
     expect(cell("3,0").getAttribute("data-target")).toBe("invalid");
-    expect(cell("3,0").querySelector(".cell-target")).not.toBeNull();
+    expect(host.querySelector('.outlines .cell-target[data-for="3,0"]')).not.toBeNull();
   });
 
   it("keeps the board as it was when a wall is clicked", () => {

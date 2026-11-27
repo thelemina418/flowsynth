@@ -3,6 +3,7 @@ import { dismissSummary, endSession, pauseSession, recordSummaryReflection, resu
 import { addPracticeLog, archiveHabit, chooseHabitClass, createHabit, renameHabit, selectHabit, setHabitColor } from "./habits";
 import { createIntention, deleteIntention, editIntention, retainIntentionChoice, rollIntentionOccurrences } from "./intentions";
 import { writeNote } from "./notes";
+import { recable, type CableAction } from "./cables";
 import { relayout, type PlacementAction } from "./placement";
 import { computeBoardRates } from "./rates";
 import { settleHonestyReport } from "./trust";
@@ -37,8 +38,9 @@ export type Action =
   | { type: "deleteIntention"; id: string }
   | { type: "retainIntention"; id: string }
   | { type: "rollIntentions"; now: number }
-  // The board, in upgrade mode only (issues #25, #31).
-  | PlacementAction;
+  // The board, in upgrade mode only (issues #25, #31, #33).
+  | PlacementAction
+  | CableAction;
 
 export interface ApplyResult {
   ok: boolean;
@@ -95,10 +97,14 @@ function run(state: GameState, action: Action): Step {
     case "removeModule":
     case "rotateModule":
       return relaid(state, relayout(state, action));
+    case "patchCable":
+    case "repatchCable":
+    case "unplugCable":
+      return relaid(state, recable(state, action));
   }
 }
 
-// A layout or facing change recomputes the board's rates once (issue #26),
+// A layout, facing or cable change recomputes the board's rates once (issue #26),
 // and so does a session's end, so the Flywheel picks up that session's
 // Producer credit (issue #32); a refusal changed nothing, so it recomputes
 // nothing.

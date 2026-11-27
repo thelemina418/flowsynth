@@ -71,10 +71,15 @@ describe("the board on a fresh start", () => {
     mountFresh();
     const readout = host.querySelector(".nous-readout")!;
     expect(readout.textContent).toBe("ν 0");
-    // The tray (issues #25, #31): Sine, Triangle and the Flywheel, unplaced.
-    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Sine", "Triangle", "Flywheel"]);
+    // The tray (issues #25, #31, #33): Sine, Triangle and the Flywheel,
+    // unplaced, and the one Patch cable.
+    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Sine", "Triangle", "Flywheel", "1 Patch cable"]);
     const visible = [...host.querySelectorAll("p, span, text, h2, h3, button")].filter((el) => !el.closest(".sr-only") && !el.querySelector("p, span, text")).map((el) => el.textContent);
-    expect(visible.sort()).toEqual(["F", "S", "Sine", "Triangle", "Flywheel", "ν 0"].sort());
+    // Seven of philosophy.md's nine things: the board, the walls with Shale
+    // marked (its initial; F is Flint's), Sine, Triangle, Flywheel, the
+    // Patch cable and ν 0. No cord is drawn.
+    expect(visible.sort()).toEqual(["F", "S", "Sine", "Triangle", "Flywheel", "1 Patch cable", "ν 0"].sort());
+    expect(host.querySelectorAll(".cord, [data-plug], .bead")).toHaveLength(0);
     // The Hex detail is empty.
     expect(host.querySelector("[data-hex-detail]")!.textContent).toBe("");
   });
