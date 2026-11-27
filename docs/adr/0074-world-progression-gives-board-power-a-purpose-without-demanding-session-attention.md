@@ -10,7 +10,7 @@ The first experiment tests one enemy sequence, one combat resource, scaling Aret
 
 > ADR-0087, implemented by #526–#530, supersedes this experiment's entry, acquisition, Mutator and refund promises. Permanent discovery on positive prestige and type-wide Hone remain. The interim mixed-draft Blade path was superseded in #545: fresh World slots offer infrastructure and Blacksmith earns ordinary weapons.
 
-> ADR-0088 and ADR-0089 are implemented by #543–#544: lifetime victories, sequential pressure, released enemy cells, actual creature combat and recovery, and distance-priced expansion independent of pitch. See the [redesign brief](../world-combat-redesign-brief.md) for the live direction and [#541 record](../evidence/issue-541/README.md) for verification status. The historical experiment and calibration below do not validate the live redesign.
+> ADR-0088 and ADR-0089 are implemented by #543–#544: lifetime victories, sequential pressure, released enemy cells, actual creature combat and recovery, and distance-priced expansion independent of pitch. See the [redesign brief](../archive/world-combat-redesign-brief.md) for the live direction and [#541 record](../archive/evidence/issue-541/README.md) for verification status. The historical experiment and calibration below do not validate the live redesign.
 
 ## Progression and reset contract
 

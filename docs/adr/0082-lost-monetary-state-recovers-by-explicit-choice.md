@@ -27,4 +27,4 @@ The calibrated translation (ADR-0081) converts finite pre-calibration saves once
 
 ## Provenance
 
-The boundary's contract: [save-migration](../save-migration.md) (the recovery section). The evidence: `src/engine/save-recovery.test.ts`, `src/ui/app.recovery.test.ts`, `src/ui/shared-save.test.ts`, `tools/save-recovery.test.ts` with the recorded walk `docs/evidence/issue-494/recovered-walk.json`, and the captures under `docs/evidence/issue-494/`.
+The boundary's contract: [save-migration](../archive/save-migration.md) (the recovery section). The evidence: `src/engine/save-recovery.test.ts`, `src/ui/app.recovery.test.ts`, `src/ui/shared-save.test.ts`, `tools/save-recovery.test.ts` with the recorded walk `docs/archive/evidence/issue-494/recovered-walk.json`, and the captures under `docs/archive/evidence/issue-494/`.
