@@ -5,18 +5,16 @@ import { SAVE_VERSION } from "./constants";
 import { D, fromSave, isNum, NumFault, toSave, type Num } from "./num";
 import type { GameState, Habit, HabitClass, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
 
-// The interim save boundary (issue #15). It reads the real-life records —
-// habits, Notes, the practice log, Intentions and their calendar, session
-// history, a running session's trust ledger — out of a v15 save and writes
-// them back in the interim shape. Everything else in a v15 save (the board,
-// the economy, the World) is left behind. The stale-tab guard (ADR-0032,
-// shared-save.ts) and the explicit recovery (ADR-0082) stand. Dev-only:
-// save v16 and the one-time v15 migration replace this (issues #18, #19).
+// The save boundary. Save v16 (issue #18) writes the nested GameState
+// (`records`, `game`) with every Decimal as num's save string, and reads it
+// back exactly. The stale-tab guard (ADR-0032, shared-save.ts) and the
+// explicit lost-money recovery (ADR-0082) stand: a v16 file whose Decimal
+// figures are unreadable refuses an ordinary load and recovers by choice.
 //
-// Interim (issue #17): it writes the nested GameState (`records`, `game`)
-// with every Decimal as num's save string, still under version 15, and
-// reads either that shape or a flat v15 save (the retired build's, or
-// issue #15's interim) into the GameState.
+// A v15 save reads through `readV15` — the seam issue #19's one-time
+// migration replaces. Until then it reads the flat v15 shape (the retired
+// build's, or issue #15's interim) and the nested shape issue #17's interim
+// wrote under version 15.
 
 export interface SaveFile {
   app: "flowsynth";
@@ -37,6 +35,8 @@ export interface LoadResult {
   lost?: string[];
   // Present exactly when this load performed the player's chosen recovery.
   recovered?: RecoveryReport;
+  // A save from a newer build: refused, and its bytes are never replaced.
+  newerVersion?: boolean;
 }
 
 // What the recovery could not read, stated as paths (ADR-0082). No figure
@@ -189,7 +189,7 @@ function readAccounting(raw: Partial<SessionAccounting> & { bucketNous?: unknown
     poolSeconds: finiteOr(raw.poolSeconds, 0),
     pendingAwaySeconds: finiteOr(raw.pendingAwaySeconds, 0),
     events: Array.isArray(raw.events) ? raw.events : [],
-    provisionalNous: readNum(raw.provisionalNous ?? raw.bucketNous, D(0)),
+    provisionalNous: readLostable(raw.provisionalNous ?? raw.bucketNous),
   };
 }
 
@@ -240,22 +240,37 @@ function readSave(text: string, recovery: boolean): LoadResult {
   if (!isRecord(parsed) || parsed.app !== "flowsynth" || typeof parsed.version !== "number") {
     return { error: "This file is not a FlowSynth save." };
   }
-  if (parsed.version < SAVE_VERSION) {
+  if (parsed.version > SAVE_VERSION) {
+    return {
+      error: `Save version ${parsed.version} is newer than this build supports (${SAVE_VERSION}). The save is left untouched.`,
+      newerVersion: true,
+    };
+  }
+  if (parsed.version < LEGACY_VERSION) {
     return {
       error: `Incompatible older version (save v${parsed.version}, this build is v${SAVE_VERSION}) — starting fresh.`,
     };
   }
-  if (parsed.version > SAVE_VERSION) {
-    return { error: `Save version ${parsed.version} is newer than this build supports (${SAVE_VERSION}).` };
-  }
   if (!isRecord(parsed.state)) return { error: "The save data is incomplete." };
   try {
-    if (isRecord(parsed.state.records) && isRecord(parsed.state.game)) return readNested(parsed.state.records, parsed.state.game);
-    return readFlat(parsed.state, parsed.version, recovery);
+    if (parsed.version === LEGACY_VERSION) return readV15(parsed.state, recovery);
+    if (!isRecord(parsed.state.records) || !isRecord(parsed.state.game)) return { error: "The save data is incomplete." };
+    return readNested(parsed.state.records, parsed.state.game, parsed.version, recovery);
   } catch (error) {
     if (!(error instanceof NumFault)) throw error;
     return { error: `The save data has an unreadable figure: ${error.detail}.` };
   }
+}
+
+// The one earlier version this build reads (issue #19 migrates it).
+const LEGACY_VERSION = 15;
+
+// The v15 seam: issue #19 replaces this with the one-time v15 → v16
+// migration. Interim: the nested shape issue #17 wrote under v15 reads as
+// v16 does; a flat v15 save reads its records.
+function readV15(raw: Record<string, unknown>, recovery: boolean): LoadResult {
+  if (isRecord(raw.records) && isRecord(raw.game)) return readNested(raw.records, raw.game, LEGACY_VERSION, recovery);
+  return readFlat(raw, LEGACY_VERSION, recovery);
 }
 
 const MODES = ["upgrade", "flow", "paused"];
@@ -270,14 +285,55 @@ function readClassCredit(raw: unknown): Record<HabitClass, number> {
   };
 }
 
-// The nested GameState this interim build writes.
-function readNested(records: Record<string, unknown>, game: Record<string, unknown>): LoadResult {
+// A saved Decimal the v16 shape can read: num's save string or a finite
+// number. Absent reads as the fallback; anything else is lost.
+function readableNum(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (typeof value !== "string") return false;
+  try {
+    fromSave(value);
+    return true;
+  } catch (error) {
+    if (error instanceof NumFault) return false;
+    throw error;
+  }
+}
+
+// The v16 lost-money walk (ADR-0082): the game's Decimal figures, read raw
+// before any default can hide a loss. Detection and repair are one walk:
+// a lost figure reads as zero under recovery, and the report names exactly
+// these paths.
+function lostNestedFigures(game: Record<string, unknown>): string[] {
+  const lost: string[] = [];
+  if (!readableNum(game.nous)) lost.push("game.nous");
+  if (game.mode !== "upgrade" && isRecord(game.session)) {
+    // A session without its accounting lost its practice facts too.
+    if (!isRecord(game.session.accounting)) lost.push("game.session.accounting");
+    else if (!readableNum(game.session.accounting.provisionalNous)) lost.push("game.session.accounting.provisionalNous");
+  }
+  return lost;
+}
+
+// Under recovery a lost figure starts at zero; otherwise it was refused
+// before this read.
+function readLostable(value: unknown): Num {
+  return readableNum(value) ? readNum(value, D(0)) : D(0);
+}
+
+// The nested GameState: save v16's shape.
+function readNested(records: Record<string, unknown>, game: Record<string, unknown>, version: number, recovery: boolean): LoadResult {
   if (typeof game.mode !== "string" || !MODES.includes(game.mode)) {
     return { error: "The save data has an unknown session mode." };
   }
   for (const field of ["notes", "habits", "practiceLog", "sessionRecords", "intentions"]) {
     if (!Array.isArray(records[field])) return { error: "The save data is incomplete." };
   }
+  const lost = lostNestedFigures(game);
+  if (recovery && lost.includes("game.session.accounting")) {
+    return { error: "The session's practice accounting is incomplete; recovery cannot reconstruct it. The original save is unchanged." };
+  }
+  if (lost.length && !recovery) return needsRecovery(lost);
   const fresh = createInitialState();
   const flowing = game.mode !== "upgrade" && isRecord(game.session);
   const intentions = records.intentions as GameState["records"]["intentions"];
@@ -296,7 +352,7 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
       nextId: finiteOr(records.nextId, fresh.records.nextId),
     },
     game: {
-      nous: readNum(game.nous, D(0)),
+      nous: readLostable(game.nous),
       mode: flowing ? (game.mode as GameState["game"]["mode"]) : "upgrade",
       session: flowing ? readSession(game.session as Partial<SessionState>) : null,
       summary: isRecord(game.summary) ? readSummary(game.summary as Partial<SessionSummary>) : null,
@@ -306,7 +362,16 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
       legacyLine: typeof game.legacyLine === "string" ? game.legacyLine : null,
     },
   };
-  return { state };
+  const recovered = recovery && lost.length > 0 ? { fromVersion: version, lost } : undefined;
+  return { state, ...(recovered && { recovered }) };
+}
+
+function needsRecovery(lost: string[]): LoadResult {
+  return {
+    error: `This save needs explicit recovery: unreadable monetary state (${lost.join(", ")}). The original save is unchanged; loading repairs nothing — recovery is its own explained choice.`,
+    recoveryRequired: true,
+    lost,
+  };
 }
 
 // A flat v15 save: the retired build's, or issue #15's interim. The
@@ -327,13 +392,7 @@ function readFlat(raw: Record<string, unknown>, version: number, recovery: boole
     return { error: "The session's practice accounting is incomplete; recovery cannot reconstruct it. The original save is unchanged." };
   }
   const lost = lostMonetaryFigures(raw);
-  if (lost.length && !recovery) {
-    return {
-      error: `This save needs explicit recovery: unreadable monetary state (${lost.join(", ")}). The original save is unchanged; loading repairs nothing — recovery is its own explained choice.`,
-      recoveryRequired: true,
-      lost,
-    };
-  }
+  if (lost.length && !recovery) return needsRecovery(lost);
   const fresh = createInitialState();
   // A legacy breather has nothing to resume in this build: it lands
   // between sessions, where a finished breather sits.

@@ -117,6 +117,36 @@ describe("shared-save ownership (ADR-0032)", () => {
     expect(stored().savedAt).toBe(1000);
   });
 
+  // Save v16 (issue #18): a newer build's save is refused and never
+  // overwritten — not by an ordinary write, not by a forced one, and not
+  // when its stamp is older than this tab's.
+  it("a newer-version save loads as refused and its stored text is left untouched", () => {
+    const { owner, storage, state } = scenario();
+    const future = serialize(state, 500).replace(`"version": ${SAVE_VERSION}`, `"version": ${SAVE_VERSION + 1}`);
+    storage.setItem(STORAGE_KEY, future);
+    expect(owner.load()).toMatchObject({ newerVersion: true });
+    expect(owner.write(state, 3000)).toBe("refused");
+    expect(owner.write(state, 3000, true)).toBe("refused");
+    expect(storage.getItem(STORAGE_KEY)).toBe(future);
+  });
+
+  it("a newer build writing the slot mid-session is never overwritten, even by a forced save", () => {
+    const { owner, storage, state } = scenario();
+    const future = serialize(state, 500).replace(`"version": ${SAVE_VERSION}`, `"version": ${SAVE_VERSION + 1}`);
+    storage.setItem(STORAGE_KEY, future);
+    expect(owner.write(state, 3000, true)).toBe("refused");
+    expect(storage.getItem(STORAGE_KEY)).toBe(future);
+  });
+
+  it("a recovery adoption never replaces a newer build's save", () => {
+    const { owner, storage, state } = scenario();
+    const future = serialize(state, 500).replace(`"version": ${SAVE_VERSION}`, `"version": ${SAVE_VERSION + 1}`);
+    storage.setItem(STORAGE_KEY, future);
+    expect(owner.adoptRecovered("source bytes", createInitialState(), 1000)).toBe(false);
+    expect(storage.getItem(STORAGE_KEY)).toBe(future);
+    expect(storage.getItem(ORIGINAL_SAVE_KEY)).not.toBe("source bytes");
+  });
+
   it("a missing or invalid load timestamp uses controlled wall time without fabricating new shared progress", () => {
     const { owner, state, storage } = scenario();
     const file = JSON.parse(serialize(state, 2000));

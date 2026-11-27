@@ -1,4 +1,5 @@
 import { ARCHIVED_ORIGINAL_SAVE_KEY, deserialize, ORIGINAL_SAVE_KEY, recoverLostSave, serialize, STORAGE_KEY, type RecoveryReport } from "../engine/save";
+import { SAVE_VERSION } from "../engine/constants";
 import type { GameState } from "../engine/types";
 
 export interface LoadedSave {
@@ -12,7 +13,8 @@ export interface LoadedSave {
 // A failed parse: the recovery-required shape names the lost paths and —
 // from load() — carries the exact stored bytes, so the app can offer the
 // explicit recovery without reading the slot again.
-export type ParsedSave = LoadedSave | { error: string; recoveryRequired?: boolean; lost?: string[]; raw?: string };
+// A newer build's save is refused and flagged: its bytes are never replaced.
+export type ParsedSave = LoadedSave | { error: string; recoveryRequired?: boolean; lost?: string[]; raw?: string; newerVersion?: boolean };
 export type WriteOutcome = "written" | "failed" | "refused";
 export type SaveStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
@@ -35,6 +37,17 @@ export function memorySaveStorage(): SaveStorage {
     setItem: (key, next) => { files.set(key, next); },
     removeItem: (key) => { files.delete(key); },
   };
+}
+
+// A slot written by a newer build (issue #18): this build cannot read it,
+// so it must never replace it.
+function fromNewerBuild(raw: string): boolean {
+  try {
+    const version = (JSON.parse(raw) as { version?: unknown }).version;
+    return typeof version === "number" && version > SAVE_VERSION;
+  } catch {
+    return false;
+  }
 }
 
 function savedAtOf(raw: string): number | null {
@@ -61,9 +74,10 @@ export class SharedSave {
   parse(text: string): ParsedSave {
     const result = deserialize(text);
     if (result.error || !result.state) {
-      return result.recoveryRequired
-        ? { error: result.error ?? "Explicit recovery required.", recoveryRequired: true, lost: result.lost ?? [] }
-        : { error: result.error ?? "unknown error" };
+      if (result.recoveryRequired) {
+        return { error: result.error ?? "Explicit recovery required.", recoveryRequired: true, lost: result.lost ?? [] };
+      }
+      return { error: result.error ?? "unknown error", ...(result.newerVersion ? { newerVersion: true } : {}) };
     }
     return { state: result.state, savedAt: savedAtOf(text) ?? this.now() };
   }
@@ -129,6 +143,8 @@ export class SharedSave {
     const changed: { key: string; previous: string | null }[] = [];
     try {
       const text = serialize(state, savedAt);
+      const current = this.storage.getItem(STORAGE_KEY);
+      if (current !== null && fromNewerBuild(current)) return false;
       const earlier = this.storage.getItem(ORIGINAL_SAVE_KEY);
       const replace = (key: string, value: string, previous: string | null): void => {
         if (previous === value) return;
@@ -218,6 +234,8 @@ export class SharedSave {
     try {
       const text = serialize(state, now);
       const raw = this.storage.getItem(STORAGE_KEY);
+      // A newer build's save is never overwritten, forced or not.
+      if (raw !== null && fromNewerBuild(raw)) return "refused";
       if (raw !== null) this.retainOnce(raw);
       this.storage.setItem(STORAGE_KEY, text);
       this.knownSavedAt = now;

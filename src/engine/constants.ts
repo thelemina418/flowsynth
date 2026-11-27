@@ -23,9 +23,7 @@ export const REFLECTION_SLIDER_MIN = 1;
 export const REFLECTION_SLIDER_POSITIONS = 5;
 export const REFLECTION_SLIDER_NEUTRAL = 3;
 
-// The interim save keeps the v15 number (issue #15): it reads the real-life
-// records out of a v15 save and writes the interim shape back under the
-// same number. Dev-only — save v16 and the one-time v15 migration replace
-// it (issue #18). Older versions are refused; newer ones are never
+// Save v16 (issue #18): the nested GameState. A v15 save is read once and
+// migrated (issue #19); older versions are refused; newer ones are never
 // overwritten.
-export const SAVE_VERSION = 15;
+export const SAVE_VERSION = 16;
