@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { fresh } from "./fixtures";
+import { advanceIn, applyIn, fresh } from "./fixtures";
 import { deserialize, serialize } from "./save";
 
 // The one-time v15 → v16 migration (issue #19). The fixture is a v15 save
@@ -72,5 +72,46 @@ describe("the v15 → v16 migration (issue #19)", () => {
     const text = serialize(migrated(), 2_000);
     expect(JSON.parse(text).version).toBe(16);
     expect(serialize(deserialize(text).state!, 2_000)).toBe(text);
+  });
+});
+
+// A v15 save can carry the player's running session (story 27). The class
+// choice changes records only, never the board, so it is open whatever the
+// mode: the first load asks for classes even mid-session. The choice
+// credits the live seconds already logged; flow after it accrues through
+// `advance`; ending the session credits nothing twice.
+describe("choosing classes with a migrated running session", () => {
+  function runningMigrated() {
+    const file = JSON.parse(V15) as { state: Record<string, unknown> & { habits: { id: string }[] } };
+    const habitId = file.state.habits[0]!.id;
+    file.state.mode = "flow";
+    file.state.activeHabitId = habitId;
+    file.state.session = { target: null, elapsed: 120, startedAt: 1, goalSeconds: {}, targetSignaled: false,
+      accounting: { creditedSeconds: 120, poolSeconds: 0, bucketNous: 0, pendingAwaySeconds: 0, events: [] } };
+    const result = deserialize(JSON.stringify(file));
+    expect(result.error).toBeUndefined();
+    const state = result.state!;
+    expect(state.game.mode).toBe("flow");
+    const logged = state.records.practiceLog
+      .filter((entry) => entry.habitId === habitId && entry.source === "live")
+      .reduce((sum, entry) => sum + entry.seconds, 0);
+    return { state, habitId, logged };
+  }
+
+  it("credits the live seconds logged so far, then accrues later flow once", () => {
+    const { state, habitId, logged } = runningMigrated();
+    expect(logged).toBeGreaterThan(0);
+    expect(applyIn(state, { type: "chooseClass", habitId, habitClass: "engineer" }).ok).toBe(true);
+    expect(state.records.classCredit.engineer).toBe(logged);
+    expect(advanceIn(state, 300, "flow").fault).toBeUndefined();
+    expect(state.records.classCredit.engineer).toBe(logged + 300);
+    expect(applyIn(state, { type: "endSession", now: 2_000_000 }).ok).toBe(true);
+    expect(state.records.classCredit.engineer).toBe(logged + 300);
+  });
+
+  it("is open while the session is paused too", () => {
+    const { state, habitId } = runningMigrated();
+    expect(applyIn(state, { type: "pauseSession" }).ok).toBe(true);
+    expect(applyIn(state, { type: "chooseClass", habitId, habitClass: "producer" }).ok).toBe(true);
   });
 });

@@ -99,10 +99,12 @@ export function archiveHabit(state: GameState, id: string): { ok: boolean; reaso
 // The class choice (story 9–14): asked once per habit that awaits its
 // class. Only an open class can be chosen, and the choice credits the
 // habit's live credited flow seconds — its live practice-log entries,
-// never manual ones — to that class. Between sessions only, so a running
-// session's credit lands through its own log entry.
+// never manual ones — to that class. It changes records only, never the
+// board, so it is open in any mode: a migrated v15 save carrying a running
+// session still chooses on first load. Nothing counts twice: a running
+// session logs its entry only when it ends, and class credit never comes
+// from that entry — flow after the choice accrues through `advance`.
 export function chooseHabitClass(state: GameState, id: string, habitClass: HabitClass): { ok: boolean; reason?: string } {
-  if (state.game.mode !== "upgrade") return { ok: false, reason: "Habits are managed between sessions." };
   const habit = state.records.habits.find((h) => h.id === id);
   if (!habit) return { ok: false, reason: "Habit not found." };
   if (habit.habitClass !== null) return { ok: false, reason: "This habit's class is already chosen." };
