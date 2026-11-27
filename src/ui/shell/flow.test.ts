@@ -262,6 +262,8 @@ describe("the flow screen", () => {
     expect(host.querySelector("[data-goal]")).toBeNull();
     tick(shell, 60);
     click("End");
+    // The summary comes first (issue #40); its Continue leads to upgrade mode.
+    click("Continue");
     expect(text("[data-goal]")).toBe("Conquer Shale");
     expect(host.querySelector("[data-chip]")).not.toBeNull();
     expect(host.querySelector("[data-doors]")).not.toBeNull();
