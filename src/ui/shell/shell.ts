@@ -1,7 +1,8 @@
 import { computed, signal } from "@preact/signals";
-import { apply } from "../../engine/apply";
+import { apply, type Action, type ApplyResult } from "../../engine/apply";
 import { createInitialState } from "../../engine/state";
 import type { GameState, Habit, HabitClass } from "../../engine/types";
+import { Placing } from "../board/placing";
 import { SharedSave, type SaveStorage } from "../shared-save";
 
 // The shell (issue #21): what opening the app owes before any game surface
@@ -31,6 +32,8 @@ export class Shell {
   readonly notice = signal<string | null>(null);
   private readonly classError = signal<string | null>(null);
   private readonly save: SharedSave;
+  // The board's pick (issue #25); every placement goes through `act`.
+  readonly placing = new Placing(this.state, (action) => this.act(action));
 
   readonly screen = computed<Screen>(() => {
     const offer = this.recovery.value;
@@ -107,6 +110,17 @@ export class Shell {
     this.classError.value = null;
     this.state.value = result.state;
     this.persist();
+  }
+
+  // The one placement path: apply, adopt and save on success. A refusal
+  // leaves the state as it was.
+  act(action: Action): ApplyResult {
+    const result = apply(this.state.peek(), action);
+    if (result.ok) {
+      this.state.value = result.state;
+      this.persist();
+    }
+    return result;
   }
 
   private persist(): void {

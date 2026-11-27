@@ -67,13 +67,14 @@ describe("the board on a fresh start", () => {
     for (const cell of [...cells("open"), ...cells("wall")]) expect(cell.querySelector("polygon")!.getAttribute("stroke-dasharray")).toBeNull();
   });
 
-  it("reads ν 0, and shows nothing beyond the board and the readout", () => {
+  it("reads ν 0, and shows nothing beyond the board, the tray and the readout", () => {
     mountFresh();
     const readout = host.querySelector(".nous-readout")!;
     expect(readout.textContent).toBe("ν 0");
-    expect(host.querySelectorAll("button")).toHaveLength(0);
-    const visible = [...host.querySelectorAll("p, span, text, h2, h3")].filter((el) => !el.closest(".sr-only") && el.children.length === 0).map((el) => el.textContent);
-    expect(visible.sort()).toEqual(["F", "S", "ν 0"].sort());
+    // The tray (issue #25): Sine and Triangle, unplaced.
+    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Sine", "Triangle"]);
+    const visible = [...host.querySelectorAll("p, span, text, h2, h3, button")].filter((el) => !el.closest(".sr-only") && !el.querySelector("p, span, text")).map((el) => el.textContent);
+    expect(visible.sort()).toEqual(["F", "S", "Sine", "Triangle", "ν 0"].sort());
   });
 
   it("carries no tooltips", () => {

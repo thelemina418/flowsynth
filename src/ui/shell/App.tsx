@@ -2,11 +2,10 @@ import type { Shell } from "./shell";
 import { ClassChoice } from "./ClassChoice";
 import { RecoveryChoice } from "./RecoveryChoice";
 import { downloadSave } from "./download";
-import { Board } from "../board/Board";
-import { NousReadout } from "../board/NousReadout";
+import { Stage } from "../board/Stage";
 
 // The shell's one surface (issue #21): the question owed on first load,
-// and once nothing is owed, the board (issue #24).
+// and once nothing is owed, the board and its tray (issues #24, #25).
 export function App({ shell }: { shell: Shell }) {
   const screen = shell.screen.value;
   const notice = shell.notice.value;
@@ -34,10 +33,7 @@ export function App({ shell }: { shell: Shell }) {
         />
       )}
       {screen.kind === "ready" && (
-        <section class="stage">
-          <NousReadout nous={game.nous} />
-          <Board board={game.board} />
-        </section>
+        <Stage nous={game.nous} board={game.board} arrived={game.arrived} placing={shell.placing} />
       )}
     </div>
   );

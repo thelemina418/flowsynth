@@ -67,3 +67,15 @@ DRY 0.0h–250.0h: 250.0h with no new milestone
 ```
 
 As expected: there is no board yet, so nothing past the two starting classes can be reached. The whole 250 h stretch is flagged dry.
+
+## Chunk 02: Board
+
+In progress; each ticket adds its part.
+
+### Improvised
+
+- **The tray (#25).** Until chunk 04's allowance chips, the tray beside the board shows one entry per arrived type (`Sine`, `Triangle`). Any arrived type can be placed while oscillator allowance remains. Once allowance is spent the entries stay, muted, rather than disappearing.
+- **Move onto an occupied cell swaps (#25).** Moving a placed module onto another occupied open cell swaps the two in one action.
+- **Removing (#25).** A placed module returns to unplaced by picking it and clicking (or dropping on) the tray.
+- **Invalid saved placements (#25).** A placement whose type is unknown, whose cell isn't an owned open cell, or whose cell already holds a module returns to unplaced instead of failing the load. A save without allowance or arrived types loads the opening's (2 oscillators; Sine and Triangle).
+- **Refusal copy (#25).** A refused placement keeps the pick and shows its reason in one quiet line under the board (`That cell is a wall.`, `Oscillator allowance is full.`, `The board is locked while a session runs.`).
