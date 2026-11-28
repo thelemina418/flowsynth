@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { apply } from "./apply";
-import { advanceIn, applyIn, begin, fresh, giveHabit, giveProducer, ownCells } from "./fixtures";
+import { advanceIn, applyIn, fresh, giveHabit, giveProducer, ownCells } from "./fixtures";
 import type { Cell } from "./hex";
 import { deserialize, serialize } from "./save";
 import { cloneState } from "./state";
@@ -9,8 +9,8 @@ import type { GameState, ModuleType } from "./types";
 // Patching into walls (spec chunk 03, issue #34), through the GameState
 // seam: a Patch may target a wall in the current arc, which takes the
 // charge as damage at 1:1, except into an `Only Arm damage` wall (issue
-// #48), which refuses it. Damage is a rate only here; HP, damage over time
-// and regen over time arrive later in chunk 05, so nothing changes a wall.
+// #48), which refuses it. Damage is a rate here; HP over time is
+// conquest.test.ts's (issue #49).
 
 const O = { q: 0, r: 0 };
 const NE = { q: 1, r: -1 };
@@ -119,8 +119,8 @@ describe("a wall's rate", () => {
   });
 });
 
-describe("advance applies nothing to a wall", () => {
-  it("in flow and in upgrade, the board and the wall rates stay as they were", () => {
+describe("upgrade mode applies nothing to a wall", () => {
+  it("in upgrade the board and the wall rates stay as they were; flow moves walls since issue #49 (conquest.test.ts)", () => {
     const s = fresh();
     giveHabit(s);
     place(s, "flywheel", O);
@@ -128,10 +128,6 @@ describe("advance applies nothing to a wall", () => {
     const board = cloneState(s).game.board;
     const walls = cloneState(s).game.rates.walls;
     advanceIn(s, HOUR, "upgrade");
-    expect(s.game.board).toEqual(board);
-    expect(s.game.rates.walls).toEqual(walls);
-    expect(begin(s, null, 0).ok).toBe(true);
-    advanceIn(s, HOUR, "flow");
     expect(s.game.board).toEqual(board);
     expect(s.game.rates.walls).toEqual(walls);
   });
