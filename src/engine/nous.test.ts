@@ -9,7 +9,10 @@ import type { GameState, HonestyOutcome } from "./types";
 // provisional time into the session's provisional nous, which the honesty
 // report banks or drops (ADR-0019).
 
-// The acceptance layout: Sine 1 ν/s, two Triangles at 1.75 each.
+// The acceptance layout: Sine 1 ν/s, two Triangles at 1.75 each, under
+// the opening's pressure (issue #52): 29% on the Sine, 34% and 39% on the
+// Triangles, so 0.71 + 1.155 + 1.0675 = 2.9325 ν/s.
+const RATE = 2.9325;
 function acceptanceLayout(): GameState {
   const s = fresh();
   giveOscillators(s, { allowance: 3 });
@@ -25,20 +28,22 @@ function start(s: GameState, target: number | null = null): void {
 }
 
 describe("trusted flow", () => {
-  it("one trusted hour yields exactly (1 + 1.75 + 1.75) × 3600 ν, the Triangles' share 3.5 × 3600", () => {
+  it("one trusted hour yields exactly 2.9325 × 3600 ν, the Triangles' share 2.2225 × 3600", () => {
     const s = acceptanceLayout();
     start(s);
     advanceIn(s, 3600, "flow");
-    expect(s.game.nous.toNumber()).toBe(4.5 * 3600);
+    expect(s.game.nous.toNumber()).toBe(RATE * 3600);
     const triangles = s.game.rates.oscillators.filter((o) => o.module === "triangle");
-    expect(triangles.reduce((sum, o) => sum + o.rate.toNumber() * 3600, 0)).toBe(3.5 * 3600);
+    expect(triangles.reduce((sum, o) => sum + o.rate.toNumber() * 3600, 0)).toBeCloseTo(2.2225 * 3600, 9);
   });
 
-  it("an hour walked in 3600 one-second steps yields the same exact nous", () => {
+  it("an hour walked in 3600 one-second steps yields the same nous", () => {
     const s = acceptanceLayout();
     start(s);
     for (let i = 0; i < 3600; i++) advanceIn(s, 1, "flow");
-    expect(s.game.nous.toNumber()).toBe(4.5 * 3600);
+    // 2.9325 isn't a binary fraction as 4.5 was, so 3600 additions carry
+    // float rounding (issue #52); they agree to well under a millionth.
+    expect(s.game.nous.toNumber()).toBeCloseTo(RATE * 3600, 6);
   });
 
   it("an empty board makes nothing", () => {
@@ -89,11 +94,11 @@ describe("provisional flow", () => {
     expect(3600).toBeGreaterThan(RECONCILIATION_FLOOR_SECONDS);
     const s = provisionalHour();
     expect(s.game.nous.toNumber()).toBe(0);
-    expect(s.game.session!.accounting.provisionalNous.toNumber()).toBe(4.5 * 3600);
+    expect(s.game.session!.accounting.provisionalNous.toNumber()).toBe(RATE * 3600);
   });
 
   it.each<[HonestyOutcome, number]>([
-    ["full", 4.5 * 3600],
+    ["full", RATE * 3600],
     ["missed", 0],
   ])("the honesty report answered %s settles nous at %d", (outcome, nous) => {
     const s = provisionalHour();

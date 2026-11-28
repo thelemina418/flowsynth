@@ -38,7 +38,8 @@ function mount(storage: SaveStorage): Shell {
   return shell;
 }
 
-// Sine, Triangle, Triangle in a triangle: 4.5 ν/s (chunk 02's layout), on
+// Sine, Triangle, Triangle in a triangle: 2.9325 ν/s (chunk 02's layout
+// under the opening's pressure, issue #52), on
 // a habit Piano · Engineer.
 function laidOut(): GameState {
   let s = createInitialState();
@@ -174,8 +175,8 @@ describe("the flow screen", () => {
     const shell = mount(saved(laidOut()));
     beginOn(shell);
     tick(shell, 60);
-    // 4.5 ν/s for a minute.
-    expect(text(".nous-readout")).toBe("ν 270");
+    // 2.9325 ν/s for a minute.
+    expect(text(".nous-readout")).toBe("ν 175");
     expect(text(".session-clock")).toBe("24:00");
     tick(shell, 1200);
     // 0.5 h + 21 min on Engineer is 0.85 h, truncated to 0.8h; 0.35 of the
@@ -193,7 +194,7 @@ describe("the flow screen", () => {
     tick(shell, 0);
     // Under the reconciliation floor, the whole absence is trusted.
     expect(shell.state.value.game.session!.accounting.creditedSeconds).toBe(60);
-    expect(text(".nous-readout")).toBe("ν 270");
+    expect(text(".nous-readout")).toBe("ν 175");
   });
 
   it("raises Ready · N on the boundary where live credit crosses a level", () => {

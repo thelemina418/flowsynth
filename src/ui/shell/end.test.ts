@@ -38,7 +38,8 @@ function mount(storage: SaveStorage): Shell {
   return shell;
 }
 
-// Sine, Triangle, Triangle in a triangle: 4.5 ν/s, on Piano · Engineer
+// Sine, Triangle, Triangle in a triangle: 2.9325 ν/s under the opening's
+// pressure (issue #52), on Piano · Engineer
 // (Engineer Lv 1 came with the third oscillator).
 function laidOut(): GameState {
   let s = createInitialState();
@@ -109,9 +110,9 @@ describe("End with provisional time owed", () => {
     ]);
     click("Practiced the whole time");
     expect(shell.screen.value.kind).toBe("summary");
-    // 4.5 ν/s × 1 800 credited seconds.
-    expect(line()).toBe("+8 100 ν · Engineer +30 min");
-    expect(shell.state.value.game.nous.toNumber()).toBe(8100);
+    // 2.9325 ν/s × 1 800 credited seconds.
+    expect(line()).toBe("+5 278 ν · Engineer +30 min");
+    expect(shell.state.value.game.nous.toNumber()).toBe(5278.5);
     expect(shell.state.value.game.mode).toBe("upgrade");
   });
 
@@ -120,8 +121,8 @@ describe("End with provisional time owed", () => {
     awayPastPlan(shell);
     click("End");
     click("Didn't practice");
-    expect(line()).toBe("+6 750 ν · Engineer +25 min");
-    expect(shell.state.value.game.nous.toNumber()).toBe(6750);
+    expect(line()).toBe("+4 398 ν · Engineer +25 min");
+    expect(shell.state.value.game.nous.toNumber()).toBe(4398.75);
   });
 
   it("freezes the session clock while the report waits: reading it credits nothing", () => {
@@ -132,8 +133,8 @@ describe("End with provisional time owed", () => {
     tick(shell, 600);
     expect(shell.state.value.game.session!.elapsed).toBe(elapsed);
     click("Practiced the whole time");
-    expect(line()).toBe("+8 100 ν · Engineer +30 min");
-    expect(shell.state.value.game.nous.toNumber()).toBe(8100);
+    expect(line()).toBe("+5 278 ν · Engineer +30 min");
+    expect(shell.state.value.game.nous.toNumber()).toBe(5278.5);
   });
 
   it("never shows the report mid-session", () => {
@@ -152,7 +153,7 @@ describe("End with nothing owed", () => {
     tick(shell, 600);
     click("End");
     expect(shell.screen.value.kind).toBe("summary");
-    expect(line()).toBe("+2 700 ν · Engineer +10 min");
+    expect(line()).toBe("+1 759 ν · Engineer +10 min");
   });
 
   it("appends the level crossed", () => {
@@ -175,7 +176,7 @@ describe("the summary", () => {
     click("End");
     const reopened = mount(storage);
     expect(reopened.screen.value.kind).toBe("summary");
-    expect(line()).toBe("+2 700 ν · Engineer +10 min");
+    expect(line()).toBe("+1 759 ν · Engineer +10 min");
     // One dismiss control, and no reflection input.
     expect(buttons()).toEqual(["Continue"]);
     expect(host.querySelector("input, textarea")).toBeNull();

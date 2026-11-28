@@ -274,8 +274,9 @@ export interface ResonanceInstance {
 }
 
 // One placed oscillator's rate (mechanics-sketch.md, Rates):
-// rate = base × resonance × charge × faders × (1 − pressure). Faders and
-// pressure are identity legs until chunks 06 and 05 fill them in.
+// rate = base × resonance × charge × faders × (1 − pressure). Faders are
+// an identity leg until chunk 06; pressure is the bordering walls' sum,
+// capped at 60% (issue #52).
 export interface OscillatorRate {
   cell: Cell;
   module: OscillatorType;

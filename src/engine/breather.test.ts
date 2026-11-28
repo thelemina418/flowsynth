@@ -68,11 +68,12 @@ describe("breather rates", () => {
     const s = releaseLayout();
     const [release, sine] = s.game.rates.oscillators;
     expect(release!.module).toBe("release");
-    // A Flywheel at 0 Producer hours delivers 1 charge/s: 1 + ln 2.
+    // A Flywheel at 0 Producer hours delivers 1 charge/s: 1 + ln 2. The
+    // opening's walls press 34% on (1,0) and 39% on (0,1) (issue #52).
     expect(release!.rate.toNumber()).toBe(0);
-    expect(release!.breatherRate.toNumber()).toBeCloseTo(6 * (1 + Math.LN2), 12);
-    expect(sine!.breatherRate.toNumber()).toBe(1);
-    expect(s.game.rates.breatherTotal.toNumber()).toBeCloseTo(2 * (1 + 6 * (1 + Math.LN2)), 12);
+    expect(release!.breatherRate.toNumber()).toBeCloseTo(6 * (1 + Math.LN2) * 0.66, 12);
+    expect(sine!.breatherRate.toNumber()).toBeCloseTo(0.61, 12);
+    expect(s.game.rates.breatherTotal.toNumber()).toBeCloseTo(2 * (0.61 + 6 * (1 + Math.LN2) * 0.66), 12);
   });
 });
 
