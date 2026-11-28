@@ -423,3 +423,120 @@ DRY 27.2h–250.0h: 222.8h with no new milestone
 - **After the marked Schist.** Its conquest does not open Mixer yet, since that is Demo's. The Goal's next entry, `Prestige`, is not shown until chunk 06, so the Goal names nothing and the player lays out for ν/s from 10 h on. The board owns 8 cells by then, against chunk 04's 4. The queued grants find room, and the board ends at 43.76 ν/s with four Saws (chunk 04: 6.17). The era's ν is 5.19e7 (#52's run: 4.7e6). The dry stretch from 27 h on is the run waiting for prestige, the next milestone it can read.
 - **Levels.** Roadie joins the rotation at 3.7 h, so each class gets about a third of the credit from then on. Lv 5 (8 h on the class) arrives at 20.5 h for Engineer, 23.8 h for Producer and 27.2 h for Roadie.
 
+
+## Chunk 06: Console and prestige
+
+Issues #58–#64 (parent #57), on `integration/spec-06-console`.
+
+### Built
+
+- **The console and channel faders (#58, #59).** All the console's rules live in `console.ts`: `costOf`, `affordable`, `maxAffordable`, `buyFader`, and the multipliers the rates read. Every catalogue type has a channel base in `modules.ts`. The strip appears the first time any fader is affordable and stays (a saved, monotonic flag). A channel level multiplies the type's ν, charge, Blade damage, Guard Plate shielding or Release breather ν. The Hex detail's `Faders ×…` line shows the product.
+- **Bus faders (#60).** One per category the player has. Each level multiplies the whole category, on top of the type's channel; the Arms bus multiplies Blade damage, not Guard Plate shielding (see Review fixes). The bus row shows from the first affordable bus.
+- **Era ν and the Prestige Goal (#61).** Every ν credit goes through `earn`, which adds to both the balance and `eraNous`. `Prestige` is the Goal from 1e6 era ν, and `prestigeGainOf` = `floor(sqrt(era ν / 1e6))`.
+- **Prestige (#62).** `apply({ type: "prestige" })` works in upgrade mode at 1e6 era ν. It banks the Arete, counts the prestige, and zeroes ν, era ν and the channel and bus levels. The board and everything else stay. The confirmation lists what resets and what's kept.
+- **The master section (#63).** Shown from the first prestige: Channel Taper, Bus Taper and Drive, each bought with Arete at `level + 1`. Their levels survive prestige.
+- **The pace runner plays the chunk (#64).** The `buyCheapestFader` hook now buys the cheapest affordable ν fader, channel or bus, one level at a time through `apply`, until none is affordable. Ties keep the console's order. A new last tending seam, `prestigeWhenWorthwhile`, comes after the breather, so the breather pays into the era it ends. At each visit it reads the Arete the era would bank per credited hour of the era. It prestiges at the first visit where that figure has not risen since the last one. Then it spends all its Arete on the master faders, cheapest first, ties in console order. `PaceTurn` gains `eraStartHours`. The `first-prestige` milestone now has a probe (prestiges ≥ 1), and `Second era ends` and `Third era ends` join it (≥ 2, ≥ 3). The report lists each ended era (length, Arete, the hour it ended) and the current era's hours so far.
+
+### Improvised
+
+- **"Stops rising" is read, not forecast (#64).** The player compares this visit's Arete per era hour with the last visit's. An era worth no Arete reads as 0, so the first Arete always counts as a rise. A lookahead version came first: it estimated the hours to the next Arete from the board's flow ν/s. It ended the first era at 2.5 h, because flow ν/s leaves out breathers and the faders still to buy. Then, once faders compounded, it never ended another era. The read version is the ticket's rule as written. The last reading is kept per turn in a `WeakMap`, so every run reads its own.
+- **Master spending order (#64).** At level 0 all three master faders cost 1, so the console's order decides ties: the first three Arete buy Channel Taper, Bus Taper, then Drive.
+- **Prior pace tests pin the new hooks (#64).** The opening-layout, fight-layout and class-level tests pin `buyCheapestFader: () => {}`, because faders change the figures they read. The breather-ν comparison pins `prestigeWhenWorthwhile: () => {}`, because a prestige mid-run would zero the ν it compares. The prestige tests set era ν as `arete² × PRESTIGE_AT`, so they hold if the divisor is tuned.
+
+### Pace runner
+
+`npm run pace` (250 credited hours) was run at the start of #64 with the authored numbers and the new hooks. It never finished: a 40-hour run was stopped after 12 minutes. Era ν went past 1e1190 by 18 h. The numbers below are from after the tuning.
+
+#### Why the authored console diverged
+
+The ticket's tuning order is master numbers, then the Arete divisor, then fader bases. None of the three reaches the cause, which sits in the steps. Spending S ν on faders whose cost grows by g per level buys about log_g S levels. A ×s step therefore multiplies output by about S^(ln s / ln g). With channel ×1.25 and bus ×1.1 at g = 1.6, an oscillator's own path is S^0.68, so era ν grows like t^3 on a fixed board. The board doesn't stay fixed: classes level, Saws arrive and walls fall. The runner measured local exponents of 5–8.
+
+- **Arete per hour never falls.** Arete is `sqrt(era ν)`, so Arete per hour falls only once era ν grows slower than t². At t^3 or faster, it keeps rising, and no era after the first ever ends.
+- **Shielded oscillators diverge.** A shielded oscillator's ν also takes the Guard Plate's channel and the Arms bus, which adds another 0.68 to the exponent. Past 1 the economy blows up in finite time. Era 2 went from 3.9e4 to 1e1190 ν in 14 hours.
+- **Tapers make it worse.** They lower g toward 1.30, which raises every exponent.
+
+Raising bases only delays the onset, and the divisor only moves where the first Arete lands. Neither changes the exponent.
+
+#### Tuning
+
+All three changes are recorded in `mechanics-sketch.md`:
+
+- **Channel step ×1.25 → ×1.1, bus step ×1.05 (was ×1.1)** (`console.ts`). An oscillator's own path is now S^0.31, with the shielded path at S^0.61. An era's ν settles below t² once its faders are rebought, so Arete per hour peaks soon after the first Arete and the era ends there. The divisor (1e6), the bases, the 1.6 growth and the master numbers are unchanged. Sweeps of Drive at ×1.1–×1.5 and of the taper at −0.02 a level barely moved the first eras, so they stay.
+- **Schist 3e5 → 3e6 HP** (`map.ts`). Faders on the Flywheel, the Blade and the Arms bus multiply Blade damage. With the new steps, the marked Schist fell at 3.6 h at 3e5 (3.3 h at the old steps). At 3e6 it falls at 6.3 h.
+
+The tests that read these figures moved with them: `console.test.ts`, `console-bus.test.ts`, `console-channels.test.ts`, `save-console.test.ts` and `hexReadout.test.ts`. Schist's Hex detail now reads `3e6 / 3e6 HP · regen 15.0/s`, not chunk 05's `300 000 / 300 000`.
+
+The sweep (40–60 h runs) tried: Guard Plate shielding taken as the larger of the oscillator's own faders and the Plate's rather than their product; the divisor at 7e5–3e6; Flywheel and Blade channel bases ×8–×4 000; the bus base at 2e4; and Schist at 2e6–3e7. Two findings shaped the choice:
+
+- **Schist and the first prestige are tied.** The first prestige lands about 3–4 h after the marked Schist falls, because the conquest is what opens room for the board that reaches 1e6. A Schist inside 8–12 h put the first prestige at 11–19 h.
+- **The first era runs 2–3 times as long as later ones.** Later eras start with the board already built. A divisor that put the first prestige in 8–10 h made later eras of 3.3–5 h. One that made later eras 4–8 h put the first at 12 h or later.
+
+The chosen numbers keep the first prestige and the next two eras on target and leave the Schist window short by 1.7 h. The never-a-product Plate changed nothing inside 60 h (eras end before shielding compounds), so the Plate stays a product. The latent divergence is noted below.
+
+#### The run
+
+```
+Pace run: 300 sessions, 250.0h credited
+Board: 6 oscillators, 2 modulators, 3.64e9 ν/s, 8.42e6 charge/s — Saw (0,0), Saw (0,-2), Saw (0,-1), Saw (0,1), Saw (1,0), Triangle (1,-1), Flywheel (-1,1) facing NE, Flywheel (-2,1) facing SE, Patch (-2,1) → (0,-2)
+Era ν: 1.03e15
+Classes: Engineer Lv 14, Producer Lv 14, Roadie Lv 14
+Breathers taken: 300
+Era 1: 9.2h, 1 Arete, ended at 9.2h
+Era 2: 4.2h, 1 Arete, ended at 13.3h
+Era 3: 4.2h, 1 Arete, ended at 17.5h
+Era 4: 3.3h, 1 Arete, ended at 20.8h
+...
+Era 9: 3.3h, 1 Arete, ended at 37.5h
+Era 10: 2.5h, 1 Arete, ended at 40.0h
+...
+Era 17: 2.5h, 1 Arete, ended at 57.5h
+Era 18: 3.3h, 2 Arete, ended at 60.8h
+Era 19: 8.3h, 8 Arete, ended at 69.2h
+Era 20: 17.5h, 19 Arete, ended at 86.7h
+Era 21: 5.0h, 12 Arete, ended at 91.7h
+Era 22: 6.7h, 19 Arete, ended at 98.3h
+Era 23: 13.3h, 80 Arete, ended at 111.7h
+Era 24: 138.3h so far
+
+Milestone                         Reached       Target
+--------------------------------  ------------  --------------------------------------------------
+Roadie opens                      2.0h          first contact with Flint, by about 3h (spec 05)
+Mixer opens                       not reached   conquering the marked Schist (Demo, 15–60h)
+First Shale conquered             0.2h          the first session or two, under about 1h (spec 05)
+First Basalt conquered            2.0h          Sketch, 0–15h (ring 1)
+First Flint conquered             2.5h          Sketch, 0–15h (rings 1–2)
+First Schist conquered            6.3h          Demo, 15–60h (rings 1–2)
+...
+Marked Flint conquered            2.5h          after Roadie opens (Sketch, 0–15h)
+Marked Schist conquered           6.3h          about 8–12h (spec 05)
+Engineer level 5                  20.5h         8h on the class
+Producer level 5                  23.8h         8h on the class
+Roadie level 5                    27.2h         8h on the class
+First prestige (Sketch gate)      9.2h          8–10h, Demo by 15h
+Second era ends                   13.3h         4–8h after the first (spec 06)
+Third era ends                    17.5h         4–8h after the second (spec 06)
+...
+
+DRY 2.5h–6.3h: 3.8h with no new milestone
+DRY 6.3h–9.2h: 2.8h with no new milestone
+DRY 9.2h–13.3h: 4.2h with no new milestone
+DRY 13.3h–17.5h: 4.2h with no new milestone
+DRY 17.5h–20.5h: 3.0h with no new milestone
+DRY 20.5h–23.8h: 3.3h with no new milestone
+DRY 23.8h–27.2h: 3.3h with no new milestone
+DRY 27.2h–250.0h: 222.8h with no new milestone
+```
+
+#### Targets
+
+- **First worthwhile prestige (target: about 8–10 h). Met: 9.2 h.** The era reaches 1e6 during the 10th session. At the next visit, 1 Arete over more hours reads as a fall, and the player prestiges.
+- **Later Sketch eras (target: 4–8 h). Met for the Sketch arc.** Eras 2 and 3 run 4.2 h each and end at 13.3 h and 17.5 h. **Not met past it.** Eras 4–17 run 2.5–3.3 h, as Drive, the tapers and class levels speed each rebuild. The progression map's "4–8 h in Demo" belongs to the Demo arc, whose gates aren't built yet. Each era ends one visit after its first Arete, so through 57 h every era banks exactly 1 Arete.
+- **Long eras after 60 h.** Eras 18–23 bank 2–80 Arete and run 3.3–17.5 h. Era 24 has not ended after 138 h. By then the master section has several Taper levels, and the class levels have brought Saws. The era's growth is back above t², so Arete per hour keeps creeping up. Era ν reaches 1e15, but the run stays bounded and finishes 250 h in about 70 s. This is past this chunk's horizon, but a later chunk tuning Demo should expect it. The Guard Plate's stacking on an oscillator's own faders is the other latent divergence: it is bounded only because eras end before it compounds.
+- **The marked Schist (target: about 8–12 h). Re-checked with faders: not met, 6.3 h.** Faders took it from 10.0 h (chunk 05) to 3.3 h. The step change and the 3e6 HP bring it back to 6.3 h. Any later Schist pushed the first prestige past 10 h (see Tuning above). A better fix could split what drives the two: for example, ν after Schist that doesn't depend on the conquest's extra cells, or a Blade fader with its own growth. That is a design choice, so it's left open here.
+- **Roadie (target: by about 3 h). Met: 2.0 h.** The Flywheel's channel fader helps the first Basalt fall sooner (chunk 05: 3.7 h).
+- **Dry stretches.** The era ends fill the Sketch arc every 4.2 h, but each gap is still over 2 h, and so is 2.5–6.3 h before the marked Schist. No unlock this chunk adds would fill them: walls and classes are the only other milestones. The tail from 27.2 h is the Demo and Record gates, which the engine doesn't track yet.
+
+### Review fixes
+
+- **Guard Plate shielding is the Plate's channel alone.** The Arms bus multiplies every Blade's damage, as the spec says, but no longer the Plate's shielding (`rates.ts`). A shielded oscillator's path is now S^0.51, not S^0.61, so the latent divergence noted above is weaker. `npm run pace` was re-run afterwards: every headline number is unchanged (first prestige 9.2 h, eras 2–3 at 4.2 h, marked Schist 6.3 h, era 24 open at 138.3 h, era ν 1.03e15). So the Arms bus on shielding never moved the runner. No number was retuned.
+- **Smaller fixes.** The console is drawn read-only beneath the breather's calm screen. The prestige confirmation shows its `Prestige` title and the spec's `Resets   ν · fader levels` / `Keeps   …` columns. The Hex detail's faders figure joins the legs line as `×N faders`. Fader levels are written in the ν number format, and every readout reserves room for an uncapped level and an uncapped Drive's Arete cost. The Arete lane reserves the ν lane's figure width.

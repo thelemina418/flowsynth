@@ -62,7 +62,7 @@ An Arm must sit on a cell that borders a wall. If it doesn't, it does nothing an
 | Shale | ring 1 | 600 | 0.1 | 5% |
 | Basalt | ring 1 | 6e3 | 1 | 8% |
 | Flint | ring 1–2 | 6e4 | 10 | 10% |
-| Schist | ring 2 | 3e5 | 15 | 12% |
+| Schist | ring 2 | 3e6 | 15 | 12% |
 | Gneiss | ring 2–3 | 3e7 | 2e3 | 15% |
 | Obsidian | ring 3 | 1e9 | 5e4 | 20% |
 | Granite | ring 3–4 | 1e11 | 3e6 | 25% |
@@ -76,16 +76,23 @@ An Arm must sit on a cell that borders a wall. If it doesn't, it does nothing an
 
 ## Console
 
-- **Channel faders**: one per type the player has. Each level multiplies that type's output (ν for oscillators, charge for modulators, damage for Arms) by ×1.25.
-- **Bus faders**: one per category. Each level multiplies the whole category by ×1.1.
-- Cost is `base × 1.6^level`. Channel bases: Sine 10, Triangle 15, Flywheel 25, Square 200, Saw 1 500, Pulsewell 2 000, Blade 500, Guard Plate 3 000. Bus bases: 5 000 for each category.
+- **Channel faders**: one per type the player has. Each level multiplies that type's output (ν for oscillators, charge for modulators, damage for Arms) by ×1.1.
+- **Bus faders**: one per category. Each level multiplies the whole category by ×1.05.
+- Tuned by the pace runner (issue #64): channel ×1.25 and bus ×1.1 made era ν grow faster than the square of the era's hours, so Arete per hour (`sqrt` of era ν) never stopped rising and no second era ended; with the Guard Plate's fader stacked on an oscillator's own, ν diverged within hours. At ×1.1 and ×1.05 an era's growth settles under that, and an era ends soon after its first Arete.
+- Cost is `base × 1.6^level`. Channel bases: Sine 10, Triangle 15, Flywheel 25, Square 200, Saw 1 500, Release 10 000, Pulsewell 2 000, Blade 500, Guard Plate 3 000. Bus bases: 5 000 for each category.
+- The Release's fader raises its breather ν only; its flow ν stays 0.
+- The Guard Plate's fader: each level multiplies the ν of the oscillators an active Plate shields (beside it, and pressed by a wall but for the Plate) by ×1.1. A shielded oscillator takes the strongest guarding neighbour's multiplier, never a product.
 - The console appears the first time any fader is affordable. Click buys +1; shift-click buys the most affordable.
 
 ## Prestige
 
 - Available once the era's ν reaches 1e6.
 - Arete gained = `floor(sqrt(era ν / 1e6))`.
-- The master section (Arete): faders that make channel and bus costs grow more slowly, and one fader that multiplies all ν. The builder authors 3–5 master faders.
+- The master section (Arete): faders that make channel and bus costs grow more slowly, and one fader that multiplies all ν. The builder authors 3–5 master faders. Shown from the first prestige on; levels survive every prestige. Three are authored:
+  - **Channel Taper** (`channel growth −0.03`): each level takes 0.03 off the channel faders' growth, 1.6 down to 1.30 (cap: level 10). The reduced growth applies over the whole curve, `base × g^level`, so a level lowers every channel fader's next cost at once.
+  - **Bus Taper** (`bus growth −0.03`): the same for the bus faders.
+  - **Drive** (`oscillator ν ×1.5`): each level multiplies all oscillator ν, flow and breather, by ×1.5. Uncapped.
+  - Each costs `level + 1` Arete. Click buys +1; shift-click buys the most affordable. A capped fader reads `max` in place of its cost.
 - It resets ν and fader levels only (ADR-0093).
 
 ## Sessions and breathers

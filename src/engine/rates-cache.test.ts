@@ -222,6 +222,62 @@ describe("recomputing the board's rates", () => {
     expect(isOpen(s.game.board, { q: 0, r: -1 })).toBe(true);
   });
 
+  it("recomputes once for a fader purchase or a max purchase, and never for a refused one (issue #58)", () => {
+    const s = acceptanceLayout();
+    s.game.nous = D(60);
+    counted.mockClear();
+    applyIn(s, { type: "buyFader", fader: { kind: "channel", type: "sine" } });
+    expect(counted).toHaveBeenCalledTimes(1);
+    counted.mockClear();
+    applyIn(s, { type: "buyFader", fader: { kind: "channel", type: "sine" }, max: true });
+    expect(counted).toHaveBeenCalledTimes(1);
+    expect(s.game.console.channels.sine).toBe(3);
+    counted.mockClear();
+    applyIn(s, { type: "buyFader", fader: { kind: "channel", type: "flywheel" } });
+    applyIn(s, { type: "buyFader", fader: { kind: "channel", type: "flywheel" }, max: true });
+    expect(counted).not.toHaveBeenCalled();
+  });
+
+  it("recomputes once for a bus purchase or a max purchase, and never for a refused one (issue #60)", () => {
+    const s = acceptanceLayout();
+    s.game.nous = D(5000 + 8000 + 12800);
+    counted.mockClear();
+    applyIn(s, { type: "buyFader", fader: { kind: "bus", category: "oscillator" } });
+    expect(counted).toHaveBeenCalledTimes(1);
+    counted.mockClear();
+    applyIn(s, { type: "buyFader", fader: { kind: "bus", category: "oscillator" }, max: true });
+    expect(counted).toHaveBeenCalledTimes(1);
+    expect(s.game.console.buses.oscillator).toBe(3);
+    counted.mockClear();
+    applyIn(s, { type: "buyFader", fader: { kind: "bus", category: "modulator" } });
+    applyIn(s, { type: "buyFader", fader: { kind: "bus", category: "arm" }, max: true });
+    expect(counted).not.toHaveBeenCalled();
+  });
+
+  it("recomputes once for a master purchase, and never for a refused one (issue #63)", () => {
+    const s = acceptanceLayout();
+    s.game.prestiges = 1;
+    s.game.arete = D(1);
+    counted.mockClear();
+    applyIn(s, { type: "buyFader", fader: { kind: "master", id: "drive" } });
+    expect(counted).toHaveBeenCalledTimes(1);
+    counted.mockClear();
+    applyIn(s, { type: "buyFader", fader: { kind: "master", id: "drive" } });
+    expect(counted).not.toHaveBeenCalled();
+  });
+
+  it("recomputes once for a prestige, and never for a refused one (issue #62)", () => {
+    const s = acceptanceLayout();
+    s.game.eraNous = D(999_999);
+    counted.mockClear();
+    applyIn(s, { type: "prestige" });
+    expect(counted).not.toHaveBeenCalled();
+    s.game.eraNous = D(1e6);
+    applyIn(s, { type: "prestige" });
+    expect(counted).toHaveBeenCalledTimes(1);
+    expect(s.game.prestiges).toBe(1);
+  });
+
   it("recomputes once on load, from the layout, and never writes the rates to the save", () => {
     const s = acceptanceLayout();
     const text = serialize(s, 0);

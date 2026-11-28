@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { apply } from "../../engine/apply";
-import { giveOscillators } from "../../engine/fixtures";
+import { giveOscillators, openRoadie } from "../../engine/fixtures";
 import { lifetimeCells, type Cell } from "../../engine/hex";
 import { D } from "../../engine/num";
 import { createInitialState } from "../../engine/state";
@@ -52,6 +52,36 @@ describe("the Hex detail readout", () => {
     ]);
   });
 
+  it("shows a faders leg on the legs line while the channel isn't ×1 (issue #58)", () => {
+    let s = laid(ACCEPTANCE);
+    s.game.nous = D(26);
+    for (const max of [false, false]) s = apply(s, { type: "buyFader", fader: { kind: "channel", type: "sine" }, max }).state;
+    expect(s.game.console.channels.sine).toBe(2);
+    // 0.71 × 1.1² = 0.859…
+    expect(texts(s, { q: 0, r: 0 })).toEqual([
+      "Sine · Oscillator",
+      "Not resonating · needs Triangles on opposite sides",
+      "1.0 ν/s base · ×1.21 faders · −29% pressure",
+      "0.85 ν/s",
+    ]);
+    // A Triangle with no channel level shows none.
+    expect(texts(s, { q: 1, r: 0 }).some((t) => t.includes("faders"))).toBe(false);
+  });
+
+  it("folds the Oscillators bus into the faders leg: channel 2 and bus 1 read ×1.1² × 1.05 (issue #60)", () => {
+    let s = laid(ACCEPTANCE);
+    s.game.nous = D(5026);
+    for (const fader of [{ kind: "channel", type: "sine" }, { kind: "channel", type: "sine" }, { kind: "bus", category: "oscillator" }] as const) {
+      s = apply(s, { type: "buyFader", fader }).state;
+    }
+    expect(s.game.console.buses.oscillator).toBe(1);
+    // 1.1² × 1.05 = 1.2705, shown to 3 figures rounded down; 0.71 × that
+    // is 0.902….
+    expect(texts(s, { q: 0, r: 0 }).slice(2)).toEqual(["1.0 ν/s base · ×1.27 faders · −29% pressure", "0.9 ν/s"]);
+    // The Triangle has the bus alone.
+    expect(texts(s, { q: 1, r: 0 })).toContain("1.0 ν/s base · ×1.75 resonance · ×1.05 faders · −34% pressure");
+  });
+
   it("leaves the pressure leg out of an oscillator no wall presses on", () => {
     // (0,1)'s bordering walls owned, as a conquest leaves them, all but none.
     const s = createInitialState();
@@ -92,7 +122,7 @@ describe("the Hex detail readout", () => {
 
   it("names the class a marked wall opens", () => {
     expect(texts(laid([]), { q: 0, r: -2 })).toEqual(["Flint · Wall · ring 2 · opens Roadie", `60${T}000 / 60${T}000 HP · regen 10.0/s`, "Only Arm damage", "Pressure 10%"]);
-    expect(texts(laid([]), { q: -2, r: 1 })).toEqual(["Schist · Wall · ring 2 · opens Mixer", `300${T}000 / 300${T}000 HP · regen 15.0/s`, "Pressure 12%"]);
+    expect(texts(laid([]), { q: -2, r: 1 })).toEqual(["Schist · Wall · ring 2 · opens Mixer", "3e6 / 3e6 HP · regen 15.0/s", "Pressure 12%"]);
   });
 
   it("adds the damage a patched wall takes as its effect line", () => {
@@ -172,5 +202,41 @@ describe("a patched modulator's readout (issue #33)", () => {
 
   it("names an empty target as an open cell", () => {
     expect(texts(patched({ q: 1, r: 0 }), { q: 0, r: 0 })).toEqual(["Flywheel · Modulator · facing NE", "1.0 charge/s · patched → Open cell"]);
+  });
+});
+
+// Channel levels in the Arm and modulator lines (issue #59): the Hex
+// detail reads the multiplied figures from the cached rates.
+describe("the multiplied figures in the Hex detail (issue #59)", () => {
+  // A Blade on the centre turned to NW (Basalt (−1,0)), fed through a
+  // Patch by a Flywheel on (0,1) at 1.4 charge/s (4 credited Producer
+  // hours), with these channel levels.
+  function fedBlade(levels: Partial<Record<ModuleType, number>>): GameState {
+    let s = createInitialState();
+    openRoadie(s);
+    s.game.console.channels = { ...levels };
+    s.records.classCredit.producer = 4 * 3600;
+    const steps: Parameters<typeof apply>[1][] = [
+      { type: "placeModule", module: "blade", cell: { q: 0, r: 0 } },
+      ...Array.from({ length: 4 }, () => ({ type: "rotateModule", cell: { q: 0, r: 0 }, turn: "clockwise" }) as const),
+      { type: "placeModule", module: "flywheel", cell: { q: 0, r: 1 } },
+      { type: "patchCable", cable: "patch", source: { q: 0, r: 1 }, target: { q: 0, r: 0 } },
+    ];
+    for (const step of steps) {
+      const result = apply(s, step);
+      expect(result.ok, result.reason).toBe(true);
+      s = result.state;
+    }
+    return s;
+  }
+
+  it("a Blade at channel level 1 reads 1.4 × 10 × 1.1 = 15.4/s to Basalt", () => {
+    expect(texts(fedBlade({ blade: 1 }), { q: 0, r: 0 })).toEqual(["Blade · Arm · facing NW", "1.4 charge/s received", "15.4/s to Basalt"]);
+  });
+
+  it("a Flywheel at channel level 1 reads 1.4 × 1.1 = 1.54 charge/s, and the Blade receives it", () => {
+    const s = fedBlade({ flywheel: 1 });
+    expect(texts(s, { q: 0, r: 1 })).toEqual(["Flywheel · Modulator · facing NE", "1.54 charge/s · patched → Blade"]);
+    expect(texts(s, { q: 0, r: 0 })).toEqual(["Blade · Arm · facing NW", "1.54 charge/s received", "15.4/s to Basalt"]);
   });
 });

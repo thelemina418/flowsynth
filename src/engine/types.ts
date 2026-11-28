@@ -305,8 +305,9 @@ export interface ResonanceInstance {
 
 // One placed oscillator's rate (mechanics-sketch.md, Rates):
 // rate = base × resonance × charge × faders × (1 − pressure). Faders are
-// an identity leg until chunk 06; pressure is the bordering walls' sum,
-// capped at 60% (issue #52).
+// the type's channel multiplier (issue #58) × the Oscillators bus (#60) ×
+// a shielding Guard Plate's channel (#59) × Drive (#63); pressure is the
+// bordering walls' sum, capped at 60% (issue #52).
 export interface OscillatorRate {
   cell: Cell;
   module: OscillatorType;
@@ -411,9 +412,33 @@ export interface BoardRates {
   breatherTotal: Num;
 }
 
+// The master section's faders (issue #63), bought with Arete.
+export type MasterId = "channelTaper" | "busTaper" | "drive";
+
+// The console (spec chunk 06, issue #58; GLOSSARY: Console, Fader): each
+// type's channel fader level and each category's bus level (issue #60),
+// both absent = 0 and reset by prestige; the master levels (issue #63);
+// and the console's monotonic disclosure: `shown.console` flips the first
+// time any fader is affordable, `shown.buses` the first time a bus fader
+// is, and neither flips back (engine/console.ts).
+export interface ConsoleState {
+  channels: Partial<Record<ModuleType, number>>;
+  buses: Partial<Record<ModuleCategory, number>>;
+  // The master levels (issue #63): prestige never resets them.
+  master: Partial<Record<MasterId, number>>;
+  shown: { console: boolean; buses: boolean };
+}
+
 // The game state.
 export interface Game {
   nous: Num;
+  // The era's ν (issue #61): everything made since the era began.
+  // Spending never lowers it (engine/era.ts).
+  eraNous: Num;
+  // The Arete banked by prestiges (issue #62; ADR-0039), and how many
+  // prestiges have ended an era. Prestige never resets either.
+  arete: Num;
+  prestiges: number;
   mode: Mode;
   session: SessionState | null;
   summary: SessionSummary | null;
@@ -428,6 +453,7 @@ export interface Game {
   // The allowance and the arrived types are derived from class credit and
   // the open classes (engine/levels.ts, issue #38), never stored.
   board: Board;
+  console: ConsoleState;
   // Derived from the board, never saved (engine/rates.ts).
   rates: BoardRates;
 }

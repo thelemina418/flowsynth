@@ -272,5 +272,31 @@
 }
 .breather-line { font-size: 18px; color: var(--muted); overflow-wrap: anywhere; }
 .breather-clock { color: var(--ink); }
+/* The console beneath it (issue #58), read-only, at the board's width; its
+   strip scrolls inside itself, never the page. */
+.breather-console { width: min(100%, 640px); min-width: 0; }
 .summary-breather { font-size: 13px; color: var(--muted); }
 .shell-transport { gap: 8px; }
+
+/* The prestige confirmation (issue #62): a small panel over the board,
+   which stays in view beneath a dimmed scrim. */
+.prestige-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+
+.prestige-confirm { width: min(100%, 380px); }
+.prestige-lists {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+}
+/* Each row's label and list fall into the grid's two columns. */
+.prestige-list { display: contents; }
+.prestige-label { color: var(--muted); }
+.prestige-gain { color: var(--arete); }

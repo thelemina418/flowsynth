@@ -7,6 +7,25 @@
   gap: 12px;
 }
 
+/* The ν readout and, from the first prestige, the Arete readout beside it
+   (issue #62), each in its own fixed lane. */
+.nous-lane {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+}
+
+/* ADR-0031: the Arete lane reserves the same figure width as the ν lane
+   (16ch less `ν `), after its longer `Arete ` label. */
+.arete-readout {
+  min-width: 20ch;
+  font-size: 17px;
+  line-height: 1.2;
+  color: var(--arete);
+  white-space: nowrap;
+}
+
 /* ADR-0031: the readout's lane is fixed, so the figure changes, never the
    layout. */
 .nous-readout {
@@ -287,3 +306,14 @@
   line-height: 1.2;
   color: var(--ink);
 }
+
+/* The Prestige Goal (issue #62) is the one Goal the player acts on: the
+   same line, outlined in the Arete register as an available control. */
+.goal-action {
+  justify-self: start;
+  padding: 6px 10px;
+  border-color: var(--arete-line);
+  color: var(--arete);
+  text-align: left;
+}
+.goal-action:hover { background: var(--arete-faint); border-color: var(--arete); }

@@ -33,9 +33,15 @@ interface StageProps {
   readouts?: ComponentChildren;
   // The Goal line on the board (issue #42), in upgrade mode only.
   goal?: string | null;
+  // A Goal the player acts on (the Prestige Goal, issue #62) is a button.
+  onGoal?: (() => void) | undefined;
+  // The Arete beside ν from the first prestige on (issue #62), else null.
+  arete?: Num | null;
+  // The console strip below the board (issue #58), once it shows.
+  console?: ComponentChildren;
 }
 
-export function Stage({ nous, board, rates, flowing, arrived, arrivedCables, unplaced, chips, placing, inspected, tray = true, readouts, goal = null }: StageProps) {
+export function Stage({ nous, board, rates, flowing, arrived, arrivedCables, unplaced, chips, placing, inspected, tray = true, readouts, goal = null, onGoal, arete = null, console }: StageProps) {
   useEffect(() => {
     const dismiss = () => {
       placing.clear();
@@ -52,7 +58,7 @@ export function Stage({ nous, board, rates, flowing, arrived, arrivedCables, unp
     };
     const onClick = (event: MouseEvent) => {
       const target = event.target instanceof Element ? event.target : null;
-      if (!target?.closest("[data-cell], [data-plug], [data-tray], [data-hex-detail]")) dismiss();
+      if (!target?.closest("[data-cell], [data-plug], [data-tray], [data-hex-detail], [data-prestige-confirm]")) dismiss();
     };
     document.addEventListener("keydown", onKey);
     document.addEventListener("click", onClick);
@@ -90,17 +96,23 @@ export function Stage({ nous, board, rates, flowing, arrived, arrivedCables, unp
   const open = inspected.value;
   return (
     <section class="stage">
-      {readouts === undefined && <NousReadout nous={nous} />}
-      {goal !== null && (
-        <p class="goal-line mono" data-goal="">
-          {goal}
-        </p>
-      )}
+      {readouts === undefined && <NousReadout nous={nous} arete={arete} />}
+      {goal !== null &&
+        (onGoal ? (
+          <button type="button" class="goal-line goal-action mono" data-goal="" onClick={onGoal}>
+            {goal}
+          </button>
+        ) : (
+          <p class="goal-line mono" data-goal="">
+            {goal}
+          </p>
+        ))}
       <div class={tray ? "stage-board" : "stage-board stage-board-alone"}>
         <Board board={board} rates={rates} flowing={flowing} placing={placing} inspected={open} onCell={onCell} onPlug={onPlug} onDrop={onDrop} />
         {tray && <Tray arrived={arrived} cables={arrivedCables} unplaced={unplaced} chips={chips} placing={placing} onDrop={onDrop} />}
       </div>
       {readouts}
+      {console}
       <HexDetail board={board} rates={rates} cell={open} />
       {note !== null && (
         <p class="board-note mono" role="status">

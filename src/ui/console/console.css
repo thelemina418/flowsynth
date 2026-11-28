@@ -1,0 +1,85 @@
+/* The console (issue #58): a strip of faders below the board in The
+   Rack's tokens. A fader is a vertical throw whose fill is its level,
+   with its readout beneath. Hue is category only: the throw's fill wears
+   the type's category hue. The state grammar: an affordable fader is a
+   clear outline, anything else muted (the base control's disabled
+   state). On a phone the strip scrolls inside itself, never the page. */
+.console {
+  /* The strip's content never sizes the page: its width comes from the
+     stage, and the faders scroll inside it. */
+  contain: inline-size;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 10px;
+}
+
+.console-section {
+  display: flex;
+  gap: 8px;
+  width: max-content;
+}
+
+/* The bus section (issue #60) stands apart from the channels behind a
+   hairline rule on the strip: its own row beneath them, so it is never
+   scrolled out of sight behind a long channel row. */
+.console-section-ruled {
+  min-width: 100%;
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.fader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-color: var(--line-strong);
+}
+
+.fader-throw {
+  position: relative;
+  display: block;
+  width: 10px;
+  height: 56px;
+  border: 1px solid var(--line);
+  background: var(--panel-deep);
+}
+
+.fader-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--hue-oscillator);
+}
+
+.fader[data-category="modulator"] .fader-fill { background: var(--hue-modulator); }
+.fader[data-category="arm"] .fader-fill { background: var(--hue-arm); }
+
+.fader-readout {
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.fader[data-muted] .fader-throw { border-color: var(--line-soft); }
+.fader[data-muted] .fader-fill { opacity: 0.45; }
+
+/* The master section (issue #63) is in the Arete register: its throws
+   fill in Arete, never a category hue, an affordable one is outlined in
+   Arete, and each carries its one effect line beneath the readout. */
+.fader[data-master] .fader-fill { background: var(--arete); }
+.fader[data-master]:not([data-muted]) { border-color: var(--arete-line); }
+
+.fader-effect {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: nowrap;
+}

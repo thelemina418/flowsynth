@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { D, pow } from "./num";
 import { begin, applyIn, advanceIn, fresh, giveHabit, giveOscillators } from "./fixtures";
 import { grantsOf } from "./levels";
+import { discloseConsole } from "./console";
 import { SAVE_VERSION } from "./constants";
 import { deserialize, recoverLostSave, serialize, SaveRefusedError } from "./save";
 
@@ -39,6 +40,8 @@ describe("save v16", () => {
       const s = flowing();
       s.game.nous = nous;
       s.game.session!.accounting.provisionalNous = pow(10, 5_000);
+      // A balance set by hand: the console shows as a commit would show it.
+      discloseConsole(s);
       const loaded = deserialize(serialize(s, 1_000));
       expect(loaded.error).toBeUndefined();
       expect(loaded.state).toEqual(s);

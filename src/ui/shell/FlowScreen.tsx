@@ -1,8 +1,10 @@
 import { useState } from "preact/hooks";
+import { shownArete } from "../../engine/era";
 import { activeHabit } from "../../engine/habits";
 import { foughtWall } from "../../engine/fought";
 import { grantsOf } from "../../engine/levels";
 import { Stage } from "../board/Stage";
+import { Console } from "../console/Console";
 import { NousReadout } from "../board/NousReadout";
 import { Notes } from "./Notes";
 import { clockCaption, clockFigure, classLine, hpRow, readyCount } from "./readouts";
@@ -18,7 +20,7 @@ import type { Shell } from "./shell";
 // The HP row is the fought wall's (issue #50), absent while none is
 // fought; it moves to the next wall when one falls, and adds no control.
 // No tray, Goal or doors, and nothing prompts the player. Board clicks
-// inspect read-only. The clock and the Notes door are the old console's.
+// inspect read-only, and the console (issue #58) is drawn muted. The clock and the Notes door are the old console's.
 export function FlowScreen({ shell, error }: { shell: Shell; error: string | null }) {
   const [notes, setNotes] = useState(false);
   const state = shell.state.value;
@@ -43,9 +45,10 @@ export function FlowScreen({ shell, error }: { shell: Shell; error: string | nul
         placing={shell.placing}
         inspected={shell.inspected}
         tray={false}
+        console={<Console state={state} live={false} onBuy={() => undefined} />}
         readouts={
           <div class="flow-readouts">
-            <NousReadout nous={game.nous} />
+            <NousReadout nous={game.nous} arete={shownArete(state)} />
             <div class="flow-right">
               {line !== null && (
                 <p class="flow-class mono" data-class-line="">

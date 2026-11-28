@@ -120,7 +120,9 @@ export function fmtRate(value: Num): string {
 
 // A wall's HP: the one figure that rounds up rather than truncating, so it
 // agrees with the HP bar, whose last cell stays lit while any HP is left.
-// It reads 0 only at the conquest (issue #50).
+// It reads 0 only at the conquest (issue #50). A fader's cost (issue #58)
+// reads through it too, so a balance that reads at least the cost always
+// affords it.
 export function fmtHp(value: Num): string {
   return fmt(Decimal.max(0, value.sub(NUDGE).ceil()));
 }

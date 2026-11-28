@@ -108,9 +108,9 @@ describe("the board on a fresh start", () => {
     const rest = visible.filter((el) => !el.classList.contains("wall-initial")).map((el) => el.textContent);
     expect(rest.sort()).toEqual(["Sine", "Triangle", "Flywheel", "1 Patch cable", "ν 0", "Conquer Shale", "Begin flow"].sort());
     expect(host.querySelector("[data-goal]")!.textContent).toBe("Conquer Shale");
-    // No chips, doors, class line or breather control before the first
-    // completed session.
-    expect(host.querySelectorAll("[data-chip], [data-doors], [data-class-line], [data-breather]")).toHaveLength(0);
+    // Nothing else before the first completed session or affordable fader.
+    // No chips, doors, class line, breather control or console (issue #58).
+    expect(host.querySelectorAll("[data-chip], [data-doors], [data-class-line], [data-breather], [data-console]")).toHaveLength(0);
     expect(host.querySelectorAll(".cord, [data-plug], .bead")).toHaveLength(0);
     // The Hex detail is empty.
     expect(host.querySelector("[data-hex-detail]")!.textContent).toBe("");

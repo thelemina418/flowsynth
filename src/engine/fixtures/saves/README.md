@@ -213,3 +213,81 @@ const loaded = deserialize(text);
 if (loaded.error) throw new Error(loaded.error);
 writeFileSync(process.argv[3]!, serialize(loaded.state!, JSON.parse(text).savedAt) + "\n");
 ```
+
+## `v16-chunk05.json`
+
+A genuine chunk-05 v16 save, written before the console existed, which
+`src/engine/save-console.test.ts` loads to check chunk 06 reads it with
+every fader at 0 and nothing else changed (issue #58).
+
+**Provenance.** Written by chunk 05's own engine and save code at commit
+`7e4503f` (the merge of `integration/spec-05-walls`, `SAVE_VERSION` 16),
+through `apply` and `advance` only, not hand-made. The script below ran as
+a one-off vitest file at that commit (`FIXTURE_OUT=<out.json> npm test --
+<file>`); that build read the save back and re-serialized it byte for byte
+(`<out.json>.reread` was identical). Its output is committed byte for byte
+and frozen.
+
+**Text.** Placeholder names, note and reflection only.
+
+**What it holds.** Two classed habits (Engineer, Producer), three sessions
+(one with a reflection, one followed by a breather), a daily Intention, a
+Note, Shale conquered by a patched Flywheel, a Sine and a Triangle, and
+9 338.67 ν on the balance.
+
+```ts
+import { writeFileSync } from "node:fs";
+import { it } from "vitest";
+import { advance } from "./advance";
+import { apply, type Action } from "./apply";
+import { deserialize, serialize } from "./save";
+import { createInitialState } from "./state";
+import type { GameState } from "./types";
+
+it("writes the chunk-05 v16 fixture", () => {
+  let s: GameState = createInitialState();
+  const DAY = 86_400_000;
+  let now = Date.UTC(2026, 10, 20, 15, 0, 0); // 2026-11-20
+  const must = (action: Action): string | undefined => {
+    const r = apply(s, action);
+    if (!r.ok) throw new Error(`${action.type}: ${r.reason}`);
+    s = r.state;
+    return r.id;
+  };
+  const flow = (seconds: number) => {
+    for (let done = 0; done < seconds; done += 60) {
+      s = advance(s, Math.min(60, seconds - done), "flow", "visible").state;
+      now += Math.min(60, seconds - done) * 1000;
+    }
+  };
+  const engineer = must({ type: "createHabit", name: "Habit A", habitClass: "engineer" })!;
+  const producer = must({ type: "createHabit", name: "Habit B", habitClass: "producer" })!;
+  must({ type: "createIntention", habitId: engineer, minutes: 30, schedule: "daily", now });
+  must({ type: "writeNote", text: "Placeholder note between sessions.", now });
+  function session(habitId: string, minutes: number, reflect: boolean, breather: boolean) {
+    must({ type: "startSession", habitId, target: minutes * 60, now });
+    flow(minutes * 60);
+    must({ type: "endSession", now });
+    if (reflect) must({ type: "reflect", text: "Placeholder reflection.", slider: 4 });
+    must({ type: "dismissSummary" });
+    if (breather && s.game.breather.banked) {
+      must({ type: "takeBreather", now });
+      s = advance(s, 120, "breather", "visible").state;
+      now += 120_000;
+      if (s.game.breather.running) must({ type: "endBreatherEarly" });
+      if (s.game.breather.result) must({ type: "dismissBreatherResult" });
+    }
+    now += DAY;
+  }
+  must({ type: "placeModule", module: "sine", cell: { q: 0, r: 0 } });
+  must({ type: "placeModule", module: "triangle", cell: { q: 1, r: 0 } });
+  must({ type: "placeModule", module: "flywheel", cell: { q: 0, r: 1 } });
+  must({ type: "patchCable", cable: "patch", source: { q: 0, r: 1 }, target: { q: -1, r: 1 } });
+  session(engineer, 25, true, false);
+  session(producer, 45, false, true);
+  session(engineer, 40, false, false);
+  const text = serialize(s, now);
+  writeFileSync(process.env.FIXTURE_OUT!, text + "\n");
+  writeFileSync(process.env.FIXTURE_OUT! + ".reread", serialize(deserialize(text).state!, now) + "\n");
+});
+```

@@ -4,12 +4,14 @@ import { createInitialState } from "./state";
 import { cableName } from "./cables";
 import { cellKind, isOpen, wallHp } from "./board";
 import { addCell, cellKey, DIRECTIONS, distance, FACING_NAMES, lifetimeCells, neighbours, sameCell, type Cell } from "./hex";
+import { prestigeAvailable, prestigeGainOf } from "./era";
 import { goalOf } from "./goal";
 import { BASALT_CELLS, FLINT_CELL, SCHIST_CELL, SHALE_CELL, wallAt, wallOf, type WallKind } from "./map";
 import { cableFrom, moduleAt } from "./placement";
 import { classLevel, grantsOf } from "./levels";
 import { hasFacing, isArm, isModulator, isOscillator, moduleName } from "./modules";
-import { add, D, fmt, fmtRate, gt, type Num } from "./num";
+import { affordable, busFaders, channelFaders, costOf, masterFaders, type FaderId } from "./console";
+import { add, D, fmt, fmtRate, gt, lt, type Num } from "./num";
 import type { AdvanceMode, AdvanceResult, Cable, GameState, HabitClass, ModuleType, Placement } from "./types";
 
 // The pace runner (spec chunk 01, `npm run pace`): a scripted reasonable
@@ -62,6 +64,9 @@ const title = (word: string) => word[0]!.toUpperCase() + word.slice(1);
 const kindConquered = (kind: WallKind) => (s: GameState) => s.game.board.open.some((cell) => wallAt(cell)?.kind === kind);
 const cellConquered = (cell: Cell) => (s: GameState) => isOpen(s.game.board, cell);
 
+// The era's end: the prestige count (spec chunk 06, issue #64).
+const prestigedAtLeast = (count: number) => (s: GameState) => s.game.prestiges >= count;
+
 export const PROGRESSION_MILESTONES: MilestoneProbe[] = [
   ...CLASSES.map((c) => ({ id: `class-open:${c}`, label: `${title(c)} opens`, target: CLASS_OPENS[c], reached: classOpen(c) })),
   ...WALLS.map((w) => ({
@@ -73,7 +78,9 @@ export const PROGRESSION_MILESTONES: MilestoneProbe[] = [
   { id: "wall:marked-flint", label: "Marked Flint conquered", target: "after Roadie opens (Sketch, 0–15h)", reached: cellConquered(FLINT_CELL) },
   { id: "wall:marked-schist", label: "Marked Schist conquered", target: "about 8–12h (spec 05)", reached: cellConquered(SCHIST_CELL) },
   ...CLASSES.map((c) => ({ id: `class-level-5:${c}`, label: `${title(c)} level 5`, target: "8h on the class", reached: classAtLevel(c, 5) })),
-  { id: "first-prestige", label: "First prestige (Sketch gate)", target: "8–10h, Demo by 15h" },
+  { id: "first-prestige", label: "First prestige (Sketch gate)", target: "8–10h, Demo by 15h", reached: prestigedAtLeast(1) },
+  { id: "second-era-ends", label: "Second era ends", target: "4–8h after the first (spec 06)", reached: prestigedAtLeast(2) },
+  { id: "third-era-ends", label: "Third era ends", target: "4–8h after the second (spec 06)", reached: prestigedAtLeast(3) },
   { id: "gate:obsidian", label: "Obsidian conquered (Demo gate)", target: "60h" },
   { id: "gate:corundum", label: "Corundum conquered (Record gate)", target: "140h" },
   { id: "gate:master", label: "Master finished (Encore opens)", target: "250h" },
@@ -87,6 +94,9 @@ export const PROGRESSION_MILESTONES: MilestoneProbe[] = [
 export interface PaceTurn {
   readonly state: GameState;
   readonly now: number;
+  // The credited hours at which the current era began: 0, or the hours
+  // at the last prestige (issue #64).
+  readonly eraStartHours: number;
   apply(action: Action): ApplyResult;
   advance(seconds: number, mode: AdvanceMode): AdvanceResult;
 }
@@ -99,16 +109,63 @@ export interface TendingHooks {
   buyCheapestFader(turn: PaceTurn): void;
   placeAllowance(turn: PaceTurn): void;
   patchChargeToNearestWall(turn: PaceTurn): void;
+  prestigeWhenWorthwhile(turn: PaceTurn): void;
 }
 
 export const DEFAULT_TENDING: TendingHooks = {
   takeBankedBreathers: takeBreatherInFull,
-  buyCheapestFader: () => {},
+  buyCheapestFader,
   placeAllowance: followGoal,
   // The Goal-following layout (issue #55) already patches into the Goal's
   // wall when that makes it fall soonest.
   patchChargeToNearestWall: () => {},
+  prestigeWhenWorthwhile,
 };
+
+// The fader step (spec chunk 06, issue #64): the player buys the cheapest
+// affordable ν fader, channel or bus, one level at a time, until none is
+// affordable. Ties keep the console's order. Arete faders are the prestige
+// step's.
+export function buyCheapestFader(turn: PaceTurn): void {
+  buyCheapestOf(turn, (state) => [...channelFaders(state), ...busFaders(state)]);
+}
+
+// Buys the cheapest affordable fader among those `faders` lists, a level
+// at a time, until none is affordable. Ties keep the list's order.
+function buyCheapestOf(turn: PaceTurn, faders: (state: GameState) => FaderId[]): void {
+  for (;;) {
+    const state = turn.state;
+    let cheapest: { fader: FaderId; cost: Num } | null = null;
+    for (const fader of faders(state)) {
+      if (!affordable(state, fader)) continue;
+      const cost = costOf(state, fader);
+      if (cheapest === null || lt(cost, cheapest.cost)) cheapest = { fader, cost };
+    }
+    if (cheapest === null) return;
+    must(turn.apply({ type: "buyFader", fader: cheapest.fader }), "buying a fader");
+  }
+}
+
+// The prestige step (spec chunk 06, issue #64): at each visit the player
+// reads the Arete the era would bank per credited hour of the era, and ends
+// the era at the first visit where that has stopped rising since the last.
+// An era worth no Arete reads as nothing, so the first Arete is always a
+// rise. Then it spends all its Arete on the master faders, cheapest first.
+// The last reading is kept per turn, so each run reads its own.
+const lastAretePerHour = new WeakMap<PaceTurn, { prestiges: number; perHour: number }>();
+
+export function prestigeWhenWorthwhile(turn: PaceTurn): void {
+  const state = turn.state;
+  if (state.game.mode !== "upgrade") return;
+  const eraHours = creditedHoursOf(state) - turn.eraStartHours;
+  const perHour = eraHours > 0 ? prestigeGainOf(state).toNumber() / eraHours : 0;
+  const last = lastAretePerHour.get(turn);
+  const before = last !== undefined && last.prestiges === state.game.prestiges ? last.perHour : 0;
+  lastAretePerHour.set(turn, { prestiges: state.game.prestiges, perHour });
+  if (perHour === 0 || perHour > before || !prestigeAvailable(state)) return;
+  must(turn.apply({ type: "prestige" }), "prestiging");
+  buyCheapestOf(turn, masterFaders);
+}
 
 // The breather step (spec chunk 04, issue #45): the player takes the
 // banked breather, runs breather time for its whole length, and dismisses
@@ -265,6 +322,8 @@ function soonestFall(state: GameState, targets: readonly Cell[]): { seconds: num
 // advances), so the greedy placement can build on it.
 class Plan implements PaceTurn {
   readonly actions: Action[] = [];
+  // A plan lays out a board; no era ends in one.
+  readonly eraStartHours = 0;
   constructor(public state: GameState, readonly now: number) {}
   apply(action: Action): ApplyResult {
     const result = apply(this.state, action);
@@ -461,6 +520,14 @@ export interface MilestoneRow {
   tracked: boolean;
 }
 
+// An era the run ended by prestige: the credited hours it ended at, its
+// length, and the Arete it banked.
+export interface EraRow {
+  endsAtHours: number;
+  lengthHours: number;
+  arete: Num;
+}
+
 export interface DryStretch {
   fromHours: number;
   toHours: number;
@@ -483,6 +550,8 @@ export interface PaceReport {
   // Each open class's level at the end of the run, in class order.
   classLevels: { habitClass: HabitClass; level: number }[];
   breathersTaken: number;
+  // Each era the run ended, in order (issue #64).
+  eras: EraRow[];
   // Every stretch longer than DRY_STRETCH_HOURS with no new milestone,
   // including the one from the last milestone to the end of the run.
   dryStretches: DryStretch[];
@@ -526,6 +595,8 @@ export function runPace(script: PaceScript): PaceReport {
   let state = script.start ?? createInitialState();
   let now = START_EPOCH_MS;
   let breathersTaken = 0;
+  let eraStartHours = creditedHoursOf(state);
+  const eras: EraRow[] = [];
   const turn: PaceTurn = {
     get state() {
       return state;
@@ -533,10 +604,19 @@ export function runPace(script: PaceScript): PaceReport {
     get now() {
       return now;
     },
+    get eraStartHours() {
+      return eraStartHours;
+    },
     apply: (action) => {
+      const gain = action.type === "prestige" ? prestigeGainOf(state) : null;
       const result = apply(state, action);
       state = result.state;
       if (result.ok && action.type === "takeBreather") breathersTaken++;
+      if (result.ok && gain !== null) {
+        const endsAtHours = creditedHoursOf(state);
+        eras.push({ endsAtHours, lengthHours: endsAtHours - eraStartHours, arete: gain });
+        eraStartHours = endsAtHours;
+      }
       return result;
     },
     advance: (seconds, mode) => {
@@ -581,6 +661,7 @@ export function runPace(script: PaceScript): PaceReport {
     tending.buyCheapestFader(turn);
     turn.advance(tendSeconds, "upgrade");
     tending.takeBankedBreathers(turn);
+    tending.prestigeWhenWorthwhile(turn);
     observe();
     now += restMs;
   }
@@ -605,9 +686,10 @@ export function runPace(script: PaceScript): PaceReport {
     rate: state.game.rates.total,
     charge: state.game.rates.modulators.reduce((sum, m) => add(sum, m.output), D(0)),
     walls: state.game.rates.walls.map((w) => ({ name: wallOf(w.cell).name, cell: { ...w.cell }, damage: w.damage })),
-    nous: state.game.nous,
+    nous: state.game.eraNous,
     classLevels: CLASSES.filter((c) => state.game.openClasses.includes(c)).map((habitClass) => ({ habitClass, level: classLevel(state, habitClass).level })),
     breathersTaken,
+    eras,
     dryStretches: dryStretches([...reachedAt.values()], creditedHours),
   };
 }
@@ -655,6 +737,8 @@ export function formatPaceReport(report: PaceReport): string {
     `Era ν: ${fmt(report.nous)}`,
     `Classes: ${report.classLevels.map((c) => `${title(c.habitClass)} Lv ${c.level}`).join(", ")}`,
     `Breathers taken: ${report.breathersTaken}`,
+    ...report.eras.map((e, i) => `Era ${i + 1}: ${hours(e.lengthHours)}, ${fmt(e.arete)} Arete, ended at ${hours(e.endsAtHours)}`),
+    `Era ${report.eras.length + 1}: ${hours(report.creditedHours - (report.eras.at(-1)?.endsAtHours ?? 0))} so far`,
     "",
     line(head),
     line(widths.map((w) => "-".repeat(w))),

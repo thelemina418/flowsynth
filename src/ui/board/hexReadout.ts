@@ -4,7 +4,7 @@ import { className } from "../../engine/habits";
 import { modifierName, wallOf } from "../../engine/map";
 import { categoryName, categoryOf, moduleName, takesCharge } from "../../engine/modules";
 import { cableFrom, moduleAt } from "../../engine/placement";
-import { fmtHp, fmtPercent, fmtRate, gt } from "../../engine/num";
+import { eq, fmtHp, fmtPercent, fmtRate, gt } from "../../engine/num";
 import { wallRateAt } from "../../engine/rates";
 import type { ArmRate, Board, BoardRates, ModulatorRate, ModuleType, OscillatorRate, OscillatorType, ReachHolds } from "../../engine/types";
 
@@ -14,7 +14,8 @@ import type { ArmRate, Board, BoardRates, ModulatorRate, ModuleType, OscillatorR
 // numbers are the ones ν rises by. At most five lines, one of them the
 // effect line. A leg shows only while it isn't identity: resonance while
 // resonating, charge while charge is received (issue #32), pressure while
-// a wall presses on it (issue #52); faders wait for chunk 06.
+// a wall presses on it (issue #52), faders while the console raises it
+// (issue #58), each a `×N word` leg on the one legs line.
 
 export interface DetailLine {
   text: string;
@@ -133,11 +134,14 @@ function oscillatorLines(o: OscillatorRate): DetailLine[] {
     lines.push({ text: `Resonating ×${count} · ${words.verb} ${shapes.join(", ")}`, effect: true });
   }
   // The legs line: base, then each leg that isn't identity. The charge leg
-  // appears only when charge is received (issue #32), the pressure leg only
-  // while a wall presses on it (issue #52).
+  // appears only when charge is received (issue #32), the faders leg only
+  // while the console raises it (issue #58), the pressure leg only while a
+  // wall presses on it (issue #52).
   const legs = [`${fmtRate(o.base)} ν/s base`];
   if (count > 0) legs.push(`×${fmtRate(o.resonance)} resonance`);
   if (gt(o.chargeReceived, 0)) legs.push(`×${fmtRate(o.charge)} charge`);
+  // What the console raises it by, while that isn't ×1 (issue #58).
+  if (!eq(o.faders, 1)) legs.push(`×${fmtRate(o.faders)} faders`);
   if (gt(o.pressure, 0)) legs.push(`−${fmtPercent(o.pressure)}% pressure`);
   if (legs.length > 1) lines.push({ text: legs.join(" · ") });
   lines.push({ text: `${fmtRate(o.rate)} ν/s` });

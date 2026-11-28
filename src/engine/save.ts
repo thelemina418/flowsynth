@@ -6,12 +6,13 @@ import { D, fromSave, gte, isNum, lte, NumFault, toSave, type Num } from "./num"
 import { ARCS, cellKind, openingBoard } from "./board";
 import { wallAt } from "./map";
 import { cellKey, isFacing, LIFETIME_RADIUS, ring, type Cell } from "./hex";
-import { hasFacing, isModuleType } from "./modules";
+import { channelBaseOf, hasFacing, isModuleCategory, isModuleType } from "./modules";
 import { isCableType, newCableRefusal, type CableRoom } from "./cables";
 import { grantsOf } from "./levels";
 import { emptyEncyclopedia, isEntryId, revealEntries } from "./encyclopedia";
 import { computeBoardRates } from "./rates";
-import type { Arc, Board, BreatherState, Cable, EncyclopediaState, EntryId, GameState, Habit, HabitClass, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary, SummaryWall, WallHp } from "./types";
+import { discloseConsole, emptyConsole, isMasterId, masterCap } from "./console";
+import type { Arc, Board, BreatherState, Cable, ConsoleState, EncyclopediaState, EntryId, GameState, Habit, HabitClass, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary, SummaryWall, WallHp } from "./types";
 
 // The save boundary. Save v16 (issue #18) writes the nested GameState
 // (`records`, `game`) with every Decimal as num's save string, and reads it
@@ -366,6 +367,23 @@ function lostNestedFigures(game: Record<string, unknown>): string[] {
   return lost;
 }
 
+// A figure that is never negative: absent, unreadable, non-finite or
+// negative, it reads as the fallback. The era's nous (issue #61) falls back
+// to the loaded balance: a save from before chunk 06 has none, and nothing
+// was spendable then, so its balance is the era's nous. The banked Arete
+// (issue #62) falls back to 0: a save from before the first prestige has
+// none.
+function readNonNegativeNum(value: unknown, fallback: Num): Num {
+  if (value === undefined || !readableNum(value)) return fallback;
+  const read = readNum(value, fallback);
+  return Number.isFinite(read.mag) && gte(read, 0) ? read : fallback;
+}
+
+// The prestige count (issue #62): a non-negative whole number, else 0.
+function readPrestiges(value: unknown): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
 // Under recovery a lost figure starts at zero; otherwise it was refused
 // before this read.
 function readLostable(value: unknown): Num {
@@ -404,6 +422,8 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
   // `arrivedCables` is ignored.
   const { cableAllowance, arrivedCables } = grantsOf({ records: { ...fresh.records, classCredit }, game: { ...fresh.game, openClasses } });
   board.cables = readCables(isRecord(game.board) ? game.board.cables : undefined, { board, cableAllowance, arrivedCables });
+  const console = readConsole(game.console);
+  const nous = readLostable(game.nous);
   const state: GameState = {
     records: {
       habits: (records.habits as Habit[]).map(readHabit),
@@ -418,7 +438,10 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
       nextId: finiteOr(records.nextId, fresh.records.nextId),
     },
     game: {
-      nous: readLostable(game.nous),
+      nous,
+      eraNous: readNonNegativeNum(game.eraNous, nous),
+      arete: readNonNegativeNum(game.arete, D(0)),
+      prestiges: readPrestiges(game.prestiges),
       mode,
       session: flowing ? readSession(game.session as Partial<SessionState>) : null,
       summary: isRecord(game.summary) ? readSummary(game.summary as Partial<SessionSummary>) : null,
@@ -427,13 +450,50 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
       openClasses,
       legacyLine: typeof game.legacyLine === "string" ? game.legacyLine : null,
       board,
+      console,
       // Recomputed once from the layout; a saved rate is never read.
-      rates: computeBoardRates(board, classCredit.producer),
+      rates: computeBoardRates(board, classCredit.producer, console),
     },
   };
   revealEntries(state);
+  discloseConsole(state);
   const recovered = recovery && lost.length > 0 ? { fromVersion: version, lost } : undefined;
   return { state, ...(recovered && { recovered }) };
+}
+
+// The console (issue #58): additive v16 fields. A level is kept only when
+// it is a non-negative integer for a type with a channel fader; anything
+// else is dropped and reads 0. The disclosure flag is kept only when it is
+// `true`; the reader then recomputes it from the loaded state.
+function readConsole(raw: unknown): ConsoleState {
+  const console = emptyConsole();
+  if (!isRecord(raw)) return console;
+  for (const [type, level] of levelEntries(raw.channels)) {
+    if (isModuleType(type) && channelBaseOf(type) !== null) console.channels[type] = level;
+  }
+  // The bus levels and their own flag (issue #60), read the same way.
+  for (const [category, level] of levelEntries(raw.buses)) {
+    if (isModuleCategory(category)) console.buses[category] = level;
+  }
+  // The master levels (issue #63): an unknown id is dropped, and a level
+  // past its fader's cap reads as the cap.
+  for (const [id, level] of levelEntries(raw.master)) {
+    if (!isMasterId(id)) continue;
+    const cap = masterCap(id);
+    console.master[id] = cap === null ? level : Math.min(level, cap);
+  }
+  if (isRecord(raw.shown) && raw.shown.console === true) console.shown.console = true;
+  if (isRecord(raw.shown) && raw.shown.buses === true) console.shown.buses = true;
+  return console;
+}
+
+// A saved level map's positive integer entries; anything else reads 0.
+function levelEntries(raw: unknown): [string, number][] {
+  if (!isRecord(raw) || Array.isArray(raw)) return [];
+  return Object.entries(raw).filter((entry): entry is [string, number] => {
+    const level = entry[1];
+    return typeof level === "number" && Number.isInteger(level) && level > 0;
+  });
 }
 
 function readCell(value: unknown): Cell | null {
@@ -577,7 +637,7 @@ function readV15(raw: Record<string, unknown>, recovery: boolean): LoadResult {
     game: {
       ...fresh.game,
       // The migration starts from the opening board, and its rates.
-      rates: computeBoardRates(fresh.game.board, fresh.records.classCredit.producer),
+      rates: computeBoardRates(fresh.game.board, fresh.records.classCredit.producer, fresh.game.console),
       legacyLine: legacyLineOf(raw.modules),
       mode: flowing ? (raw.mode as GameState["game"]["mode"]) : "upgrade",
       session: flowing ? readSession(raw.session as Partial<SessionState>) : null,

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { applyIn, giveOscillators, giveProducer, openRoadie, ownCells } from "./fixtures";
-import { creditedHoursOf, DEFAULT_TENDING, followGoal, formatPaceReport, placeAllowanceGreedily, runPace, type MilestoneProbe, type PaceTurn } from "./pace";
+import { applyIn, giveHabit, giveOscillators, giveProducer, openRoadie, ownCells } from "./fixtures";
+import { buyCheapestFader, creditedHoursOf, DEFAULT_TENDING, followGoal, formatPaceReport, placeAllowanceGreedily, prestigeWhenWorthwhile, PROGRESSION_MILESTONES, runPace, type MilestoneProbe, type PaceTurn } from "./pace";
+import { D } from "./num";
+import { PRESTIGE_AT } from "./era";
 import { createInitialState } from "./state";
+import { advance } from "./advance";
+import { apply } from "./apply";
+import type { GameState } from "./types";
 
 // The pace runner (spec chunk 01, issue #20): a scripted reasonable player
 // driven through `apply` and `advance`. Its numbers are consulted, never
@@ -51,7 +56,7 @@ describe("dry stretches", () => {
 });
 
 describe("the tending seams", () => {
-  it("places the allowance once before the first session, then per session places, patches, buys faders and takes the breather (ADR-0095)", () => {
+  it("places the allowance once before the first session, then per session places, patches, buys faders, takes the breather and weighs prestige (ADR-0095)", () => {
     const calls: string[] = [];
     const hook = (name: string) => () => { calls.push(name); };
     runPace({
@@ -62,9 +67,12 @@ describe("the tending seams", () => {
         buyCheapestFader: hook("fader"),
         placeAllowance: hook("allowance"),
         patchChargeToNearestWall: hook("patch"),
+        prestigeWhenWorthwhile: hook("prestige"),
       },
     });
-    expect(calls).toEqual(["allowance", "allowance", "patch", "fader", "breathers"]);
+    // The prestige step comes last, so the breather pays into the era it
+    // ends (issue #64).
+    expect(calls).toEqual(["allowance", "allowance", "patch", "fader", "breathers", "prestige"]);
   });
 });
 
@@ -82,6 +90,7 @@ describe("the breather step", () => {
           DEFAULT_TENDING.takeBankedBreathers({
             get state() { return turn.state; },
             get now() { return turn.now; },
+            get eraStartHours() { return turn.eraStartHours; },
             apply: (action) => turn.apply(action),
             advance: (seconds, mode) => {
               const r = turn.advance(seconds, mode);
@@ -97,8 +106,9 @@ describe("the breather step", () => {
   });
 
   it("pays the breather's ν into the era", () => {
-    const without = runPace({ creditedHours: 2.5, milestones: [], tending: { takeBankedBreathers: () => {} } });
-    const taken = runPace({ creditedHours: 2.5, milestones: [] });
+    // No prestige: an era ended mid-run would zero the ν compared.
+    const without = runPace({ creditedHours: 2.5, milestones: [], tending: { takeBankedBreathers: () => {}, prestigeWhenWorthwhile: () => {} } });
+    const taken = runPace({ creditedHours: 2.5, milestones: [], tending: { prestigeWhenWorthwhile: () => {} } });
     expect(without.breathersTaken).toBe(0);
     expect(taken.nous.toNumber()).toBeGreaterThan(without.nous.toNumber());
   });
@@ -106,7 +116,9 @@ describe("the breather step", () => {
   it("prints the breathers taken and each open class's level", () => {
     // Four 50-minute sessions alternate Engineer and Producer: 100 minutes
     // each, past 0.5 h and 1.5 h, so both classes read Lv 2.
-    const text = formatPaceReport(runPace({ creditedHours: 3, milestones: [] }));
+    // No faders: they bring Basalt down sooner, and Roadie opening would
+    // share the rotation.
+    const text = formatPaceReport(runPace({ creditedHours: 3, milestones: [], tending: { buyCheapestFader: () => {} } }));
     expect(text).toContain("Breathers taken: 4\n");
     expect(text).toContain("Classes: Engineer Lv 2, Producer Lv 2\n");
   });
@@ -131,7 +143,7 @@ describe("the class-level probes", () => {
 // The greedy placement before the first session only: the board the
 // opening allowance makes, before any class level grants more. No breather
 // is taken, so the era's ν is flow ν alone.
-function openingOnly(): { tending: { placeAllowance: (turn: PaceTurn) => void; takeBankedBreathers: () => void } } {
+function openingOnly(): { tending: { placeAllowance: (turn: PaceTurn) => void; takeBankedBreathers: () => void; buyCheapestFader: () => void } } {
   let first = true;
   return {
     tending: {
@@ -140,12 +152,14 @@ function openingOnly(): { tending: { placeAllowance: (turn: PaceTurn) => void; t
         first = false;
       },
       takeBankedBreathers: () => {},
+      // No faders: these pin the layout's own figures (issue #64).
+      buyCheapestFader: () => {},
     },
   };
 }
 
 // The Goal-following layout before the first session only.
-function openingOnlyGoal(): { tending: { placeAllowance: (turn: PaceTurn) => void; takeBankedBreathers: () => void } } {
+function openingOnlyGoal(): { tending: { placeAllowance: (turn: PaceTurn) => void; takeBankedBreathers: () => void; buyCheapestFader: () => void } } {
   let first = true;
   return {
     tending: {
@@ -154,6 +168,8 @@ function openingOnlyGoal(): { tending: { placeAllowance: (turn: PaceTurn) => voi
         first = false;
       },
       takeBankedBreathers: () => {},
+      // No faders: these pin the layout's own figures (issue #64).
+      buyCheapestFader: () => {},
     },
   };
 }
@@ -172,6 +188,14 @@ describe("placing the allowance", () => {
     expect(report.placements).toHaveLength(3);
     expect(report.rate.toNumber()).toBeCloseTo(1.91896, 4);
     expect(report.nous.toNumber()).toBeCloseTo(22_519.5, 0);
+  });
+
+  it("reads the era's ν for the report, not the balance (issue #61)", () => {
+    // The same run from an era already 5e5 ν in, all of it spent.
+    const start = createInitialState();
+    start.game.eraNous = D(5e5);
+    const report = runPace({ creditedHours: 3, start, ...openingOnly() });
+    expect(report.nous.toNumber()).toBeCloseTo(522_519.5, 0);
   });
 
   it("places the third oscillator Engineer Lv 1 grants after the first session, and resonates (issue #38)", () => {
@@ -265,6 +289,7 @@ describe("placing the allowance", () => {
           placeAllowanceGreedily({
             get state() { return turn.state; },
             get now() { return turn.now; },
+            get eraStartHours() { return turn.eraStartHours; },
             apply: (action) => { const r = turn.apply(action); results.push(r.ok); return r; },
             advance: (s, m) => turn.advance(s, m),
           }),
@@ -336,5 +361,143 @@ describe("building up to a fall", () => {
     const report = runPace({ creditedHours: 0.05, start, ...openingOnlyGoal() });
     expect(report.walls.map((w) => w.name)).toEqual(["Schist"]);
     expect(report.walls[0]!.damage.toNumber()).toBeCloseTo(23, 6);
+  });
+});
+
+// A turn on one state, outside a run: the hooks' own seam.
+function turnOn(start: GameState, eraStartHours = 0): PaceTurn {
+  let state = start;
+  return {
+    get state() { return state; },
+    get now() { return 0; },
+    get eraStartHours() { return eraStartHours; },
+    apply: (action) => { const r = apply(state, action); state = r.state; return r; },
+    advance: (seconds, mode) => { const r = advance(state, seconds, mode); state = r.state; return r; },
+  };
+}
+
+// The console (spec chunk 06, issue #64): between sessions the player buys
+// the cheapest affordable fader, again and again, until none is.
+describe("buying faders", () => {
+  it("buys the cheapest affordable ν fader until none is affordable", () => {
+    // A fresh start has the Sine (base 10), the Triangle (15) and the
+    // Flywheel (25), each cost ×1.6 a level. 100 ν buys Sine 10, Triangle
+    // 15, Sine 16, Triangle 24, Flywheel 25, leaving 10: under Sine's
+    // 25.6, Triangle's 38.4 and Flywheel's 40.
+    const start = createInitialState();
+    start.game.nous = D(100);
+    const turn = turnOn(start);
+    buyCheapestFader(turn);
+    expect(turn.state.game.console.channels).toEqual({ sine: 2, triangle: 2, flywheel: 1 });
+    expect(turn.state.game.nous.toNumber()).toBeCloseTo(10, 6);
+  });
+});
+
+// An era `hours` credited hours into the run, at `arete` squared times the
+// divisor (PRESTIGE_AT), so the era is worth exactly `arete` Arete.
+function eraAt(hours: number, arete: number): GameState {
+  const state = createInitialState();
+  giveHabit(state, "Piano", "engineer").habit.seconds = hours * 3600;
+  state.game.eraNous = D(arete * arete * PRESTIGE_AT);
+  return state;
+}
+
+// Moves the run to `hours` credited, at an era worth `arete`.
+function later(turn: PaceTurn, hours: number, arete: number): void {
+  turn.state.records.habits[0]!.seconds = hours * 3600;
+  turn.state.game.eraNous = D(arete * arete * PRESTIGE_AT);
+}
+
+// The prestige step (spec chunk 06, issue #64): the player reads the
+// Arete the era would bank per credited hour of it at each visit, and ends
+// the era at the first visit where that has stopped rising. Then it spends
+// all its Arete on the master faders, cheapest first.
+describe("prestiging when worthwhile", () => {
+  it("waits while the era is worth no Arete", () => {
+    const turn = turnOn(eraAt(8, 0.9));
+    prestigeWhenWorthwhile(turn);
+    later(turn, 9, 0.99);
+    prestigeWhenWorthwhile(turn);
+    expect(turn.state.game.prestiges).toBe(0);
+  });
+
+  it("keeps the era at its first Arete: Arete per hour has just risen from nothing", () => {
+    const turn = turnOn(eraAt(8, 3));
+    prestigeWhenWorthwhile(turn);
+    expect(turn.state.game.prestiges).toBe(0);
+  });
+
+  it("keeps the era while Arete per hour still rises", () => {
+    // 2 Arete in 8 hours is 0.25 an hour; 3 in 8.5 is 0.35.
+    const turn = turnOn(eraAt(8, 2));
+    prestigeWhenWorthwhile(turn);
+    later(turn, 8.5, 3);
+    prestigeWhenWorthwhile(turn);
+    expect(turn.state.game.prestiges).toBe(0);
+  });
+
+  it("prestiges once Arete per hour stops rising, and spends the Arete cheapest first", () => {
+    // 3 Arete in 8 hours is 0.375 an hour; still 3 at 9 hours is 0.33.
+    // All three master faders cost 1 at level 0; ties keep the console's
+    // order.
+    const turn = turnOn(eraAt(8, 3));
+    prestigeWhenWorthwhile(turn);
+    later(turn, 9, 3);
+    prestigeWhenWorthwhile(turn);
+    expect(turn.state.game.prestiges).toBe(1);
+    expect(turn.state.game.console.master).toEqual({ channelTaper: 1, busTaper: 1, drive: 1 });
+    expect(turn.state.game.arete.toNumber()).toBe(0);
+  });
+
+  it("counts the era's hours from its start, not the run's", () => {
+    // The era began at 7.5 h: 3 Arete in half an hour is 6 an hour, and 4
+    // in one hour is 4: it prestiges. From the run's start, 3 in 8 hours
+    // and 4 in 8.5 would still be rising.
+    const turn = turnOn(eraAt(8, 3), 7.5);
+    prestigeWhenWorthwhile(turn);
+    later(turn, 8.5, 4);
+    prestigeWhenWorthwhile(turn);
+    expect(turn.state.game.prestiges).toBe(1);
+  });
+
+  it("records each era the run ends: where it ended, its length and its Arete", () => {
+    // An era worth 3 Arete at the start. The first session's visit reads 3
+    // Arete in 50 minutes; the second's, 3 in 100: it prestiges.
+    const report = runPace({ creditedHours: 1.5, start: eraAt(0, 3), milestones: [] });
+    expect(report.eras).toHaveLength(1);
+    expect(report.eras[0]!.arete.toNumber()).toBe(3);
+    expect(report.eras[0]!.endsAtHours).toBeCloseTo(100 / 60);
+    expect(report.eras[0]!.lengthHours).toBeCloseTo(100 / 60);
+  });
+});
+
+describe("the era milestones", () => {
+  it("report the first prestige and the ends of the second and third eras at the hours they came", () => {
+    // Each era is worth 3 Arete from its first breather on, so each ends
+    // at its second session's visit. The probes read the prestige count.
+    const probes = PROGRESSION_MILESTONES.filter((m) => ["first-prestige", "second-era-ends", "third-era-ends"].includes(m.id));
+    expect(probes.map((m) => m.label)).toEqual(["First prestige (Sketch gate)", "Second era ends", "Third era ends"]);
+    const report = runPace({
+      creditedHours: 5,
+      start: eraAt(0, 3),
+      milestones: probes,
+      tending: {
+        takeBankedBreathers: (turn) => {
+          DEFAULT_TENDING.takeBankedBreathers(turn);
+          turn.state.game.eraNous = D(9 * PRESTIGE_AT);
+        },
+      },
+    });
+    expect(report.milestones.map((m) => m.reachedAtHours)).toEqual([
+      expect.closeTo(100 / 60), expect.closeTo(200 / 60), expect.closeTo(300 / 60),
+    ]);
+    expect(report.eras.map((e) => e.lengthHours)).toEqual([expect.closeTo(100 / 60), expect.closeTo(100 / 60), expect.closeTo(100 / 60)]);
+  });
+
+  it("prints each era's length and Arete", () => {
+    const report = runPace({ creditedHours: 1.5, start: eraAt(0, 3), milestones: [] });
+    const text = formatPaceReport(report);
+    expect(text).toContain("Era 1: 1.7h, 3 Arete, ended at 1.7h\n");
+    expect(text).toContain("Era 2: 0.0h so far\n");
   });
 });

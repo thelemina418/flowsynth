@@ -1,4 +1,4 @@
-import { disclosureOf, goalOf } from "../../engine/goal";
+import { disclosureOf, goalOf, prestigeIsGoal } from "../../engine/goal";
 import { hasUnseen } from "../../engine/encyclopedia";
 import { grantsOf } from "../../engine/levels";
 import { unplacedOf } from "../../engine/placement";
@@ -16,6 +16,9 @@ import { breatherMinutes } from "./readouts";
 import { RecoveryChoice } from "./RecoveryChoice";
 import { downloadSave } from "./download";
 import { Stage } from "../board/Stage";
+import { Console } from "../console/Console";
+import { prestigeGainOf, shownArete } from "../../engine/era";
+import { PrestigeConfirm } from "./PrestigeConfirm";
 
 // The shell's one surface (issue #21): the question owed on first load,
 // and once nothing is owed, the board and its tray (issues #24, #25),
@@ -31,6 +34,10 @@ export function App({ shell }: { shell: Shell }) {
   const game = state.game;
   const grants = grantsOf(state);
   const shown = disclosureOf(state);
+  const goal = goalOf(state);
+  // The Prestige Goal opens its confirmation (issue #62).
+  const prestigeGoal = prestigeIsGoal(state) && game.mode === "upgrade";
+  const arete = shownArete(state);
   return (
     <div class="shell">
       <h1 class="sr-only">FlowSynth</h1>
@@ -63,10 +70,16 @@ export function App({ shell }: { shell: Shell }) {
           arrivedCables={grants.arrivedCables}
           unplaced={unplacedOf(state)}
           chips={shown.chips}
-          goal={goalOf(state)}
+          goal={goal}
+          onGoal={prestigeGoal ? () => shell.openPrestige() : undefined}
+          arete={arete}
           placing={shell.placing}
           inspected={shell.inspected}
+          console={<Console state={state} live={game.mode === "upgrade"} onBuy={(fader, max) => shell.buyFader(fader, max)} />}
         />
+      )}
+      {screen.kind === "ready" && prestigeGoal && shell.confirmingPrestige.value && (
+        <PrestigeConfirm gain={prestigeGainOf(state)} onCancel={() => shell.cancelPrestige()} onConfirm={() => shell.prestige()} />
       )}
       {screen.kind === "ready" && (
         <div class="shell-transport">
@@ -107,7 +120,7 @@ export function App({ shell }: { shell: Shell }) {
       {screen.kind === "flow" && <FlowScreen shell={shell} error={screen.error} />}
       {screen.kind === "honesty" && <HonestyReport session={screen.session} error={screen.error} onAnswer={(outcome) => shell.answerHonesty(outcome)} />}
       {screen.kind === "summary" && <Summary summary={screen.summary} onDismiss={() => shell.dismissSummary()} />}
-      {screen.kind === "breather" && <Breather running={screen.running} onEndEarly={() => shell.endBreatherEarly()} />}
+      {screen.kind === "breather" && <Breather state={state} running={screen.running} onEndEarly={() => shell.endBreatherEarly()} />}
       {screen.kind === "breather-result" && <BreatherResult result={screen.result} onDismiss={() => shell.dismissBreatherResult()} />}
     </div>
   );

@@ -1,0 +1,279 @@
+{
+  "app": "flowsynth",
+  "version": 16,
+  "savedAt": 1795452720000,
+  "state": {
+    "records": {
+      "habits": [
+        {
+          "id": "h1",
+          "name": "Habit A",
+          "seconds": 3900,
+          "archived": false,
+          "color": "vermillion",
+          "habitClass": "engineer"
+        },
+        {
+          "id": "h2",
+          "name": "Habit B",
+          "seconds": 2700,
+          "archived": false,
+          "color": "vermillion",
+          "habitClass": "producer"
+        }
+      ],
+      "activeHabitId": "h1",
+      "practiceLog": [
+        {
+          "id": "p5",
+          "habitId": "h1",
+          "seconds": 1500,
+          "source": "live",
+          "at": 1795188300000
+        },
+        {
+          "id": "p6",
+          "habitId": "h2",
+          "seconds": 2700,
+          "source": "live",
+          "at": 1795277400000
+        },
+        {
+          "id": "p7",
+          "habitId": "h1",
+          "seconds": 2400,
+          "source": "live",
+          "at": 1795366320000
+        }
+      ],
+      "sessionRecords": [
+        {
+          "sessionNumber": 1,
+          "startedAt": 1795186800000,
+          "endedAt": 1795188300000,
+          "habitId": "h1",
+          "mode": "planned",
+          "plannedTarget": 1500,
+          "creditedSeconds": 1500,
+          "honestyEvents": [],
+          "reflection": {
+            "text": "Placeholder reflection.",
+            "slider": 4
+          },
+          "goalsAdvanced": [
+            {
+              "goalId": "g3",
+              "seconds": 1500,
+              "goal": {
+                "id": "g3",
+                "condition": {
+                  "kind": "habit-minutes",
+                  "habitId": "h1",
+                  "minutes": 30
+                },
+                "schedule": {
+                  "kind": "daily"
+                },
+                "occurrenceKey": "2026-11-20",
+                "progressSeconds": 1500,
+                "completed": false,
+                "completedCount": 0,
+                "createdAt": 1795186800000
+              }
+            }
+          ]
+        },
+        {
+          "sessionNumber": 2,
+          "startedAt": 1795274700000,
+          "endedAt": 1795277400000,
+          "habitId": "h2",
+          "mode": "planned",
+          "plannedTarget": 2700,
+          "creditedSeconds": 2700,
+          "honestyEvents": [],
+          "reflection": null,
+          "goalsAdvanced": []
+        },
+        {
+          "sessionNumber": 3,
+          "startedAt": 1795363920000,
+          "endedAt": 1795366320000,
+          "habitId": "h1",
+          "mode": "planned",
+          "plannedTarget": 2400,
+          "creditedSeconds": 2400,
+          "honestyEvents": [],
+          "reflection": null,
+          "goalsAdvanced": [
+            {
+              "goalId": "g3",
+              "seconds": 1800,
+              "goal": {
+                "id": "g3",
+                "condition": {
+                  "kind": "habit-minutes",
+                  "habitId": "h1",
+                  "minutes": 30
+                },
+                "schedule": {
+                  "kind": "daily"
+                },
+                "occurrenceKey": "2026-11-22",
+                "progressSeconds": 0,
+                "completed": false,
+                "completedCount": 1,
+                "createdAt": 1795186800000
+              }
+            }
+          ]
+        }
+      ],
+      "notes": [
+        {
+          "id": "n4",
+          "sessionId": 0,
+          "atElapsed": -1,
+          "text": "Placeholder note between sessions.",
+          "habitId": null,
+          "at": 1795186800000
+        }
+      ],
+      "intentions": [
+        {
+          "id": "g3",
+          "condition": {
+            "kind": "habit-minutes",
+            "habitId": "h1",
+            "minutes": 30
+          },
+          "schedule": {
+            "kind": "daily"
+          },
+          "occurrenceKey": "2026-11-22",
+          "progressSeconds": 0,
+          "completed": false,
+          "completedCount": 1,
+          "createdAt": 1795186800000
+        }
+      ],
+      "classCredit": {
+        "engineer": 3900,
+        "producer": 2700,
+        "mixer": 0,
+        "roadie": 0
+      },
+      "sessionIndex": 3,
+      "sessionsCompleted": 3,
+      "nextId": 8
+    },
+    "game": {
+      "nous": "9338.666666666664",
+      "mode": "upgrade",
+      "session": null,
+      "summary": {
+        "sessionNumber": 3,
+        "seconds": 2400,
+        "nous": "3407.9999999999977",
+        "habitClass": "engineer",
+        "classSeconds": 2400,
+        "levelBefore": 0,
+        "levelAfter": 1,
+        "breather": 480,
+        "plannedTarget": 2400,
+        "honestyEvents": [],
+        "reflection": null,
+        "seen": true,
+        "walls": []
+      },
+      "breather": {
+        "banked": {
+          "seconds": 480
+        },
+        "running": null,
+        "result": null
+      },
+      "encyclopedia": {
+        "revealed": [
+          "sine",
+          "triangle",
+          "walls",
+          "pressure",
+          "charge",
+          "cables",
+          "classes",
+          "breather"
+        ],
+        "seen": []
+      },
+      "openClasses": [
+        "engineer",
+        "producer"
+      ],
+      "legacyLine": null,
+      "board": {
+        "open": [
+          {
+            "q": 0,
+            "r": 0
+          },
+          {
+            "q": 1,
+            "r": 0
+          },
+          {
+            "q": 0,
+            "r": 1
+          },
+          {
+            "q": 1,
+            "r": -1
+          },
+          {
+            "q": -1,
+            "r": 1
+          }
+        ],
+        "arc": "sketch",
+        "placements": [
+          {
+            "cell": {
+              "q": 0,
+              "r": 0
+            },
+            "module": "sine"
+          },
+          {
+            "cell": {
+              "q": 1,
+              "r": 0
+            },
+            "module": "triangle"
+          },
+          {
+            "cell": {
+              "q": 0,
+              "r": 1
+            },
+            "module": "flywheel",
+            "facing": 0
+          }
+        ],
+        "cables": [
+          {
+            "type": "patch",
+            "source": {
+              "q": 0,
+              "r": 1
+            },
+            "target": {
+              "q": -1,
+              "r": 1
+            }
+          }
+        ],
+        "walls": []
+      }
+    }
+  }
+}

@@ -106,8 +106,28 @@ describe("the breather in upgrade mode", () => {
     expect(read("[data-breather]")).toBe("Step away. The board is running. 10:00End early");
     tick(shell, 19);
     expect(read("[data-breather-clock]")).toBe("9:41");
-    expect(buttons()).toEqual(["End early"]);
+    expect([...host.querySelectorAll("button:not(.fader)")].map((b) => b.textContent)).toEqual(["End early"]);
     expect(host.querySelector(".stage, [data-cell], .shell-transport")).toBeNull();
+  });
+
+  it("draws the console read-only beneath the calm screen: every fader muted, buying nothing (issue #58)", () => {
+    const s = banked();
+    s.game.console.shown.console = true;
+    const shell = mount(saved(s));
+    click("Take breather · 10 min");
+    expect(shell.screen.value.kind).toBe("breather");
+    expect(host.querySelector("[data-console]")).not.toBeNull();
+    expect(host.querySelector("[data-console]")!.hasAttribute("data-live")).toBe(false);
+    const faders = [...host.querySelectorAll<HTMLButtonElement>("[data-console] .fader")];
+    expect(faders.map((f) => f.dataset.fader).slice(0, 3)).toEqual(["sine", "triangle", "flywheel"]);
+    const before = shell.state.value.game;
+    for (const fader of faders) {
+      expect(fader.hasAttribute("data-muted")).toBe(true);
+      expect(fader.disabled).toBe(true);
+      act(() => fader.click());
+    }
+    expect(shell.state.value.game.console).toEqual(before.console);
+    expect(shell.state.value.game.nous.eq(before.nous)).toBe(true);
   });
 
   it("End early pays nothing and shows Take breather again", () => {

@@ -1,6 +1,7 @@
 import { render } from "preact";
 import "./ui/shell/shell.css";
 import "./ui/board/board.css";
+import "./ui/console/console.css";
 import { browserSaveStorage } from "./ui/shared-save";
 import { App } from "./ui/shell/App";
 import { Shell } from "./ui/shell/shell";
