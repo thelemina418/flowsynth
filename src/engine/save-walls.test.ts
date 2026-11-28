@@ -105,6 +105,9 @@ describe("wall HP in a v16 save", () => {
     // ν affords a fader at all reaches a bus fader's 5 000 too.
     expect(game.console).toEqual({ channels: {}, buses: {}, shown: { console: consoleShown, buses: consoleShown } });
     delete game.console;
+    // The era's ν (issue #61): the save's ν, since nothing was spendable before.
+    expect(game.eraNous).toBe(game.nous);
+    delete game.eraNous;
     for (const holder of [game.board, game.session, game.summary, game.breather.result].filter((h) => h !== null)) {
       expect(holder.walls).toEqual([]);
       delete holder.walls;

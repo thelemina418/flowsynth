@@ -59,6 +59,9 @@ describe("the console in a v16 save", () => {
     // 9 338 ν reaches a bus fader's 5 000 too (issue #60).
     expect(reread.state.game.console).toEqual({ channels: {}, buses: {}, shown: { console: true, buses: true } });
     delete reread.state.game.console;
+    // The era's ν (issue #61) is named too: the save's own ν.
+    expect(reread.state.game.eraNous).toBe(fixture.state.game.nous);
+    delete reread.state.game.eraNous;
     expect(reread).toEqual(fixture);
   });
 

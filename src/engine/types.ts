@@ -427,6 +427,9 @@ export interface ConsoleState {
 // The game state.
 export interface Game {
   nous: Num;
+  // The era's ν (issue #61): everything made since the era began.
+  // Spending never lowers it (engine/era.ts).
+  eraNous: Num;
   mode: Mode;
   session: SessionState | null;
   summary: SessionSummary | null;

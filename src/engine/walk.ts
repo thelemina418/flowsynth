@@ -1,6 +1,7 @@
 import { EPS } from "./constants";
 import { add, mul, requireFinite, requireNotNaN } from "./num";
 import { stepWalls } from "./conquest";
+import { earn } from "./era";
 import { accrueLivePractice } from "./habits";
 import { accrueIntentionProgress } from "./intentions";
 import type { AdvanceResult, GameState } from "./types";
@@ -45,7 +46,7 @@ export function walkFlow(state: GameState, seconds: number, sink: Sink): Advance
   // and each piece pays at the rate that held through it.
   stepWalls(state, seconds, (span) => {
     const made = mul(state.game.rates.total, span);
-    state.game.nous = requireNotNaN(add(state.game.nous, made), "nous");
+    earn(state, made);
     session.nousMade = requireNotNaN(add(session.nousMade, made), "the session's nous");
     accounting.creditedSeconds = requireFinite(accounting.creditedSeconds + span, "the credited practice time");
     if (span > EPS) {

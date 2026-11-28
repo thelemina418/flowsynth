@@ -1,4 +1,5 @@
 import { isOpen } from "./board";
+import { prestigeAvailable } from "./era";
 import { grantsOf } from "./levels";
 import { BASALT_CELLS, FLINT_CELL, SCHIST_CELL, SHALE_CELL } from "./map";
 import { placedCount } from "./placement";
@@ -17,8 +18,7 @@ interface GoalEntry {
 }
 
 const always = () => true;
-// Declared now; chunk 06 (prestige) fills in the predicates.
-const later = () => false;
+const never = () => false;
 
 const SKETCH: readonly GoalEntry[] = [
   {
@@ -31,7 +31,9 @@ const SKETCH: readonly GoalEntry[] = [
   { label: "Reach Flint", shown: always, done: (s) => s.game.openClasses.includes("roadie") },
   { label: "Conquer Flint", shown: always, done: (s) => isOpen(s.game.board, FLINT_CELL) },
   { label: "Conquer Schist", shown: always, done: (s) => isOpen(s.game.board, SCHIST_CELL) },
-  { label: "Prestige", shown: later, done: later },
+  // Shown once the era's ν reaches 1e6 (issue #61); never done, since a
+  // prestige sets the era's ν to 0, which hides it.
+  { label: "Prestige", shown: prestigeAvailable, done: never },
 ];
 
 const PRIORITIES: Record<Arc, readonly GoalEntry[]> = {

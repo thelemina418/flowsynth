@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyIn, giveOscillators, giveProducer, openRoadie, ownCells } from "./fixtures";
 import { creditedHoursOf, DEFAULT_TENDING, followGoal, formatPaceReport, placeAllowanceGreedily, runPace, type MilestoneProbe, type PaceTurn } from "./pace";
+import { D } from "./num";
 import { createInitialState } from "./state";
 
 // The pace runner (spec chunk 01, issue #20): a scripted reasonable player
@@ -172,6 +173,14 @@ describe("placing the allowance", () => {
     expect(report.placements).toHaveLength(3);
     expect(report.rate.toNumber()).toBeCloseTo(1.91896, 4);
     expect(report.nous.toNumber()).toBeCloseTo(22_519.5, 0);
+  });
+
+  it("reads the era's ν for the report, not the balance (issue #61)", () => {
+    // The same run from an era already 5e5 ν in, all of it spent.
+    const start = createInitialState();
+    start.game.eraNous = D(5e5);
+    const report = runPace({ creditedHours: 3, start, ...openingOnly() });
+    expect(report.nous.toNumber()).toBeCloseTo(522_519.5, 0);
   });
 
   it("places the third oscillator Engineer Lv 1 grants after the first session, and resonates (issue #38)", () => {
