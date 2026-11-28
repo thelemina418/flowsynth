@@ -9,7 +9,7 @@ import { entriesOf } from "./encyclopedia";
 import { goalOf } from "./goal";
 import { grantsOf } from "./levels";
 import type { Cell } from "./hex";
-import type { GameState, ModuleType } from "./types";
+import type { BladeRate, GameState, ModuleType } from "./types";
 
 // Roadie opens, and the Blade (spec chunk 05, issue #53), through the
 // GameState seam: a conquest that leaves an open cell bordering the marked
@@ -88,7 +88,7 @@ describe("Roadie's ladder", () => {
     expect(grantsOf(s).arrived).not.toContain("blade");
   });
 
-  it("Lv 0 brings the Blade and 1 Arm; Lv 1 +1 Arm; Lv 2 nothing more yet (the Guard Plate); then +1 Arm a level", () => {
+  it("Lv 0 brings the Blade and 1 Arm; Lv 1 +1 Arm; Lv 2 no Arm (it brings the Guard Plate); then +1 Arm a level", () => {
     const s = roadieOpen();
     expect(grantsOf(s).arrived).toContain("blade");
     const arms = [0, 0.5, 1.5, 3, 5].map((h) => {
@@ -125,6 +125,13 @@ const FLINT = { q: 0, r: -2 };
 const NW = 4;
 const N = 5;
 
+// The first placed Arm's rate, which these tests make a Blade.
+function bladeRate(s: GameState): BladeRate {
+  const arm = s.game.rates.arms[0]!;
+  if (arm.module !== "blade") throw new Error("expected a Blade");
+  return arm;
+}
+
 function sameCell(a: Cell, b: Cell): boolean {
   return a.q === b.q && a.r === b.r;
 }
@@ -139,7 +146,7 @@ describe("the Blade", () => {
   it("receiving 1.4 charge/s and facing Basalt, it deals 14/s to it", () => {
     const s = roadieOpen();
     bladeAt(s, O, NW);
-    const arm = s.game.rates.arms[0]!;
+    const arm = bladeRate(s);
     expect(arm.chargeReceived.toNumber()).toBeCloseTo(1.4, 9);
     expect(arm.facesWall).toBe(true);
     expect(arm.damage.toNumber()).toBeCloseTo(14, 9);
@@ -150,9 +157,9 @@ describe("the Blade", () => {
   it("facing an open cell, it deals nothing", () => {
     const s = roadieOpen();
     bladeAt(s, O, 0);
-    expect(sameCell(s.game.rates.arms[0]!.faces, NE)).toBe(true);
-    expect(s.game.rates.arms[0]!.facesWall).toBe(false);
-    expect(s.game.rates.arms[0]!.damage.toNumber()).toBe(0);
+    expect(sameCell(bladeRate(s).faces, NE)).toBe(true);
+    expect(bladeRate(s).facesWall).toBe(false);
+    expect(bladeRate(s).damage.toNumber()).toBe(0);
     expect(s.game.rates.walls).toEqual([]);
   });
 
@@ -234,7 +241,7 @@ describe("Arms on the board", () => {
     expect(loaded.game.openClasses).toContain("roadie");
     expect(loaded.game.board.placements).toEqual(s.game.board.placements);
     expect(loaded.game.board.cables).toEqual(s.game.board.cables);
-    expect(loaded.game.rates.arms[0]!.damage.toNumber()).toBeCloseTo(14, 9);
+    expect(bladeRate(loaded).damage.toNumber()).toBeCloseTo(14, 9);
   });
 });
 

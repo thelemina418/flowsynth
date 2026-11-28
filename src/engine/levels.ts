@@ -82,10 +82,9 @@ const LADDERS: Record<HabitClass, Ladder> = {
     // Modulators.
     after: (level) => ((level - 2) % 2 === 0 ? MODULATOR : CABLE),
   },
-  // Lv 0 the Blade and 1 Arm, Lv 1 +1 Arm, Lv 2 the Guard Plate, then +1
-  // Arm each (issue #53). The Guard Plate is #54's to bring, so its level
-  // grants nothing until then.
-  roadie: { start: [{ kind: "type", module: "blade" }, ARM], levels: [ARM, null], after: () => ARM },
+  // Lv 0 the Blade and 1 Arm, Lv 1 +1 Arm, Lv 2 the Guard Plate (issue
+  // #54), then +1 Arm each (issue #53).
+  roadie: { start: [{ kind: "type", module: "blade" }, ARM], levels: [ARM, { kind: "type", module: "guardPlate" }], after: () => ARM },
   // Declared for Demo (Mixer): its types don't exist yet, and a closed
   // class grants nothing, so the ladder is empty until that chunk fills it.
   mixer: { levels: [], after: () => null },

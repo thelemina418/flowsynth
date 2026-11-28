@@ -105,7 +105,7 @@ export const ENTRIES: readonly Entry[] = [
   {
     id: "arms",
     title: "Arms",
-    lines: ["Roadie's craft · opened by reaching Flint", "Arms work only beside a wall", "Blade · 10 × charge received as damage", "Turn a Blade to choose its wall"],
+    lines: ["Roadie's craft · opened by reaching Flint", "Arms work only beside a wall", "Blade · 10 × charge received as damage", "Turn a Blade to choose its wall", "Guard Plate · cancels pressure on its neighbours"],
     revealed: (s) => s.game.openClasses.includes("roadie"),
   },
   {

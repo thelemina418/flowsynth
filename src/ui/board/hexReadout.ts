@@ -94,8 +94,13 @@ function modulatorLines(board: Board, m: ModulatorRate): DetailLine[] {
 
 // A Blade names its facing, the charge it receives, and as its effect the
 // damage it deals to the wall it faces (issue #53). Facing a cell that
-// isn't a wall, it does nothing.
+// isn't a wall, it does nothing. A Guard Plate's effect is the modules it
+// shields from pressure, while it borders a wall (issue #54).
 function armLines(a: ArmRate): DetailLine[] {
+  if (a.module === "guardPlate") {
+    const effect = a.active ? `Cancels pressure on ${a.shields} ${a.shields === 1 ? "module" : "modules"}` : "No wall in reach";
+    return [{ text: nameLine(a.module) }, { text: effect, effect: true }];
+  }
   const effect = a.facesWall ? `${fmtRate(a.damage)}/s to ${wallAt(a.faces)!.name}` : "No wall in reach";
   return [
     { text: `${nameLine(a.module)} · facing ${FACING_NAMES[a.facing]}` },

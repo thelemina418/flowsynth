@@ -62,6 +62,9 @@ interface ModuleSpec {
   // An Arm's damage to the wall it faces per charge/s received (issue
   // #53).
   damagePerCharge?: number;
+  // An Arm that cancels pressure on its neighbours while it borders a
+  // wall (issue #54).
+  guards?: true;
 }
 
 const OSCILLATOR: PartnerRule = { kind: "category", category: "oscillator" };
@@ -109,6 +112,9 @@ const MODULES: Record<ModuleType, ModuleSpec> = {
   // Arms (issue #53) make neither ν nor charge. The Blade turns the charge
   // it receives into 10× damage on the wall it faces.
   blade: { category: "arm", name: "Blade", base: 0, pattern: null, faces: true, damagePerCharge: 10 },
+  // The Guard Plate (issue #54) has no facing. Bordering a wall, it
+  // cancels pressure on its neighbours; charge delivered to it is wasted.
+  guardPlate: { category: "arm", name: "Guard Plate", base: 0, pattern: null, guards: true },
 };
 
 export const MODULE_TYPES = Object.keys(MODULES) as readonly ModuleType[];
@@ -137,6 +143,12 @@ export function isArm(module: ModuleType): module is ArmType {
 // (its charge factor) and the Blade (its damage, issue #53).
 export function takesCharge(holds: ReachHolds): holds is OscillatorType | "blade" {
   return holds !== "empty" && holds !== "wall" && holds !== "dark" && (isOscillator(holds) || MODULES[holds].damagePerCharge !== undefined);
+}
+
+// Whether this type cancels pressure on its neighbours while it borders a
+// wall: the Guard Plate (issue #54).
+export function guardsPressure(module: ModuleType): boolean {
+  return MODULES[module].guards === true;
 }
 
 // An Arm's damage per charge/s received, 0 for every other type.
