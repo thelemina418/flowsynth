@@ -1,5 +1,6 @@
 import { DRIFT_NOISE_SECONDS, EPS, RECONCILIATION_FLOOR_SECONDS } from "./constants";
 import { add, D, gt, requireFinite, requireNotNaN } from "./num";
+import { stepWalls } from "./conquest";
 import { accrueLivePractice } from "./habits";
 import { accrueIntentionProgress } from "./intentions";
 import { emptyAdvanceResult, sumResults, walkFlow } from "./walk";
@@ -29,7 +30,7 @@ export type { HonestyOutcome };
 // discards the copy and returns the state it was given.
 
 export function freshAccounting(): SessionAccounting {
-  return { creditedSeconds: 0, poolSeconds: 0, pendingAwaySeconds: 0, events: [], provisionalNous: D(0) };
+  return { creditedSeconds: 0, poolSeconds: 0, pendingAwaySeconds: 0, events: [], provisionalNous: D(0), wallSeconds: 0 };
 }
 
 // Hidden time on a running page may still be trusted. An offline gap
@@ -129,7 +130,12 @@ export function settleHonestyReport(state: GameState, outcome: HonestyOutcome): 
     state.game.nous = requireNotNaN(add(state.game.nous, held), "nous");
     session.nousMade = requireNotNaN(add(session.nousMade, held), "the session's nous");
   }
+  // The held wall seconds replay through the walls (issue #51). The held
+  // ν stays as computed, so the replay pays nothing: it only moves walls,
+  // conquers, recomputes and tallies.
+  if (outcome !== "missed" && accounting.wallSeconds > EPS) stepWalls(state, accounting.wallSeconds, () => {}, session.walls);
   accounting.events.push({ awaySeconds: pool, outcome });
+  accounting.wallSeconds = 0;
   accounting.poolSeconds = 0;
   accounting.provisionalNous = D(0);
   return { ok: true, completions };

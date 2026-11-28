@@ -4,7 +4,7 @@ import { cellKey, type Cell } from "./hex";
 import { wallAt } from "./map";
 import { add, D, div, gt, gte, lte, min, mul, requireNotNaN, sub, type Num } from "./num";
 import { computeBoardRates } from "./rates";
-import type { GameState, WallTally } from "./types";
+import type { BoardRates, GameState, WallTally } from "./types";
 
 // Wall HP and conquest (spec chunk 05, issue #49). One pure wall step moves
 // every wall through a span of time at the cached rates, closed-form: over
@@ -28,7 +28,9 @@ interface Moving {
 
 // Every wall the span can move: each wall below full, and each wall the
 // rates say takes damage, while its cell is still a wall.
-function movingWalls(state: GameState): Moving[] {
+// `damage` scales what the rates deal (a breather's 2×, issue #51); regen
+// never scales.
+function movingWalls(state: GameState, damage: number): Moving[] {
   const board = state.game.board;
   const byKey = new Map<string, Moving>();
   for (const entry of board.walls) {
@@ -36,7 +38,7 @@ function movingWalls(state: GameState): Moving[] {
     if (!wall || cellKind(board, entry.cell) !== "wall") continue;
     byKey.set(cellKey(entry.cell), { cell: entry.cell, hp: entry.hp, full: wall.hp, net: sub(0, wall.regen), attacked: false });
   }
-  for (const rate of state.game.rates.walls) {
+  for (const rate of scaledWalls(state.game.rates, damage).walls) {
     const wall = wallAt(rate.cell);
     if (!wall || cellKind(board, rate.cell) !== "wall") continue;
     const key = cellKey(rate.cell);
@@ -75,11 +77,30 @@ function tallyWall(tally: WallTally[], wall: Moving, before: Num, after: Num, fe
   }
 }
 
-export function stepWalls(state: GameState, seconds: number, segment: (seconds: number) => void, tally: WallTally[] | null = null): void {
+// The rates with each wall's damage scaled by `factor` and its net
+// following; regen unchanged. Factor 1 returns the rates as they are.
+export function scaledWalls(rates: BoardRates, factor: number): BoardRates {
+  if (factor === 1) return rates;
+  return {
+    ...rates,
+    walls: rates.walls.map((w) => {
+      const damage = mul(w.damage, factor);
+      return { ...w, damage, net: sub(damage, w.regen) };
+    }),
+  };
+}
+
+export function stepWalls(
+  state: GameState,
+  seconds: number,
+  segment: (seconds: number) => void,
+  tally: WallTally[] | null = null,
+  damage = 1,
+): void {
   let remaining = seconds;
   for (let guard = 0; remaining > 0; guard++) {
     if (guard > 1000) throw new Error("the wall step did not settle");
-    const walls = movingWalls(state);
+    const walls = movingWalls(state, damage);
     const instants = walls.map(fallsIn);
     const earliest = Math.min(...instants.map((t) => t ?? Infinity));
     const conquers = earliest < remaining || sameInstant(earliest, remaining);
