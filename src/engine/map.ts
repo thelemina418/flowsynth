@@ -166,6 +166,13 @@ const MAP: Record<string, Entry> = {
 // Shale's cell, the first wall the Goal names (issue #42).
 export const SHALE_CELL: Cell = { q: -1, r: 1 };
 
+// The two Basalts' cells: the Goal's `Conquer Basalt` is done once either
+// is open (issue #49).
+export const BASALT_CELLS: readonly Cell[] = [
+  { q: -1, r: 0 },
+  { q: 0, r: -1 },
+];
+
 // The wall authored at a cell, or null at an opening cell or beyond the
 // lifetime board. A conquered wall's cell still answers with its wall:
 // whether a cell is a wall now is the board's derived kind.

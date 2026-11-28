@@ -2,15 +2,16 @@ import { createInitialState } from "./state";
 import { normalizeIntentions } from "./intentions";
 import { normalizeHabitColor } from "./habits";
 import { SAVE_VERSION } from "./constants";
-import { D, fromSave, isNum, NumFault, toSave, type Num } from "./num";
-import { ARCS, openingBoard } from "./board";
+import { D, fromSave, gte, isNum, lte, NumFault, toSave, type Num } from "./num";
+import { ARCS, cellKind, openingBoard } from "./board";
+import { wallAt } from "./map";
 import { cellKey, isFacing, LIFETIME_RADIUS, ring, type Cell } from "./hex";
 import { hasFacing, isModuleType } from "./modules";
 import { isCableType, newCableRefusal, type CableRoom } from "./cables";
 import { grantsOf } from "./levels";
 import { emptyEncyclopedia, isEntryId, revealEntries } from "./encyclopedia";
 import { computeBoardRates } from "./rates";
-import type { Arc, Board, BreatherState, Cable, EncyclopediaState, EntryId, GameState, Habit, HabitClass, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
+import type { Arc, Board, BreatherState, Cable, EncyclopediaState, EntryId, GameState, Habit, HabitClass, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary, WallHp } from "./types";
 
 // The save boundary. Save v16 (issue #18) writes the nested GameState
 // (`records`, `game`) with every Decimal as num's save string, and reads it
@@ -433,7 +434,31 @@ function readBoard(raw: unknown): Board {
   }
   if (open.length === 0) return opening;
   const arc = typeof raw.arc === "string" && (ARCS as readonly string[]).includes(raw.arc) ? (raw.arc as Arc) : opening.arc;
-  return { open, arc, placements: readPlacements(raw.placements, seen), cables: [] };
+  const board: Board = { open, arc, placements: readPlacements(raw.placements, seen), cables: [], walls: [] };
+  board.walls = readWalls(raw.walls, board);
+  return board;
+}
+
+// Wall HP (issue #49), an additive v16 field: missing, every wall is at
+// full HP. An entry is dropped, leaving its wall full, when its cell isn't
+// a wall inside the arc (a conquered cell is open), when its HP isn't a
+// finite figure, or when it is ≤ 0 or ≥ the kind's full HP. A second entry
+// for one wall is dropped too.
+function readWalls(raw: unknown, board: Board): WallHp[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const walls: WallHp[] = [];
+  for (const item of raw) {
+    if (!isRecord(item) || typeof item.hp !== "string" || !readableNum(item.hp)) continue;
+    const cell = readCell(item.cell);
+    const wall = cell && wallAt(cell);
+    if (!cell || !wall || cellKind(board, cell) !== "wall" || seen.has(cellKey(cell))) continue;
+    const hp = fromSave(item.hp);
+    if (!Number.isFinite(hp.toNumber()) || lte(hp, 0) || gte(hp, wall.hp)) continue;
+    seen.add(cellKey(cell));
+    walls.push({ cell, hp });
+  }
+  return walls;
 }
 
 // Placements (issue #25): a placement whose type is unknown, or whose cell

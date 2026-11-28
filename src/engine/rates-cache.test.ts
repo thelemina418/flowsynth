@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { begin, applyIn, advanceIn, fresh, giveHabit, giveOscillators } from "./fixtures";
+import { isOpen } from "./board";
+import { begin, applyIn, advanceIn, fresh, giveHabit, giveOscillators, giveProducer } from "./fixtures";
+import { D } from "./num";
 import { grantsOf } from "./levels";
 import { computeBoardRates } from "./rates";
 import { deserialize, serialize } from "./save";
@@ -156,6 +158,48 @@ describe("recomputing the board's rates", () => {
     expect(s.game.breather.result).not.toBeNull();
     expect(applyIn(s, { type: "dismissBreatherResult" }).ok).toBe(true);
     expect(counted).not.toHaveBeenCalled();
+  });
+
+  it("recomputes once per conquest instant, once for a tie, and never otherwise (issue #49)", () => {
+    const s = fresh();
+    giveProducer(s, { modulators: 2, cables: 2 });
+    applyIn(s, { type: "placeModule", module: "flywheel", cell: { q: 0, r: 0 } });
+    applyIn(s, { type: "placeModule", module: "flywheel", cell: { q: 1, r: -1 } });
+    // Both Flywheels at 1.15 charge/s, into Shale and into Basalt (0,-1):
+    // Shale falls at 600 ÷ 1.05 s; Basalt's regen of 1 leaves it 0.15/s.
+    applyIn(s, { type: "patchCable", cable: "patch", source: { q: 0, r: 0 }, target: { q: -1, r: 1 } });
+    applyIn(s, { type: "patchCable", cable: "patch", source: { q: 1, r: -1 }, target: { q: 0, r: -1 } });
+    giveHabit(s, "Piano", "engineer");
+    begin(s, null, 0);
+    counted.mockClear();
+    for (let i = 0; i < 500; i++) advanceIn(s, 1, "flow");
+    expect(counted).not.toHaveBeenCalled();
+    advanceIn(s, 100, "flow");
+    expect(counted).toHaveBeenCalledTimes(1);
+    counted.mockClear();
+    advanceIn(s, 1000, "flow");
+    expect(counted).not.toHaveBeenCalled();
+  });
+
+  it("two walls falling at the same instant are conquered together, with one recompute (issue #49)", () => {
+    const s = fresh();
+    giveProducer(s, { modulators: 2, cables: 2 });
+    applyIn(s, { type: "placeModule", module: "flywheel", cell: { q: 0, r: 0 } });
+    applyIn(s, { type: "placeModule", module: "flywheel", cell: { q: 1, r: -1 } });
+    // Shale at net 1.05/s, and Basalt (0,-1) at net 0.15/s carrying a
+    // saved HP that runs out at the same instant as Shale's 600.
+    expect(applyIn(s, { type: "patchCable", cable: "patch", source: { q: 0, r: 0 }, target: { q: -1, r: 1 } }).ok).toBe(true);
+    expect(applyIn(s, { type: "patchCable", cable: "patch", source: { q: 1, r: -1 }, target: { q: 0, r: -1 } }).ok).toBe(true);
+    giveHabit(s, "Piano", "engineer");
+    begin(s, null, 0);
+    const falls = 600 / 1.05;
+    s.game.board.walls = [{ cell: { q: 0, r: -1 }, hp: D(falls * 0.15) }];
+    counted.mockClear();
+    advanceIn(s, falls + 10, "flow");
+    expect(counted).toHaveBeenCalledTimes(1);
+    expect(s.game.board.walls).toEqual([]);
+    expect(isOpen(s.game.board, { q: -1, r: 1 })).toBe(true);
+    expect(isOpen(s.game.board, { q: 0, r: -1 })).toBe(true);
   });
 
   it("recomputes once on load, from the layout, and never writes the rates to the save", () => {

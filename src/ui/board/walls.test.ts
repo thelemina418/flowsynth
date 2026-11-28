@@ -2,7 +2,10 @@
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
+import { advance } from "../../engine/advance";
 import { apply, type Action } from "../../engine/apply";
+import { giveHabit, started } from "../../engine/fixtures";
+import { D } from "../../engine/num";
 import { createInitialState } from "../../engine/state";
 import type { GameState } from "../../engine/types";
 import { memorySaveStorage } from "../shared-save";
@@ -93,3 +96,32 @@ describe("patching into a wall", () => {
     expect(host.textContent).toContain("Only Arm damage.");
 });
 });
+
+describe("a wall's HP on screen (issue #49)", () => {
+  it("the Hex detail reads a fought wall's live HP and the damage it takes, and an open cell once it falls", () => {
+    const shell = mount();
+    let s = laid([FLYWHEEL, { type: "patchCable", cable: "patch", source: { q: 0, r: 0 }, target: { q: -1, r: 1 } }]);
+    giveHabit(s, "Piano", "engineer");
+    s = started(s, 0, null);
+    show(shell, s);
+    click(cell("-1,1"));
+    expect(lines()).toEqual(["Shale · Wall · ring 1", "600 / 600 HP · regen 0.1/s", "Pressure 5%", "Taking 1.0/s"]);
+    s = advance(s, 100, "flow").state;
+    show(shell, s);
+    expect(lines()).toEqual(["Shale · Wall · ring 1", "510 / 600 HP · regen 0.1/s", "Pressure 5%", "Taking 1.0/s"]);
+    s = advance(s, 600, "flow").state;
+    show(shell, s);
+    click(cell("-1,1"));
+    expect(lines()).toEqual(["Open cell"]);
+  });
+
+  it("a damaged wall nothing fights reads its HP and no Taking line", () => {
+    const shell = mount();
+    const s = laid([]);
+    s.game.board.walls = [{ cell: { q: -1, r: 1 }, hp: D(412.7) }];
+    show(shell, s);
+    click(cell("-1,1"));
+    expect(lines()).toEqual(["Shale · Wall · ring 1", "412 / 600 HP · regen 0.1/s", "Pressure 5%"]);
+  });
+});
+
