@@ -94,4 +94,4 @@ An Arm must sit on a cell that borders a wall. If it doesn't, it does nothing an
 - Every session needs a habit (a name plus its class), which can be created inline. Only open classes can be chosen.
 - Away time is reconciled by the existing trust accounting and honesty report (ADR-0019).
 - A session with at least 10 credited minutes banks a breather. At most one is held, and a newer one replaces it. Starting a flow session does not consume it.
-- Breather length is credited time ÷ 5, from a 5-minute minimum to a 15-minute maximum. During it the board runs ×2 and breather oscillators wake. It pays out only if completed, and its result appears the next time the app is opened.
+- Breather length is credited time ÷ 5, from a 5-minute minimum to a 15-minute maximum. During it the board runs ×2 and breather oscillators wake. Walls take double damage, and their regen doesn't double. It pays out only if completed, and its result appears the next time the app is opened.

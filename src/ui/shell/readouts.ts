@@ -108,7 +108,8 @@ export function breatherClock(running: NonNullable<BreatherState["running"]>): s
   return formatClock(Math.ceil(running.seconds - running.elapsed - 1e-9)).replace(/^0(?=\d:)/, "");
 }
 
-// `Breather complete · +31 400 ν`. Chunk 05 appends the HP segment.
+// `Breather complete · +31 400 ν · Shale −220 HP`: the walls segment is
+// the summary's (issue #51).
 export function breatherResultLine(result: NonNullable<BreatherState["result"]>): string {
-  return `Breather complete · +${fmt(result.nous)} ν`;
+  return `Breather complete · +${fmt(result.nous)} ν${wallsSegment(result.walls)}`;
 }

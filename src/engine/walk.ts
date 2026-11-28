@@ -10,7 +10,8 @@ import type { AdvanceResult, GameState } from "./types";
 // (the session clock, credited seconds, the active habit, its class, and
 // its Intention) and banks nous. Provisional time runs the session clock,
 // joins the pool and adds to the provisional nous; it credits nothing
-// until the honesty report settles it (§3, ADR-0019). Internal to the trust
+// until the honesty report settles it (§3, ADR-0019), and holds its wall
+// seconds aside for the same answer (issue #51). Internal to the trust
 // layer: callers pass time through `advance`.
 export type Sink = "trusted" | "provisional";
 
@@ -35,6 +36,9 @@ export function walkFlow(state: GameState, seconds: number, sink: Sink): Advance
     const made = mul(state.game.rates.total, seconds);
     accounting.poolSeconds = requireFinite(accounting.poolSeconds + seconds, "the provisional pool");
     accounting.provisionalNous = requireNotNaN(add(accounting.provisionalNous, made), "the provisional nous");
+    // Provisional time moves no wall: its seconds wait for the honesty
+    // report, beside its ν (issue #51).
+    accounting.wallSeconds = requireFinite(accounting.wallSeconds + seconds, "the provisional wall seconds");
     return result;
   }
   // Trusted time moves the walls (issue #49): a conquest splits the span,

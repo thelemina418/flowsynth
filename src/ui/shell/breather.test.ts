@@ -4,7 +4,8 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
 import { apply } from "../../engine/apply";
 import { advance } from "../../engine/advance";
-import { giveHabit, giveOscillators } from "../../engine/fixtures";
+import { giveHabit, giveOscillators, giveProducer } from "../../engine/fixtures";
+import { D } from "../../engine/num";
 import { serialize, STORAGE_KEY } from "../../engine/save";
 import { createInitialState } from "../../engine/state";
 import type { GameState } from "../../engine/types";
@@ -144,6 +145,37 @@ describe("the breather in upgrade mode", () => {
     expect(shell.screen.value.kind).toBe("ready");
     expect(buttons()).toContain("Begin flow");
     expect(buttons().some((b) => b.startsWith("Take breather"))).toBe(false);
+  });
+});
+
+// The banked layout with a Flywheel at (0,0) in place of the Sine,
+// patched into Shale (-1,1). A breather doubles its 1.0/s against Shale's
+// regen of 0.1/s.
+function bankedAgainstShale(): GameState {
+  let s = banked();
+  giveProducer(s, { modulators: 1, cables: 1 });
+  s = apply(s, { type: "removeModule", cell: { q: 0, r: 0 } }).state;
+  s = apply(s, { type: "placeModule", module: "flywheel", cell: { q: 0, r: 0 } }).state;
+  return apply(s, { type: "patchCable", cable: "patch", source: { q: 0, r: 0 }, target: { q: -1, r: 1 } }).state;
+}
+
+describe("the breather result's walls (issue #51)", () => {
+  it("reads the spec's example for a wall that lost HP", () => {
+    const s = banked();
+    s.game.breather.banked = null;
+    s.game.breather.result = { nous: D(31_400), walls: [{ cell: { q: -1, r: 1 }, lost: D(220), conquered: false, fought: true }] };
+    const shell = mount(saved(s));
+    expect(shell.screen.value.kind).toBe("breather-result");
+    expect(read("[data-breather-result]")).toBe("Breather complete · +31 400 ν · Shale −220 HP");
+  });
+
+  it("a 10-minute breather at 2 × 1.0/s − 0.1/s conquers Shale and says so", () => {
+    const s = bankedAgainstShale();
+    expect(s.game.board.placements.find((p) => p.cell.q === 0 && p.cell.r === 0)?.module).toBe("flywheel");
+    const shell = mount(saved(s));
+    click("Take breather · 10 min");
+    tick(shell, 1_000);
+    expect(read("[data-breather-result]")).toMatch(/^Breather complete · \+[\d ]+ ν · Shale conquered$/);
   });
 });
 
