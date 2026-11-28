@@ -161,7 +161,8 @@ describe("recomputing the board's rates", () => {
   it("recomputes once on load, from the layout, and never writes the rates to the save", () => {
     const s = acceptanceLayout();
     const text = serialize(s, 0);
-    expect(text).not.toMatch(/rates|resonance|instances/);
+    // "resonance" may be a revealed Encyclopedia entry id (issue #44), never a rate key.
+    expect(text).not.toMatch(/"rates"|"resonance":|"instances"/);
     counted.mockClear();
     const loaded = deserialize(text).state!;
     expect(counted).toHaveBeenCalledTimes(1);

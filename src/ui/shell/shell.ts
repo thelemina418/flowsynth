@@ -5,7 +5,7 @@ import type { Cell } from "../../engine/hex";
 import { disclosureOf } from "../../engine/goal";
 import { createInitialState } from "../../engine/state";
 import { poolOutstanding, type Presence } from "../../engine/trust";
-import type { BreatherState, GameState, Habit, HabitClass, HonestyOutcome, SessionState, SessionSummary } from "../../engine/types";
+import type { BreatherState, EntryId, GameState, Habit, HabitClass, HonestyOutcome, SessionState, SessionSummary } from "../../engine/types";
 import { Placing } from "../board/placing";
 import { SharedSave, type SaveStorage } from "../shared-save";
 
@@ -29,6 +29,7 @@ export type Screen =
   | { kind: "breather"; running: NonNullable<BreatherState["running"]> }
   | { kind: "breather-result"; result: NonNullable<BreatherState["result"]> }
   | { kind: "almanac"; error: string | null }
+  | { kind: "encyclopedia"; entry: EntryId | null }
   | { kind: "ready" };
 
 interface Offer {
@@ -61,6 +62,10 @@ export class Shell {
   // with the last refusal as its one quiet line.
   private readonly almanacOpen = signal(false);
   private readonly almanacError = signal<string | null>(null);
+  // The Encyclopedia (issue #44): open from upgrade mode once its door
+  // shows, on its list (null) or on one entry.
+  private readonly encyclopediaOpen = signal(false);
+  private readonly encyclopediaEntry = signal<EntryId | null>(null);
   // Set by End while provisional time is owed (issue #40): the honesty
   // report shows only then, never mid-session. Not saved: a reload lands
   // on the flow screen, and End asks again.
@@ -92,6 +97,7 @@ export class Shell {
     const result = state.game.breather.result;
     if (mode === "upgrade" && result) return { kind: "breather-result", result };
     if (this.almanacOpen.value) return { kind: "almanac", error: this.almanacError.value };
+    if (this.encyclopediaOpen.value) return { kind: "encyclopedia", entry: this.encyclopediaEntry.value };
     if (this.beginOpen.value) return { kind: "begin", error: this.beginError.value };
     return { kind: "ready" };
   });
@@ -212,6 +218,7 @@ export class Shell {
     const state = this.state.peek();
     if (state.game.mode !== "upgrade" || !disclosureOf(state).doors) return;
     this.act({ type: "rollIntentions", now: this.now() });
+    this.closeEncyclopedia();
     this.almanacError.value = null;
     this.almanacOpen.value = true;
   }
@@ -219,6 +226,27 @@ export class Shell {
   closeAlmanac(): void {
     this.almanacOpen.value = false;
     this.almanacError.value = null;
+  }
+
+  // The Encyclopedia's door shows beside the Almanac's. It opens on the
+  // list of revealed entries.
+  openEncyclopedia(): void {
+    const state = this.state.peek();
+    if (state.game.mode !== "upgrade" || !disclosureOf(state).doors) return;
+    this.closeAlmanac();
+    this.encyclopediaEntry.value = null;
+    this.encyclopediaOpen.value = true;
+  }
+
+  // Opening an entry marks it seen (`readEntry`); null goes back to the list.
+  openEntry(id: EntryId | null): void {
+    if (id !== null && !this.act({ type: "readEntry", id }).ok) return;
+    this.encyclopediaEntry.value = id;
+  }
+
+  closeEncyclopedia(): void {
+    this.encyclopediaOpen.value = false;
+    this.encyclopediaEntry.value = null;
   }
 
   // An Almanac action, given the wall clock when it needs one. A refusal

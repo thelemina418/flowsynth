@@ -141,7 +141,9 @@ describe("a v15 save's records (issue #19)", () => {
     expect(state.records.classCredit).toEqual({ engineer: 0, producer: 0, mixer: 0, roadie: 0 });
     // The game starts fresh: the retired economy's nous stays behind, and
     // the collection leaves one Almanac line (issue #19).
-    expect(state.game).toEqual({ ...fresh().game, legacyLine: "Legacy era · 1 module · archived" });
+    // Its completed sessions reveal Classes (issue #44).
+    const book = { revealed: [...fresh().game.encyclopedia.revealed, "classes"], seen: [] };
+    expect(state.game).toEqual({ ...fresh().game, encyclopedia: book, legacyLine: "Legacy era · 1 module · archived" });
     for (const retired of ["nous", "modules", "cells", "world", "forge", "achievements", "arete", "prestiges", "scrap"]) {
       expect(state, retired).not.toHaveProperty(retired);
     }
