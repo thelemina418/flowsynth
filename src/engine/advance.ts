@@ -1,5 +1,6 @@
 import { runBreather } from "./breather";
 import { revealEntries } from "./encyclopedia";
+import { discloseConsole } from "./console";
 import { transact } from "./state";
 import { applyGap, type Presence } from "./trust";
 import { emptyAdvanceResult } from "./walk";
@@ -15,7 +16,7 @@ import type { AdvanceMode, AdvanceResult, GameState } from "./types";
 // - 'breather' runs a taken breather on by the wall gap and pays it at its
 //   deadline (engine/breather.ts, issue #41); outside one it moves nothing.
 // Every commit adds the Encyclopedia entries its state reveals (issue
-// #44). Pure: the state given is never touched. The next state comes back with
+// #44) and shows the console once a fader is first affordable (#58). Pure: the state given is never touched. The next state comes back with
 // the result; a numeric fault (a nonfinite second, a NaN Decimal) returns
 // the state given and names the figure in `fault`.
 export interface Advanced extends AdvanceResult {
@@ -35,6 +36,7 @@ export function advance(
     const ran = transact(state, (draft) => {
       runBreather(draft, seconds);
       revealEntries(draft);
+      discloseConsole(draft);
     });
     if (ran.fault !== undefined) return { ...emptyAdvanceResult(), fault: ran.fault, state };
     return { ...emptyAdvanceResult(), state: ran.state };
@@ -42,6 +44,7 @@ export function advance(
   const done = transact(state, (draft) => {
     const gap = applyGap(draft, seconds, presence, driftStepSeconds);
     revealEntries(draft);
+    discloseConsole(draft);
     return gap;
   });
   if (done.fault !== undefined) return { ...emptyAdvanceResult(), fault: done.fault, state };

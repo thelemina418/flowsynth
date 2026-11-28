@@ -222,6 +222,22 @@ describe("recomputing the board's rates", () => {
     expect(isOpen(s.game.board, { q: 0, r: -1 })).toBe(true);
   });
 
+  it("recomputes once for a fader purchase or a max purchase, and never for a refused one (issue #58)", () => {
+    const s = acceptanceLayout();
+    s.game.nous = D(60);
+    counted.mockClear();
+    applyIn(s, { type: "buyFader", fader: { kind: "channel", type: "sine" } });
+    expect(counted).toHaveBeenCalledTimes(1);
+    counted.mockClear();
+    applyIn(s, { type: "buyFader", fader: { kind: "channel", type: "sine" }, max: true });
+    expect(counted).toHaveBeenCalledTimes(1);
+    expect(s.game.console.channels.sine).toBe(3);
+    counted.mockClear();
+    applyIn(s, { type: "buyFader", fader: { kind: "channel", type: "flywheel" } });
+    applyIn(s, { type: "buyFader", fader: { kind: "channel", type: "flywheel" }, max: true });
+    expect(counted).not.toHaveBeenCalled();
+  });
+
   it("recomputes once on load, from the layout, and never writes the rates to the save", () => {
     const s = acceptanceLayout();
     const text = serialize(s, 0);

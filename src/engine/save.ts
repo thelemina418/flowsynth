@@ -6,12 +6,13 @@ import { D, fromSave, gte, isNum, lte, NumFault, toSave, type Num } from "./num"
 import { ARCS, cellKind, openingBoard } from "./board";
 import { wallAt } from "./map";
 import { cellKey, isFacing, LIFETIME_RADIUS, ring, type Cell } from "./hex";
-import { hasFacing, isModuleType } from "./modules";
+import { channelBaseOf, hasFacing, isModuleType } from "./modules";
 import { isCableType, newCableRefusal, type CableRoom } from "./cables";
 import { grantsOf } from "./levels";
 import { emptyEncyclopedia, isEntryId, revealEntries } from "./encyclopedia";
 import { computeBoardRates } from "./rates";
-import type { Arc, Board, BreatherState, Cable, EncyclopediaState, EntryId, GameState, Habit, HabitClass, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary, SummaryWall, WallHp } from "./types";
+import { discloseConsole, emptyConsole } from "./console";
+import type { Arc, Board, BreatherState, Cable, ConsoleState, EncyclopediaState, EntryId, GameState, Habit, HabitClass, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary, SummaryWall, WallHp } from "./types";
 
 // The save boundary. Save v16 (issue #18) writes the nested GameState
 // (`records`, `game`) with every Decimal as num's save string, and reads it
@@ -404,6 +405,7 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
   // `arrivedCables` is ignored.
   const { cableAllowance, arrivedCables } = grantsOf({ records: { ...fresh.records, classCredit }, game: { ...fresh.game, openClasses } });
   board.cables = readCables(isRecord(game.board) ? game.board.cables : undefined, { board, cableAllowance, arrivedCables });
+  const console = readConsole(game.console);
   const state: GameState = {
     records: {
       habits: (records.habits as Habit[]).map(readHabit),
@@ -427,13 +429,33 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
       openClasses,
       legacyLine: typeof game.legacyLine === "string" ? game.legacyLine : null,
       board,
+      console,
       // Recomputed once from the layout; a saved rate is never read.
-      rates: computeBoardRates(board, classCredit.producer),
+      rates: computeBoardRates(board, classCredit.producer, console),
     },
   };
   revealEntries(state);
+  discloseConsole(state);
   const recovered = recovery && lost.length > 0 ? { fromVersion: version, lost } : undefined;
   return { state, ...(recovered && { recovered }) };
+}
+
+// The console (issue #58): additive v16 fields. A level is kept only when
+// it is a non-negative integer for a type with a channel fader; anything
+// else is dropped and reads 0. The disclosure flag is kept only when it is
+// `true`; the reader then recomputes it from the loaded state.
+function readConsole(raw: unknown): ConsoleState {
+  const console = emptyConsole();
+  if (!isRecord(raw)) return console;
+  if (isRecord(raw.channels) && !Array.isArray(raw.channels)) {
+    for (const [type, level] of Object.entries(raw.channels)) {
+      if (!isModuleType(type) || channelBaseOf(type) === null) continue;
+      if (typeof level !== "number" || !Number.isInteger(level) || level < 0) continue;
+      if (level > 0) console.channels[type] = level;
+    }
+  }
+  if (isRecord(raw.shown) && raw.shown.console === true) console.shown.console = true;
+  return console;
 }
 
 function readCell(value: unknown): Cell | null {
@@ -577,7 +599,7 @@ function readV15(raw: Record<string, unknown>, recovery: boolean): LoadResult {
     game: {
       ...fresh.game,
       // The migration starts from the opening board, and its rates.
-      rates: computeBoardRates(fresh.game.board, fresh.records.classCredit.producer),
+      rates: computeBoardRates(fresh.game.board, fresh.records.classCredit.producer, fresh.game.console),
       legacyLine: legacyLineOf(raw.modules),
       mode: flowing ? (raw.mode as GameState["game"]["mode"]) : "upgrade",
       session: flowing ? readSession(raw.session as Partial<SessionState>) : null,

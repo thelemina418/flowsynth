@@ -16,6 +16,7 @@ import { breatherMinutes } from "./readouts";
 import { RecoveryChoice } from "./RecoveryChoice";
 import { downloadSave } from "./download";
 import { Stage } from "../board/Stage";
+import { Console } from "../console/Console";
 
 // The shell's one surface (issue #21): the question owed on first load,
 // and once nothing is owed, the board and its tray (issues #24, #25),
@@ -66,6 +67,7 @@ export function App({ shell }: { shell: Shell }) {
           goal={goalOf(state)}
           placing={shell.placing}
           inspected={shell.inspected}
+          console={<Console state={state} live={game.mode === "upgrade"} onBuy={(fader, max) => shell.buyFader(fader, max)} />}
         />
       )}
       {screen.kind === "ready" && (

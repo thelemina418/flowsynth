@@ -93,12 +93,16 @@ describe("wall HP in a v16 save", () => {
   // Chunk 05 reads the same state with every wall at full HP. What chunk 05
   // itself adds is named, not ignored: its wall fields, each at its empty
   // default, and the Encyclopedia entries its rules reveal from the board.
-  function readsAsChunk04(saved: string, chunk04: string, revealedByChunk05: string[]): void {
+  // Chunk 06 adds the console (issue #58): every fader at 0, shown when
+  // the save's ν already affords one.
+  function readsAsChunk04(saved: string, chunk04: string, revealedByChunk05: string[], consoleShown: boolean): void {
     const loaded = deserialize(saved);
     expect(loaded.error).toBeUndefined();
     expect(loaded.state!.game.board.walls).toEqual([]);
     const file = JSON.parse(serialize(loaded.state!, JSON.parse(saved).savedAt));
     const game = file.state.game;
+    expect(game.console).toEqual({ channels: {}, shown: { console: consoleShown } });
+    delete game.console;
     for (const holder of [game.board, game.session, game.summary, game.breather.result].filter((h) => h !== null)) {
       expect(holder.walls).toEqual([]);
       delete holder.walls;
@@ -113,10 +117,10 @@ describe("wall HP in a v16 save", () => {
     expect(JSON.parse(V16_CHUNK04).state.game.board.cables).toEqual([{ type: "patch", source: { q: 0, r: 1 }, target: SHALE }]);
     // Chunk 04 read it back byte for byte, so the save is its own reading.
     // Its Sine at the centre borders walls, so pressure reveals its entry.
-    readsAsChunk04(V16_CHUNK04, V16_CHUNK04, ["pressure"]);
+    readsAsChunk04(V16_CHUNK04, V16_CHUNK04, ["pressure"], true);
   });
 
   it("the v15 fixture loads with every wall at full HP and nothing else changed", () => {
-    readsAsChunk04(V15, V15_CHUNK04_LOAD, []);
+    readsAsChunk04(V15, V15_CHUNK04_LOAD, [], false);
   });
 });

@@ -305,8 +305,8 @@ export interface ResonanceInstance {
 
 // One placed oscillator's rate (mechanics-sketch.md, Rates):
 // rate = base × resonance × charge × faders × (1 − pressure). Faders are
-// an identity leg until chunk 06; pressure is the bordering walls' sum,
-// capped at 60% (issue #52).
+// the type's channel multiplier (issue #58); pressure is the bordering
+// walls' sum, capped at 60% (issue #52).
 export interface OscillatorRate {
   cell: Cell;
   module: OscillatorType;
@@ -411,6 +411,15 @@ export interface BoardRates {
   breatherTotal: Num;
 }
 
+// The console (spec chunk 06, issue #58; GLOSSARY: Console, Fader): each
+// type's channel fader level (absent = 0), and the console's monotonic
+// disclosure: `shown.console` flips the first time any fader is
+// affordable and never flips back (engine/console.ts).
+export interface ConsoleState {
+  channels: Partial<Record<ModuleType, number>>;
+  shown: { console: boolean };
+}
+
 // The game state.
 export interface Game {
   nous: Num;
@@ -428,6 +437,7 @@ export interface Game {
   // The allowance and the arrived types are derived from class credit and
   // the open classes (engine/levels.ts, issue #38), never stored.
   board: Board;
+  console: ConsoleState;
   // Derived from the board, never saved (engine/rates.ts).
   rates: BoardRates;
 }

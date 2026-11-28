@@ -4,7 +4,7 @@ import { className } from "../../engine/habits";
 import { modifierName, wallOf } from "../../engine/map";
 import { categoryName, categoryOf, moduleName, takesCharge } from "../../engine/modules";
 import { cableFrom, moduleAt } from "../../engine/placement";
-import { fmtHp, fmtPercent, fmtRate, gt } from "../../engine/num";
+import { eq, fmtHp, fmtPercent, fmtRate, gt } from "../../engine/num";
 import { wallRateAt } from "../../engine/rates";
 import type { ArmRate, Board, BoardRates, ModulatorRate, ModuleType, OscillatorRate, OscillatorType, ReachHolds } from "../../engine/types";
 
@@ -14,7 +14,8 @@ import type { ArmRate, Board, BoardRates, ModulatorRate, ModuleType, OscillatorR
 // numbers are the ones ν rises by. At most five lines, one of them the
 // effect line. A leg shows only while it isn't identity: resonance while
 // resonating, charge while charge is received (issue #32), pressure while
-// a wall presses on it (issue #52); faders wait for chunk 06.
+// a wall presses on it (issue #52), faders while the console raises it
+// (issue #58).
 
 export interface DetailLine {
   text: string;
@@ -140,6 +141,8 @@ function oscillatorLines(o: OscillatorRate): DetailLine[] {
   if (gt(o.chargeReceived, 0)) legs.push(`×${fmtRate(o.charge)} charge`);
   if (gt(o.pressure, 0)) legs.push(`−${fmtPercent(o.pressure)}% pressure`);
   if (legs.length > 1) lines.push({ text: legs.join(" · ") });
+  // What the console raises it by, while that isn't ×1 (issue #58).
+  if (!eq(o.faders, 1)) lines.push({ text: `Faders ×${fmtRate(o.faders)}` });
   lines.push({ text: `${fmtRate(o.rate)} ν/s` });
   return lines;
 }

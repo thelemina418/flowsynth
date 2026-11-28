@@ -136,6 +136,6 @@ export function stepWalls(
     if (fallen.length === 0) continue;
     for (const cell of fallen) board.open.push({ q: cell.q, r: cell.r });
     openRoadie(state);
-    state.game.rates = computeBoardRates(board, state.records.classCredit.producer);
+    state.game.rates = computeBoardRates(board, state.records.classCredit.producer, state.game.console);
   }
 }

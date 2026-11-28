@@ -1,5 +1,6 @@
 import { D, isNum, isNaNNum, NumFault } from "./num";
 import { openingBoard } from "./board";
+import { emptyConsole } from "./console";
 import { emptyEncyclopedia, revealEntries } from "./encyclopedia";
 import { noRates } from "./rates";
 import type { GameState } from "./types";
@@ -31,6 +32,7 @@ export function createInitialState(): GameState {
       openClasses: ["engineer", "producer"],
       legacyLine: null,
       board: openingBoard(),
+      console: emptyConsole(),
       // The opening board holds no module, so it makes nothing.
       rates: noRates(),
     },

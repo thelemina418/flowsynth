@@ -33,9 +33,11 @@ interface StageProps {
   readouts?: ComponentChildren;
   // The Goal line on the board (issue #42), in upgrade mode only.
   goal?: string | null;
+  // The console strip below the board (issue #58), once it shows.
+  console?: ComponentChildren;
 }
 
-export function Stage({ nous, board, rates, flowing, arrived, arrivedCables, unplaced, chips, placing, inspected, tray = true, readouts, goal = null }: StageProps) {
+export function Stage({ nous, board, rates, flowing, arrived, arrivedCables, unplaced, chips, placing, inspected, tray = true, readouts, goal = null, console }: StageProps) {
   useEffect(() => {
     const dismiss = () => {
       placing.clear();
@@ -101,6 +103,7 @@ export function Stage({ nous, board, rates, flowing, arrived, arrivedCables, unp
         {tray && <Tray arrived={arrived} cables={arrivedCables} unplaced={unplaced} chips={chips} placing={placing} onDrop={onDrop} />}
       </div>
       {readouts}
+      {console}
       <HexDetail board={board} rates={rates} cell={open} />
       {note !== null && (
         <p class="board-note mono" role="status">

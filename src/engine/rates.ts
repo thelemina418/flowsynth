@@ -2,14 +2,15 @@ import { cellKind } from "./board";
 import { addCell, cellKey, DIRECTIONS, neighbours, sameCell, type Cell } from "./hex";
 import { add, D, div, gt, ln, min, mul, pow, sub, type Num } from "./num";
 import { armRole, baseRate, breatherBaseRate, damagePerCharge, hasFacing, isArm, isModulator, isOscillator, outputOf, patternOf, reachOf, takesCharge } from "./modules";
+import { channelMultiplier, emptyConsole } from "./console";
 import { wallOf } from "./map";
 import { cableFrom, moduleAt } from "./placement";
 import { instancesOf } from "./resonance";
-import type { ArmRate, Board, BoardRates, ChargeDelivery, ModulatorRate, ModulatorType, OscillatorRate, Placement, ReachHolds, WallRate } from "./types";
+import type { ArmRate, Board, BoardRates, ConsoleState, ChargeDelivery, ModulatorRate, ModulatorType, OscillatorRate, Placement, ReachHolds, WallRate } from "./types";
 
 // The board's rates (spec chunk 02, issue #26; mechanics-sketch.md,
-// Rates). One pure function of the layout and the credited Producer time
-// (issue #32). `apply` calls it once after a layout or facing change and
+// Rates). One pure function of the layout, the credited Producer time
+// (issue #32) and the console's levels (issue #58). `apply` calls it once after a layout or facing change and
 // once when a flow session ends, the save reader once on load; `advance`
 // only reads the result cached on the game state.
 
@@ -26,11 +27,13 @@ function chargeFactor(received: Num): Num {
 }
 
 // A modulator's output in charge/s, from the lifetime Producer class
-// credit (live credited seconds; manual log entries never add to it).
-function modulatorOutput(module: ModulatorType, producerSeconds: number): Num {
+// credit (live credited seconds; manual log entries never add to it),
+// times its channel fader (issue #58): the cap bounds the class growth,
+// never the fader.
+function modulatorOutput(module: ModulatorType, producerSeconds: number, console: ConsoleState): Num {
   const output = outputOf(module);
   const grown = add(output.base, mul(output.perProducerHour ?? 0, div(producerSeconds, 3600)));
-  return output.max === undefined ? grown : min(grown, output.max);
+  return mul(output.max === undefined ? grown : min(grown, output.max), channelMultiplier(console, module));
 }
 
 // The cells a placed modulator's reach covers, in reach order: each path
@@ -104,7 +107,7 @@ export function noRates(): BoardRates {
   return { oscillators: [], modulators: [], arms: [], walls: [], total: D(0), breatherTotal: D(0) };
 }
 
-export function computeBoardRates(board: Board, producerSeconds: number): BoardRates {
+export function computeBoardRates(board: Board, producerSeconds: number, console: ConsoleState = emptyConsole()): BoardRates {
   // Every module in a reach (or at a Patch's target) receives the full
   // output; only an oscillator or a Blade takes anything from it, and
   // several deliveries sum (before the log, for an oscillator).
@@ -116,7 +119,7 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
   for (const placement of board.placements) {
     const module = placement.module;
     if (!isModulator(module)) continue;
-    const output = modulatorOutput(module, producerSeconds);
+    const output = modulatorOutput(module, producerSeconds, console);
     // A patched modulator delivers to its cable's target alone, in place
     // of its reach (issue #33).
     const cable = cableFrom(board, placement.cell);
@@ -184,9 +187,9 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
     const resonance = resonanceFactor(strength, instances.length);
     const chargeReceived = received.get(cellKey(placement.cell)) ?? D(0);
     const charge = chargeFactor(chargeReceived);
-    // Faders are an identity leg until chunk 06. Pressure (issue #52)
-    // reduces ν only: modulator output and wall damage ignore it.
-    const faders = D(1);
+    // The type's channel fader (issue #58). Pressure (issue #52) reduces
+    // ν only: modulator output and wall damage ignore it.
+    const faders = channelMultiplier(console, module);
     const pressure = pressureOn(board, placement.cell, guarded);
     const product = (b: Num): Num => mul(mul(mul(mul(b, resonance), charge), faders), sub(1, pressure));
     const rate = product(base);

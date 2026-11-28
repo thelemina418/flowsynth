@@ -1,5 +1,6 @@
 import { computed, signal } from "@preact/signals";
 import { apply, type Action, type ApplyResult } from "../../engine/apply";
+import type { FaderId } from "../../engine/console";
 import type { Cell } from "../../engine/hex";
 import { disclosureOf } from "../../engine/goal";
 import { createInitialState } from "../../engine/state";
@@ -325,6 +326,13 @@ export class Shell {
     this.classError.value = null;
     this.state.value = result.state;
     this.persist();
+  }
+
+  // A console fader (issue #58): one level, or with `max` (shift-click)
+  // as many as ν affords. A refused purchase changes nothing and says
+  // nothing: the fader is already drawn muted.
+  buyFader(fader: FaderId, max: boolean): void {
+    this.act({ type: "buyFader", fader, max });
   }
 
   // The one path for an action: apply, adopt and save on success. A

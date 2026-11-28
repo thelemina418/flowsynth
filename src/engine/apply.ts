@@ -4,6 +4,7 @@ import { dismissSummary, endSession, pauseSession, recordSummaryReflection, resu
 import { addPracticeLog, archiveHabit, chooseHabitClass, createHabit, reattuneHabit, renameHabit, selectHabit, setHabitColor } from "./habits";
 import { createIntention, deleteIntention, editIntention, retainIntentionChoice, rollIntentionOccurrences } from "./intentions";
 import { readEntry, revealEntries } from "./encyclopedia";
+import { buyFader, discloseConsole, type FaderId } from "./console";
 import { writeNote } from "./notes";
 import { recable, type CableAction } from "./cables";
 import { relayout, type PlacementAction } from "./placement";
@@ -47,6 +48,9 @@ export type Action =
   | { type: "deleteIntention"; id: string }
   | { type: "retainIntention"; id: string }
   | { type: "rollIntentions"; now: number }
+  // The console (issue #58), in upgrade mode only: one level, or with
+  // `max` as many as ν affords.
+  | { type: "buyFader"; fader: FaderId; max?: boolean }
   // The board, in upgrade mode only (issues #25, #31, #33).
   | PlacementAction
   | CableAction;
@@ -119,6 +123,8 @@ function run(state: GameState, action: Action): Step {
     case "removeModule":
     case "rotateModule":
       return relaid(state, relayout(state, action));
+    case "buyFader":
+      return relaid(state, buyFader(state, action.fader, action.max === true));
     case "patchCable":
     case "repatchCable":
     case "unplugCable":
@@ -127,11 +133,12 @@ function run(state: GameState, action: Action): Step {
 }
 
 // A layout, facing or cable change recomputes the board's rates once (issue #26),
+// and so does a fader purchase (issue #58),
 // and so does a session's end or a class choice that credits Producer
 // time, so the Flywheel picks up that Producer credit (issue #32); a refusal changed nothing, so it recomputes
 // nothing.
 function relaid(state: GameState, step: Step): Step {
-  if (step.ok) state.game.rates = computeBoardRates(state.game.board, state.records.classCredit.producer);
+  if (step.ok) state.game.rates = computeBoardRates(state.game.board, state.records.classCredit.producer, state.game.console);
   return step;
 }
 
@@ -149,7 +156,10 @@ export function apply(state: GameState, action: Action): ApplyResult {
     state,
     (draft) => {
       const step = run(draft, action);
-      if (step.ok) revealEntries(draft);
+      if (step.ok) {
+        revealEntries(draft);
+        discloseConsole(draft);
+      }
       return step;
     },
     (step) => step.ok,

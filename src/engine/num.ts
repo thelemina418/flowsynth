@@ -125,6 +125,10 @@ export function fmtHp(value: Num): string {
   return fmt(Decimal.max(0, value.sub(NUDGE).ceil()));
 }
 
+// A fader's cost (issue #58) rounds up the same way, so a balance that
+// reads at least the cost always affords it.
+export const fmtCost = fmtHp;
+
 // The widest text fmtHp gives for any HP from `full` down to 0: grouped
 // digits up to 999 999, then the two-decimal mantissa (9.99) at the full
 // HP's own exponent. The flow screen's HP row reserves it (ADR-0031).

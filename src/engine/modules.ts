@@ -65,15 +65,18 @@ interface ModuleSpec {
   // An Arm that cancels pressure on its neighbours while it borders a
   // wall (issue #54).
   guards?: true;
+  // Its channel fader's base cost in ν (mechanics-sketch.md, Console;
+  // issue #58). A type without one has no channel fader yet.
+  channelBase?: number;
 }
 
 const OSCILLATOR: PartnerRule = { kind: "category", category: "oscillator" };
 
 const MODULES: Record<ModuleType, ModuleSpec> = {
   // Both cells of one opposite pair of neighbours hold Triangles.
-  sine: { category: "oscillator", name: "Sine", base: 1, pattern: { paths: [[0], [3]], partner: { kind: "type", module: "triangle" }, strength: 1 } },
+  sine: { category: "oscillator", name: "Sine", base: 1, pattern: { paths: [[0], [3]], partner: { kind: "type", module: "triangle" }, strength: 1 }, channelBase: 10 },
   // Two neighbours that are neighbours of each other hold oscillators.
-  triangle: { category: "oscillator", name: "Triangle", base: 1, pattern: { paths: [[0], [1]], partner: OSCILLATOR, strength: 0.75 } },
+  triangle: { category: "oscillator", name: "Triangle", base: 1, pattern: { paths: [[0], [1]], partner: OSCILLATOR, strength: 0.75 }, channelBase: 15 },
   // 4 or more of the 6 neighbours hold any module: a threshold, so one
   // instance at most.
   square: {
@@ -98,6 +101,7 @@ const MODULES: Record<ModuleType, ModuleSpec> = {
     faces: true,
     output: { base: 1, perProducerHour: 0.1, max: 3 },
     reach: { paths: [[0], [0, 0]], faced: true },
+    channelBase: 25,
   },
   // 0.5 charge/s to each of its 6 neighbours, facing-free. Declared only:
   // chunk 04 makes it arrive.
@@ -161,6 +165,11 @@ export function armRole(module: ArmType): "strike" | "guard" {
 // An Arm's damage per charge/s received, 0 for every other type.
 export function damagePerCharge(module: ModuleType): number {
   return MODULES[module].damagePerCharge ?? 0;
+}
+
+// A type's channel fader base cost, or null while it has no channel fader.
+export function channelBaseOf(module: ModuleType): number | null {
+  return MODULES[module].channelBase ?? null;
 }
 
 export function moduleName(module: ModuleType): string {

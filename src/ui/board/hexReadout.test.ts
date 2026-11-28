@@ -52,6 +52,23 @@ describe("the Hex detail readout", () => {
     ]);
   });
 
+  it("shows a Faders line while the channel isn't ×1 (issue #58)", () => {
+    let s = laid(ACCEPTANCE);
+    s.game.nous = D(26);
+    for (const max of [false, false]) s = apply(s, { type: "buyFader", fader: { kind: "channel", type: "sine" }, max }).state;
+    expect(s.game.console.channels.sine).toBe(2);
+    // 0.71 × 1.25² = 1.109…
+    expect(texts(s, { q: 0, r: 0 })).toEqual([
+      "Sine · Oscillator",
+      "Not resonating · needs Triangles on opposite sides",
+      "1.0 ν/s base · −29% pressure",
+      "Faders ×1.56",
+      "1.1 ν/s",
+    ]);
+    // A Triangle with no channel level shows none.
+    expect(texts(s, { q: 1, r: 0 }).some((t) => t.startsWith("Faders"))).toBe(false);
+  });
+
   it("leaves the pressure leg out of an oscillator no wall presses on", () => {
     // (0,1)'s bordering walls owned, as a conquest leaves them, all but none.
     const s = createInitialState();
