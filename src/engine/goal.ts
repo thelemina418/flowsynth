@@ -49,15 +49,15 @@ export function goalOf(state: GameState): string | null {
 // First-session disclosure (philosophy.md, Disclosure): before the first
 // completed session, upgrade mode shows only the nine first-screen things.
 // From the first completed session on, it also shows the allowance chips,
-// the class levels, and the Almanac and Encyclopedia doors. Read off the
-// session count the engine already keeps.
+// the Almanac and Encyclopedia doors. Read off the session count the
+// engine already keeps. (The flow screen's class line shows from the first
+// session, per the spec's flow sketch, so it needs no flag.)
 export interface Disclosure {
   chips: boolean;
   doors: boolean;
-  classLevels: boolean;
 }
 
 export function disclosureOf(state: GameState): Disclosure {
   const after = state.records.sessionsCompleted > 0;
-  return { chips: after, doors: after, classLevels: after };
+  return { chips: after, doors: after };
 }

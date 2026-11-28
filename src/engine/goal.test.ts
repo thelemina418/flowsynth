@@ -39,7 +39,7 @@ describe("the Goal", () => {
 
 describe("first-session disclosure", () => {
   it("a fresh start shows no chips, doors or class levels", () => {
-    expect(disclosureOf(fresh())).toEqual({ chips: false, doors: false, classLevels: false });
+    expect(disclosureOf(fresh())).toEqual({ chips: false, doors: false });
   });
 
   it("after one completed session, chips, doors and class levels are shown", () => {
@@ -47,6 +47,6 @@ describe("first-session disclosure", () => {
     expect(begin(s, 1500, 0).ok).toBe(true);
     advanceIn(s, 1500, "flow");
     expect(applyIn(s, { type: "endSession", now: 1_500_000 }).ok).toBe(true);
-    expect(disclosureOf(s)).toEqual({ chips: true, doors: true, classLevels: true });
+    expect(disclosureOf(s)).toEqual({ chips: true, doors: true });
   });
 });

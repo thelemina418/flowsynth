@@ -124,6 +124,18 @@ describe("End with provisional time owed", () => {
     expect(shell.state.value.game.nous.toNumber()).toBe(6750);
   });
 
+  it("freezes the session clock while the report waits: reading it credits nothing", () => {
+    const shell = mount(saved(laidOut()));
+    awayPastPlan(shell);
+    click("End");
+    const elapsed = shell.state.value.game.session!.elapsed;
+    tick(shell, 600);
+    expect(shell.state.value.game.session!.elapsed).toBe(elapsed);
+    click("Practiced the whole time");
+    expect(line()).toBe("+8 100 ν · Engineer +30 min");
+    expect(shell.state.value.game.nous.toNumber()).toBe(8100);
+  });
+
   it("never shows the report mid-session", () => {
     const shell = mount(saved(laidOut()));
     awayPastPlan(shell);

@@ -38,6 +38,17 @@ export function placedCount(board: Board, category: ModuleCategory): number {
   return board.placements.filter((placement) => categoryOf(placement.module) === category).length;
 }
 
+// The module allowance not yet on the board, per category: the tray's
+// counts and the flow screen's Ready count read it.
+export function unplacedOf(state: GameState): Record<ModuleCategory, number> {
+  const allowance = grantsOf(state).allowance;
+  const board = state.game.board;
+  return {
+    oscillator: Math.max(0, allowance.oscillator - placedCount(board, "oscillator")),
+    modulator: Math.max(0, allowance.modulator - placedCount(board, "modulator")),
+  };
+}
+
 // The cable plugged into the jack on `source`, if any.
 export function cableFrom(board: Board, source: Cell): Cable | undefined {
   return board.cables.find((cable) => sameCell(cable.source, source));

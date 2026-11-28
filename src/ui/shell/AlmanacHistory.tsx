@@ -4,6 +4,7 @@ import { REFLECTION_SLIDER_NEUTRAL } from "../../engine/constants";
 import { intentionSummary } from "../../engine/intentions";
 import { habitRecordName, recordMissed, recordTargetHit, sessionRecordsNewestFirst } from "../../engine/records";
 import type { GameState, HonestyOutcome, SessionRecord } from "../../engine/types";
+import { wholeMinutes } from "./readouts";
 
 // The Almanac's history surface (issue #43), ported from the old
 // console's history face (`8ecaeac^` focus.ts, format.ts): the legacy
@@ -28,13 +29,9 @@ function date(ms: number, withYear = false): string {
   return (withYear ? DATE_YEAR : DATE).format(ms);
 }
 
-function minutes(seconds: number): number {
-  return Math.max(0, Math.floor(seconds / 60 + 1e-9));
-}
-
 // `X / Y min` for a planned session, `X min` for an open-ended one.
 function practice(record: SessionRecord): string {
-  return record.plannedTarget === null ? `${minutes(record.creditedSeconds)} min` : `${minutes(record.creditedSeconds)} / ${minutes(record.plannedTarget)} min`;
+  return record.plannedTarget === null ? `${wholeMinutes(record.creditedSeconds)} min` : `${wholeMinutes(record.creditedSeconds)} / ${wholeMinutes(record.plannedTarget)} min`;
 }
 
 function valence(slider: number): string {
@@ -76,7 +73,7 @@ function Record({ state, record, onBack }: { state: GameState; record: SessionRe
       {record.goalsAdvanced.length > 0 ? (
         record.goalsAdvanced.map(({ goalId, seconds, goal }) => {
           const intention = goal ?? state.records.intentions.find((g) => g.id === goalId);
-          return <p key={goalId} class="history-line">{`${minutes(seconds)} min · ${intention ? intentionSummary(state, intention) : "a since-removed Intention"}`}</p>;
+          return <p key={goalId} class="history-line">{`${wholeMinutes(seconds)} min · ${intention ? intentionSummary(state, intention) : "a since-removed Intention"}`}</p>;
         })
       ) : (
         <p class="history-line muted">No Intentions advanced.</p>

@@ -1,7 +1,7 @@
 import { disclosureOf, goalOf } from "../../engine/goal";
 import { hasUnseen } from "../../engine/encyclopedia";
 import { grantsOf } from "../../engine/levels";
-import { placedCount } from "../../engine/placement";
+import { unplacedOf } from "../../engine/placement";
 import type { Shell } from "./shell";
 import { Almanac } from "./Almanac";
 import { Encyclopedia } from "./Encyclopedia";
@@ -61,10 +61,7 @@ export function App({ shell }: { shell: Shell }) {
           flowing={game.mode === "flow"}
           arrived={grants.arrived}
           arrivedCables={grants.arrivedCables}
-          unplaced={{
-            oscillator: Math.max(0, grants.allowance.oscillator - placedCount(game.board, "oscillator")),
-            modulator: Math.max(0, grants.allowance.modulator - placedCount(game.board, "modulator")),
-          }}
+          unplaced={unplacedOf(state)}
           chips={shown.chips}
           goal={goalOf(state)}
           placing={shell.placing}
@@ -102,7 +99,7 @@ export function App({ shell }: { shell: Shell }) {
           error={screen.error}
           onCreate={(name, habitClass) => shell.createHabit(name, habitClass)}
           onBegin={(habitId, minutes) => shell.beginFlow(habitId, minutes)}
-          onClose={() => shell.closeBegin()}
+          onClose={() => shell.closePanel()}
         />
       )}
       {screen.kind === "almanac" && <Almanac shell={shell} error={screen.error} />}

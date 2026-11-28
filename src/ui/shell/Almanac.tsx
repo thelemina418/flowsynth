@@ -23,11 +23,11 @@ const SURFACES: readonly [Surface, string][] = [
 export function Almanac({ shell, error }: { shell: Shell; error: string | null }) {
   const [surface, setSurface] = useState<Surface>("habits");
   const state = shell.state.value;
-  const close = () => shell.closeAlmanac();
+  const close = () => shell.closePanel();
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") shell.closeAlmanac();
+      if (event.key === "Escape") shell.closePanel();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
