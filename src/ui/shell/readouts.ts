@@ -1,9 +1,11 @@
 import { formatClock } from "../../engine/clock";
 import { className } from "../../engine/habits";
-import { fmt } from "../../engine/num";
+import { div, fmt, gt } from "../../engine/num";
+import { wallAt } from "../../engine/map";
+import type { FoughtWall } from "../../engine/fought";
 import { classLevel, grantsOf } from "../../engine/levels";
 import { unplacedOf } from "../../engine/placement";
-import type { BreatherState, GameState, Habit, SessionState, SessionSummary } from "../../engine/types";
+import type { BreatherState, GameState, Habit, SessionState, SessionSummary, SummaryWall } from "../../engine/types";
 
 // The flow screen's readouts (issue #39): the session class's line, the
 // Ready count and the ported console clock. Readouts, not sentences.
@@ -40,6 +42,24 @@ export function readyCount(state: GameState): number {
   return unplaced.oscillator + unplaced.modulator + Math.max(0, grantsOf(state).cableAllowance - state.game.board.cables.length);
 }
 
+const HP_CELLS = 10;
+
+// The fought wall's HP row (issue #50), `Shale ▕███████░░░▏ 412 / 600 HP`:
+// a fixed 10-cell bar and the HP against full. A cell stays lit while any
+// HP is left, so the bar empties only at the conquest. `width` is the
+// figures' widest text for this wall, `<full> / <full> HP`, so the row
+// holds its size while the HP falls (ADR-0031).
+export function hpRow(wall: FoughtWall): { name: string; bar: string; figures: string; width: number } {
+  const lit = Math.max(0, Math.min(HP_CELLS, Math.ceil(div(wall.hp, wall.full).toNumber() * HP_CELLS - 1e-9)));
+  const full = fmt(wall.full);
+  return {
+    name: wall.name,
+    bar: `▕${"█".repeat(lit)}${"░".repeat(HP_CELLS - lit)}▏`,
+    figures: `${fmt(wall.hp)} / ${full} HP`,
+    width: `${full} / ${full} HP`.length,
+  };
+}
+
 // The ported console clock (`8ecaeac^` render.ts sessionClockSeconds and
 // focus.ts sessionCaption): a planned session counts down, then counts its
 // overrun up from 0; an open-ended one counts up. The caption reads
@@ -60,11 +80,21 @@ export function clockCaption(session: SessionState, paused: boolean): string {
 // The summary line (issue #40): `+48 210 ν · Engineer +50 min`, with
 // ` → Lv 2` when the session crossed a level. Minutes are truncated, like
 // every shown figure. A habit still awaiting its class shows only its
-// minutes. Chunk 05 appends the HP segment.
+// minutes. Then the walls (issue #50): ` · <Wall> conquered` for each
+// conquest, in the order they happened, and ` · <Wall> −<n> HP` for the
+// wall still fought at the end, if it lost HP.
 export function summaryLine(summary: SessionSummary): string {
   const practice = summary.habitClass === null ? `+${wholeMinutes(summary.seconds)} min` : `${className(summary.habitClass)} +${wholeMinutes(summary.classSeconds)} min`;
   const crossed = summary.levelAfter > summary.levelBefore ? ` → Lv ${summary.levelAfter}` : "";
-  return `+${fmt(summary.nous)} ν · ${practice}${crossed}`;
+  return `+${fmt(summary.nous)} ν · ${practice}${crossed}${wallsSegment(summary.walls)}`;
+}
+
+function wallsSegment(walls: readonly SummaryWall[]): string {
+  const name = (wall: SummaryWall) => wallAt(wall.cell)?.name ?? "";
+  const conquered = walls.filter((w) => w.conquered).map((w) => ` · ${name(w)} conquered`);
+  const fought = walls.find((w) => w.fought && !w.conquered && gt(w.lost, 0));
+  const lost = fought && fmt(fought.lost) !== "0" ? [` · ${name(fought)} −${fmt(fought.lost)} HP`] : [];
+  return [...conquered, ...lost].join("");
 }
 
 // `10 min`: a breather's length, truncated, for `Breather banked · 10 min`

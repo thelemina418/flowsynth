@@ -1,3 +1,4 @@
+import { foughtWall } from "./fought";
 import { EPS, REFLECTION_SLIDER_MIN, REFLECTION_SLIDER_NEUTRAL, REFLECTION_SLIDER_POSITIONS } from "./constants";
 import { logSessionPractice } from "./habits";
 import { classLevelOf } from "./levels";
@@ -46,6 +47,7 @@ export function startSession(state: GameState, habitId: string, target: number |
     startedAt: now,
     goalSeconds: {},
     nousMade: D(0),
+    walls: [],
   };
   return ok;
 }
@@ -81,6 +83,15 @@ export function endSession(state: GameState, now: number = 0): ActionResult {
   // shorter one leaves the bank alone (ADR-0095).
   const breather = credited >= BREATHER_MIN_CREDITED - EPS ? Math.min(BREATHER_MAX_SECONDS, Math.max(BREATHER_MIN_SECONDS, credited / 5)) : null;
   if (breather !== null) state.game.breather.banked = { seconds: breather };
+  // The wall still being fought at the end, read before the close
+  // recomputes anything (issue #50).
+  const fought = foughtWall(state.game.board, state.game.rates);
+  const walls = (session?.walls ?? []).map((w) => ({
+    cell: { q: w.cell.q, r: w.cell.r },
+    lost: w.lost,
+    conquered: w.conquered,
+    fought: !w.conquered && fought !== null && fought.cell.q === w.cell.q && fought.cell.r === w.cell.r,
+  }));
   state.game.mode = "upgrade";
   state.game.session = null;
   state.records.sessionsCompleted++;
@@ -118,6 +129,7 @@ export function endSession(state: GameState, now: number = 0): ActionResult {
     honestyEvents: events,
     reflection: null,
     seen: false,
+    walls,
   };
   return ok;
 }

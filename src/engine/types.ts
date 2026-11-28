@@ -49,6 +49,24 @@ export interface SessionState {
   // The ν the session made (issue #40): banked from trusted flow time,
   // plus provisional ν once a non-missed honesty answer settles it.
   nousMade: Num;
+  // The walls the session fought (issue #50): each wall's net HP lost
+  // since it was first fought, and whether it fell. The conquered ones are
+  // in conquest order.
+  walls: WallTally[];
+}
+
+// One wall the session fought (issue #50). `lost` is net: a wall that
+// healed after the fight stopped lost less.
+export interface WallTally {
+  cell: Cell;
+  lost: Num;
+  conquered: boolean;
+}
+
+// The summary's entry: `fought` marks the wall still being fought when
+// the session ended, standing.
+export interface SummaryWall extends WallTally {
+  fought: boolean;
 }
 
 // The summary's reflection (spec §8).
@@ -75,6 +93,8 @@ export interface SessionSummary {
   honestyEvents: HonestyEvent[];
   reflection: SessionReflection | null;
   seen: boolean;
+  // The walls the session fought (issue #50), from its tally.
+  walls: SummaryWall[];
 }
 
 export type SessionMode = "planned" | "open-ended";

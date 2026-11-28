@@ -183,3 +183,12 @@ export function wallAt(cell: Cell): AuthoredWall | null {
   const stats = KINDS[kind];
   return { kind, name: stats.name, hp: D(stats.hp), regen: D(stats.regen), pressure: stats.pressure, modifier, opens };
 }
+
+const AUTHORED_ORDER = new Map(Object.keys(MAP).map((key, i) => [key, i]));
+
+// A wall's place in authored order (ring by ring, each ring clockwise from
+// its upper-left cell): what breaks ties between walls (issue #50).
+// Infinity for a cell with no wall.
+export function authoredIndex(cell: Cell): number {
+  return AUTHORED_ORDER.get(cellKey(cell)) ?? Infinity;
+}
