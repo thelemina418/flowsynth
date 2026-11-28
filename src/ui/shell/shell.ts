@@ -1,5 +1,4 @@
 import { computed, signal } from "@preact/signals";
-import { advance } from "../../engine/advance";
 import { apply, type Action, type ApplyResult } from "../../engine/apply";
 import type { Cell } from "../../engine/hex";
 import { disclosureOf } from "../../engine/goal";
@@ -8,6 +7,7 @@ import { poolOutstanding, type Presence } from "../../engine/trust";
 import type { BreatherState, EntryId, GameState, Habit, HabitClass, HonestyOutcome, SessionState, SessionSummary } from "../../engine/types";
 import { Placing } from "../board/placing";
 import { SharedSave, type SaveStorage } from "../shared-save";
+import { SessionClock } from "./clock";
 
 // The shell (issue #21): what opening the app owes before any game surface
 // exists. It loads, migrates and saves through SharedSave (ADR-0032's
@@ -32,6 +32,12 @@ export type Screen =
   | { kind: "encyclopedia"; entry: EntryId | null }
   | { kind: "ready" };
 
+// The one panel open over upgrade mode, or none: Begin flow (issue #39)
+// and the Almanac (issue #43), each with its last refusal as its one
+// quiet line, and the Encyclopedia (issue #44) on its list (null) or on
+// one entry. Opening one closes the others.
+export type Panel = { kind: "begin"; error: string | null } | { kind: "almanac"; error: string | null } | { kind: "encyclopedia"; entry: EntryId | null };
+
 interface Offer {
   raw: string;
   lost: string[];
@@ -53,28 +59,15 @@ export class Shell {
   readonly placing = new Placing(this.state, (action) => this.act(action));
   // The cell the Hex detail reads (issue #27), or null while it is empty.
   readonly inspected = signal<Cell | null>(null);
-  // The Begin flow panel (issue #39): open from upgrade mode, with the
-  // last refusal as its one quiet line. The flow screen has its own line.
-  private readonly beginOpen = signal(false);
-  private readonly beginError = signal<string | null>(null);
+  private readonly panel = signal<Panel | null>(null);
+  // The flow screen's one quiet line.
   private readonly flowError = signal<string | null>(null);
-  // The Almanac (issue #43): open from upgrade mode once its door shows,
-  // with the last refusal as its one quiet line.
-  private readonly almanacOpen = signal(false);
-  private readonly almanacError = signal<string | null>(null);
-  // The Encyclopedia (issue #44): open from upgrade mode once its door
-  // shows, on its list (null) or on one entry.
-  private readonly encyclopediaOpen = signal(false);
-  private readonly encyclopediaEntry = signal<EntryId | null>(null);
   // Set by End while provisional time is owed (issue #40): the honesty
-  // report shows only then, never mid-session. Not saved: a reload lands
-  // on the flow screen, and End asks again.
+  // report shows only then, never mid-session, and the session clock
+  // stands still until it is answered. Not saved: a reload lands on the
+  // flow screen, and End asks again.
   private readonly ending = signal(false);
-  // The clock boundary's last reading: the wall clock and the drift
-  // between the wall and performance clocks, both in ms. Null while no
-  // session clock is running.
-  private lastWall: number | null = null;
-  private lastDrift = 0;
+  private readonly clock: SessionClock;
 
   readonly screen = computed<Screen>(() => {
     const offer = this.recovery.value;
@@ -96,10 +89,7 @@ export class Shell {
     if (mode === "upgrade" && summary && !summary.seen) return { kind: "summary", summary };
     const result = state.game.breather.result;
     if (mode === "upgrade" && result) return { kind: "breather-result", result };
-    if (this.almanacOpen.value) return { kind: "almanac", error: this.almanacError.value };
-    if (this.encyclopediaOpen.value) return { kind: "encyclopedia", entry: this.encyclopediaEntry.value };
-    if (this.beginOpen.value) return { kind: "begin", error: this.beginError.value };
-    return { kind: "ready" };
+    return this.panel.value ?? { kind: "ready" };
   });
 
   // `now` is the wall clock. `drift` is the wall clock minus the
@@ -108,9 +98,10 @@ export class Shell {
   constructor(
     storage: SaveStorage,
     readonly now: () => number = () => Date.now(),
-    private readonly drift: () => number = () => 0,
+    drift: () => number = () => 0,
   ) {
     this.save = new SharedSave(storage, now);
+    this.clock = new SessionClock(now, drift);
   }
 
   boot(): void {
@@ -125,90 +116,31 @@ export class Shell {
       return;
     }
     this.save.incorporate(parsed.savedAt);
-    this.state.value = this.reconciled(parsed.state, parsed.savedAt);
+    this.state.value = this.clock.catchUpSinceSave(parsed.state, parsed.savedAt);
     this.persist();
   }
 
-  // A session saved mid-flow (the old console's resume from a save): the
-  // wall-clock gap since the save is an offline absence, settled at once
-  // by the trust rules, since the page is open again. Paused time credits
-  // nothing. A breather saved running moves on by the same gap, and one
-  // whose deadline passed while closed completes here (issue #41).
-  private reconciled(state: GameState, savedAt: number): GameState {
-    const mode = state.game.mode;
-    const now = this.now();
-    if (mode === "breather") {
-      const ran = advance(state, Math.max(0, (now - savedAt) / 1000), "breather");
-      this.seed(now);
-      return ran.fault === undefined ? ran.state : state;
-    }
-    if (mode !== "flow" && mode !== "paused") return state;
-    let next = state;
-    if (mode === "flow") {
-      const away = advance(next, Math.max(0, (now - savedAt) / 1000), "flow", "offline", 0);
-      if (away.fault === undefined) next = away.state;
-      const back = advance(next, 0, "flow", "visible", 0);
-      if (back.fault === undefined) next = back.state;
-    }
-    this.seed(now);
-    return this.marked(next);
-  }
-
-  private seed(now: number): void {
-    this.lastWall = now;
-    this.lastDrift = this.drift();
-  }
-
-  // The planned target, marked the first time it is passed (spec chunk
-  // 04): once per session. The mark is saved, so a reload never marks it
-  // again, and the session runs on.
-  private marked(state: GameState): GameState {
-    const session = state.game.session;
-    if (!session || session.target === null || session.targetSignaled || session.elapsed < session.target) return state;
-    const result = apply(state, { type: "signalTarget" });
-    return result.ok ? result.state : state;
-  }
-
-  // The clock boundary (issue #39): in flow or paused, the wall-clock gap
-  // and the drift step since the last boundary go to `advance` (paused
-  // time credits nothing). In a breather the wall gap goes to `advance`
-  // as breather time, which knows no presence (issue #41). Upgrade mode
-  // moves nothing. Every step is saved.
+  // The clock boundary (issue #39): the span since the last one goes to
+  // the session clock, frozen while End's honesty report waits. Every
+  // step is saved.
   boundary(presence: Presence): void {
-    const state = this.state.peek();
-    const mode = state.game.mode;
-    const now = this.now();
-    if (mode === "upgrade") {
-      this.lastWall = null;
+    const step = this.clock.step(this.state.peek(), presence, this.ending.peek());
+    if (step === null) return;
+    if ("fault" in step) {
+      this.notice.value = `Time couldn't be counted · ${step.fault}`;
       return;
     }
-    if (this.lastWall === null) {
-      this.seed(now);
-      return;
-    }
-    const drift = this.drift();
-    const gap = Math.max(0, (now - this.lastWall) / 1000);
-    const driftStep = (drift - this.lastDrift) / 1000;
-    this.lastWall = now;
-    this.lastDrift = drift;
-    const walked = mode === "breather" ? advance(state, gap, "breather") : advance(state, gap, "flow", presence, driftStep);
-    if (walked.fault !== undefined) {
-      this.notice.value = `Time couldn't be counted · ${walked.fault}`;
-      return;
-    }
-    this.state.value = this.marked(walked.state);
+    this.state.value = step.state;
     this.persist();
   }
 
   openBegin(): void {
     if (this.state.peek().game.mode !== "upgrade") return;
-    this.beginError.value = null;
-    this.beginOpen.value = true;
+    this.panel.value = { kind: "begin", error: null };
   }
 
-  closeBegin(): void {
-    this.beginOpen.value = false;
-    this.beginError.value = null;
+  closePanel(): void {
+    this.panel.value = null;
   }
 
   // The Almanac's door shows in upgrade mode from the first completed
@@ -218,14 +150,7 @@ export class Shell {
     const state = this.state.peek();
     if (state.game.mode !== "upgrade" || !disclosureOf(state).doors) return;
     this.act({ type: "rollIntentions", now: this.now() });
-    this.closeEncyclopedia();
-    this.almanacError.value = null;
-    this.almanacOpen.value = true;
-  }
-
-  closeAlmanac(): void {
-    this.almanacOpen.value = false;
-    this.almanacError.value = null;
+    this.panel.value = { kind: "almanac", error: null };
   }
 
   // The Encyclopedia's door shows beside the Almanac's. It opens on the
@@ -233,34 +158,34 @@ export class Shell {
   openEncyclopedia(): void {
     const state = this.state.peek();
     if (state.game.mode !== "upgrade" || !disclosureOf(state).doors) return;
-    this.closeAlmanac();
-    this.encyclopediaEntry.value = null;
-    this.encyclopediaOpen.value = true;
+    this.panel.value = { kind: "encyclopedia", entry: null };
   }
 
   // Opening an entry marks it seen (`readEntry`); null goes back to the list.
   openEntry(id: EntryId | null): void {
+    if (this.panel.peek()?.kind !== "encyclopedia") return;
     if (id !== null && !this.act({ type: "readEntry", id }).ok) return;
-    this.encyclopediaEntry.value = id;
+    this.panel.value = { kind: "encyclopedia", entry: id };
   }
 
-  closeEncyclopedia(): void {
-    this.encyclopediaOpen.value = false;
-    this.encyclopediaEntry.value = null;
+  // A refusal is the open panel's line; a success clears it.
+  private panelLine(kind: "begin" | "almanac", result: ApplyResult): void {
+    const panel = this.panel.peek();
+    if (panel && panel.kind === kind) this.panel.value = { ...panel, error: result.ok ? null : (result.reason ?? null) };
   }
 
   // An Almanac action, given the wall clock when it needs one. A refusal
   // is the Almanac's line; a success clears it.
   almanacAct(action: Action | ((now: number) => Action)): ApplyResult {
     const result = this.act(typeof action === "function" ? action(this.now()) : action);
-    this.almanacError.value = result.ok ? null : (result.reason ?? null);
+    this.panelLine("almanac", result);
     return result;
   }
 
   // `+ New habit` in the Begin flow panel. A refusal is the panel's line.
   createHabit(name: string, habitClass: HabitClass): string | null {
     const result = this.act({ type: "createHabit", name, habitClass });
-    this.beginError.value = result.ok ? null : (result.reason ?? null);
+    this.panelLine("begin", result);
     return result.ok ? (result.id ?? null) : null;
   }
 
@@ -269,14 +194,14 @@ export class Shell {
     const now = this.now();
     const result = this.act({ type: "startSession", habitId: habitId ?? "", target: minutes * 60, now });
     if (!result.ok) {
-      this.beginError.value = result.reason ?? null;
+      this.panelLine("begin", result);
       return;
     }
-    this.closeBegin();
+    this.closePanel();
     this.flowError.value = null;
     this.inspected.value = null;
     this.placing.clear();
-    this.seed(now);
+    this.clock.start(now);
   }
 
   // Pause and Resume close the span since the last boundary first, so a
@@ -321,7 +246,7 @@ export class Shell {
     const result = this.act({ type: "endSession", now: this.now() });
     this.flowError.value = result.ok ? null : (result.reason ?? null);
     if (!result.ok) return;
-    this.lastWall = null;
+    this.clock.stop();
     this.inspected.value = null;
   }
 
@@ -335,17 +260,17 @@ export class Shell {
   takeBreather(): void {
     const now = this.now();
     if (!this.act({ type: "takeBreather", now }).ok) return;
-    this.closeBegin();
+    this.closePanel();
     this.inspected.value = null;
     this.placing.clear();
-    this.seed(now);
+    this.clock.start(now);
   }
 
   // `End early`: the span since the last boundary passes first, so a
   // breather whose deadline has come completes rather than re-banking.
   endBreatherEarly(): void {
     this.boundary("visible");
-    if (this.act({ type: "endBreatherEarly" }).ok) this.lastWall = null;
+    if (this.act({ type: "endBreatherEarly" }).ok) this.clock.stop();
   }
 
   dismissBreatherResult(): void {

@@ -2,13 +2,18 @@ import { formatClock } from "../../engine/clock";
 import { className } from "../../engine/habits";
 import { fmt } from "../../engine/num";
 import { classLevel, grantsOf } from "../../engine/levels";
-import { placedCount } from "../../engine/placement";
+import { unplacedOf } from "../../engine/placement";
 import type { BreatherState, GameState, Habit, SessionState, SessionSummary } from "../../engine/types";
 
 // The flow screen's readouts (issue #39): the session class's line, the
 // Ready count and the ported console clock. Readouts, not sentences.
 
 const BAR_CELLS = 9;
+
+// Whole minutes, truncated like every shown figure: 59.9 s reads 0.
+export function wholeMinutes(seconds: number): number {
+  return Math.max(0, Math.floor(seconds / 60 + 1e-9));
+}
 
 // Hours to one decimal, truncated: 0.85 h reads 0.8h.
 export function hours(seconds: number): string {
@@ -31,10 +36,8 @@ export function classLine(state: GameState, habit: Habit | undefined): string | 
 // allowance. It reads live class credit, so a level crossed mid-flow counts
 // at once (chunk 06 adds the affordable faders).
 export function readyCount(state: GameState): number {
-  const grants = grantsOf(state);
-  const board = state.game.board;
-  const modules = (["oscillator", "modulator"] as const).reduce((sum, category) => sum + Math.max(0, grants.allowance[category] - placedCount(board, category)), 0);
-  return modules + Math.max(0, grants.cableAllowance - board.cables.length);
+  const unplaced = unplacedOf(state);
+  return unplaced.oscillator + unplaced.modulator + Math.max(0, grantsOf(state).cableAllowance - state.game.board.cables.length);
 }
 
 // The ported console clock (`8ecaeac^` render.ts sessionClockSeconds and
@@ -59,8 +62,7 @@ export function clockCaption(session: SessionState, paused: boolean): string {
 // every shown figure. A habit still awaiting its class shows only its
 // minutes. Chunk 05 appends the HP segment.
 export function summaryLine(summary: SessionSummary): string {
-  const minutes = Math.floor(summary.seconds / 60 + 1e-9);
-  const practice = summary.habitClass === null ? `+${minutes} min` : `${className(summary.habitClass)} +${Math.floor(summary.classSeconds / 60 + 1e-9)} min`;
+  const practice = summary.habitClass === null ? `+${wholeMinutes(summary.seconds)} min` : `${className(summary.habitClass)} +${wholeMinutes(summary.classSeconds)} min`;
   const crossed = summary.levelAfter > summary.levelBefore ? ` → Lv ${summary.levelAfter}` : "";
   return `+${fmt(summary.nous)} ν · ${practice}${crossed}`;
 }
@@ -68,7 +70,7 @@ export function summaryLine(summary: SessionSummary): string {
 // `10 min`: a breather's length, truncated, for `Breather banked · 10 min`
 // and `Take breather · 10 min` (issue #41).
 export function breatherMinutes(seconds: number): string {
-  return `${Math.floor(seconds / 60 + 1e-9)} min`;
+  return `${wholeMinutes(seconds)} min`;
 }
 
 // The calm screen's countdown, `9:41`: the time left, minutes unpadded.

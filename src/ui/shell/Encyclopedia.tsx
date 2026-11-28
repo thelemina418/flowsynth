@@ -17,10 +17,10 @@ export function Encyclopedia({ shell, entry }: { shell: Shell; entry: EntryId | 
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") shell.closeEncyclopedia();
+      if (event.key === "Escape") shell.closePanel();
     };
     const onTap = (event: Event) => {
-      if (panel.current && event.target instanceof Node && !panel.current.contains(event.target)) shell.closeEncyclopedia();
+      if (panel.current && event.target instanceof Node && !panel.current.contains(event.target)) shell.closePanel();
     };
     document.addEventListener("keydown", onKey);
     document.addEventListener("pointerdown", onTap);
@@ -36,7 +36,7 @@ export function Encyclopedia({ shell, entry }: { shell: Shell; entry: EntryId | 
         <h2 id="encyclopedia-title" class="shell-title">
           Encyclopedia
         </h2>
-        <button type="button" class="quiet small" onClick={() => shell.closeEncyclopedia()}>
+        <button type="button" class="quiet small" onClick={() => shell.closePanel()}>
           Close
         </button>
       </div>

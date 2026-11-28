@@ -264,6 +264,10 @@ Decided where the spec is silent or self-contradictory, by philosophy.md (#37's 
 - **One dot, not one per entry (#44).** The spec says "one quiet unseen-dot", so only the door carries it. List rows aren't marked, and the old `Title · Unseen` rows aren't ported. The dot clears once every revealed entry has been opened.
 - **Tap away (#44).** The panel stands in place of the board, as the Almanac does, and a `pointerdown` anywhere outside it closes it. Opening the Encyclopedia closes the Almanac, and the other way round.
 
+### Review fixes
+
+- **The honesty report freezes the session clock.** Once End shows the report, each boundary takes a fresh reading and moves nothing, so time spent reading it credits no practice, class credit or breather length. The clock boundary moved out of `shell.ts` into `clock.ts` (`SessionClock`, with `catchUpSinceSave` and `markTargetIfPassed`, formerly `reconciled` and `marked`). The Begin, Almanac and Encyclopedia panels share one `panel` signal over a `Panel` union, so only one is ever open. `unplacedOf` (`placement.ts`, beside `placedCount`, which `levels.ts` can't import without a cycle) is the tray's and the Ready count's one unplaced-allowance reading, and `wholeMinutes` (`readouts.ts`) is the one truncating minutes formatter. `disclosureOf` dropped its unread `classLevels` flag.
+
 ### Pace runner
 
 At the end of the chunk, `npm run pace` (250 credited hours):

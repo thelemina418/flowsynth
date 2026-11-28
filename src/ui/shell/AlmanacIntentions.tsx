@@ -2,6 +2,7 @@ import { useState } from "preact/hooks";
 import type { Action, ApplyResult } from "../../engine/apply";
 import { activeIntentionOf, intentionRequiredSeconds, pendingIntentionsOf, intentionTargetSummary } from "../../engine/intentions";
 import type { GameState, Habit, Intention, IntentionSchedule } from "../../engine/types";
+import { wholeMinutes } from "./readouts";
 
 // The Almanac's Intentions surface (issue #43), from the old console's
 // goal rows (`8ecaeac^` focus.ts): one per habit, reading `Piano · 40 / 60
@@ -17,7 +18,7 @@ const PERIOD: Record<Kind, string> = { daily: " today", weekly: " this week", on
 // Minutes truncated, held at the target once it's met.
 function line(habit: Habit, intention: Intention): string {
   const required = intentionRequiredSeconds(intention);
-  const progress = Math.floor(Math.min(intention.progressSeconds, required) / 60 + 1e-9);
+  const progress = wholeMinutes(Math.min(intention.progressSeconds, required));
   return `${habit.name} · ${progress} / ${intention.condition.minutes} min${PERIOD[intention.schedule.kind]}`;
 }
 
