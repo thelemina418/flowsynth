@@ -1,8 +1,10 @@
 import { disclosureOf, goalOf } from "../../engine/goal";
+import { hasUnseen } from "../../engine/encyclopedia";
 import { grantsOf } from "../../engine/levels";
 import { placedCount } from "../../engine/placement";
 import type { Shell } from "./shell";
 import { Almanac } from "./Almanac";
+import { Encyclopedia } from "./Encyclopedia";
 import { BeginFlow } from "./BeginFlow";
 import { ClassChoice } from "./ClassChoice";
 import { FlowScreen } from "./FlowScreen";
@@ -21,7 +23,7 @@ import { Stage } from "../board/Stage";
 // the honesty report and the summary (issue #40), and the breather's calm
 // screen and result (issue #41). Upgrade mode carries the
 // Goal line; the chips and doors wait for the first completed session
-// (issue #42).
+// (issue #42). The Encyclopedia door carries one quiet unseen-dot (#44).
 export function App({ shell }: { shell: Shell }) {
   const screen = shell.screen.value;
   const notice = shell.notice.value;
@@ -78,6 +80,10 @@ export function App({ shell }: { shell: Shell }) {
               <button type="button" class="quiet" data-door="almanac" onClick={() => shell.openAlmanac()}>
                 Almanac
               </button>
+              <button type="button" class="quiet encyclopedia-door" data-door="encyclopedia" onClick={() => shell.openEncyclopedia()}>
+                Encyclopedia
+                {hasUnseen(state) && <span class="encyclopedia-dot" data-unseen="" aria-label="Unseen entries" />}
+              </button>
             </nav>
           )}
           {game.breather.banked && (
@@ -100,6 +106,7 @@ export function App({ shell }: { shell: Shell }) {
         />
       )}
       {screen.kind === "almanac" && <Almanac shell={shell} error={screen.error} />}
+      {screen.kind === "encyclopedia" && <Encyclopedia shell={shell} entry={screen.entry} />}
       {screen.kind === "flow" && <FlowScreen shell={shell} error={screen.error} />}
       {screen.kind === "honesty" && <HonestyReport session={screen.session} error={screen.error} onAnswer={(outcome) => shell.answerHonesty(outcome)} />}
       {screen.kind === "summary" && <Summary summary={screen.summary} onDismiss={() => shell.dismissSummary()} />}

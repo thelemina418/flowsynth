@@ -8,8 +8,9 @@ import { cellKey, isFacing, LIFETIME_RADIUS, ring, type Cell } from "./hex";
 import { hasFacing, isModuleType } from "./modules";
 import { isCableType, newCableRefusal, type CableRoom } from "./cables";
 import { grantsOf } from "./levels";
+import { emptyEncyclopedia, isEntryId, revealEntries } from "./encyclopedia";
 import { computeBoardRates } from "./rates";
-import type { Arc, Board, BreatherState, Cable, GameState, Habit, HabitClass, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
+import type { Arc, Board, BreatherState, Cable, EncyclopediaState, EntryId, GameState, Habit, HabitClass, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
 
 // The save boundary. Save v16 (issue #18) writes the nested GameState
 // (`records`, `game`) with every Decimal as num's save string, and reads it
@@ -218,6 +219,16 @@ function positiveOr(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 }
 
+// The Encyclopedia (issue #44): each set keeps only known entry ids, once
+// each; seen keeps only revealed ones. Missing or unreadable, it is empty,
+// and the load then adds what the state reveals.
+function readEncyclopedia(raw: unknown): EncyclopediaState {
+  const ids = (value: unknown): EntryId[] => (Array.isArray(value) ? [...new Set(value.filter(isEntryId))] : []);
+  const revealed = isRecord(raw) ? ids(raw.revealed) : [];
+  const seen = isRecord(raw) ? ids(raw.seen).filter((id) => revealed.includes(id)) : [];
+  return { revealed, seen };
+}
+
 // The breather (issue #41): each part defaults to none when missing or
 // unreadable. A running breather needs its length; a result its ν.
 function readBreather(raw: unknown): BreatherState {
@@ -386,6 +397,7 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
       session: flowing ? readSession(game.session as Partial<SessionState>) : null,
       summary: isRecord(game.summary) ? readSummary(game.summary as Partial<SessionSummary>) : null,
       breather,
+      encyclopedia: readEncyclopedia(game.encyclopedia),
       openClasses,
       legacyLine: typeof game.legacyLine === "string" ? game.legacyLine : null,
       board,
@@ -393,6 +405,7 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
       rates: computeBoardRates(board, classCredit.producer),
     },
   };
+  revealEntries(state);
   const recovered = recovery && lost.length > 0 ? { fromVersion: version, lost } : undefined;
   return { state, ...(recovered && { recovered }) };
 }
@@ -524,6 +537,10 @@ function readV15(raw: Record<string, unknown>, recovery: boolean): LoadResult {
       summary: isRecord(raw.summary) && raw.summary.seen !== true ? { ...readSummary(raw.summary as Partial<SessionSummary>), breather: null } : null,
     },
   };
+  // The retired game's Encyclopedia is not carried; the migrated state
+  // reveals its own entries.
+  state.game.encyclopedia = emptyEncyclopedia();
+  revealEntries(state);
   const recovered = recovery && lost.length > 0 ? { fromVersion: LEGACY_VERSION, lost } : undefined;
   return { state, ...(recovered && { recovered }) };
 }

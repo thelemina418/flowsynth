@@ -177,6 +177,15 @@ export interface BreatherState {
   result: { nous: Num } | null;
 }
 
+// The Encyclopedia's entries (spec chunk 04, issue #44).
+export type EntryId = "resonance" | OscillatorType | "charge" | "cables" | "walls" | "pressure" | "classes" | "breather" | "prestige";
+
+// Revealed and seen entries: unions that only grow (engine/encyclopedia.ts).
+export interface EncyclopediaState {
+  revealed: EntryId[];
+  seen: EntryId[];
+}
+
 // The real-life records: nothing in the game ever resets them.
 export interface Records {
   habits: Habit[];
@@ -331,6 +340,7 @@ export interface Game {
   session: SessionState | null;
   summary: SessionSummary | null;
   breather: BreatherState;
+  encyclopedia: EncyclopediaState;
   // The classes a habit may attune to. Engineer and Producer open at the
   // start; later chunks open the others.
   openClasses: HabitClass[];

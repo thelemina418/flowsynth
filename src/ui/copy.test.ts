@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
+import { ENTRIES } from "../engine/encyclopedia";
 
 // The banned-word list in docs/design/philosophy.md ("Words", rule 5),
 // enforced over every string a UI source file holds: string and template
@@ -66,6 +67,14 @@ describe("UI copy (philosophy.md, Words rule 5)", () => {
     const files = sources(join(ROOT, "src/engine"));
     expect(files.length).toBeGreaterThan(3);
     const found = files.flatMap((path) => bannedCopy(readFileSync(path, "utf8"), relative(ROOT, path)));
+    expect(found).toEqual([]);
+  });
+
+  it("no Encyclopedia entry's title or line carries a banned word or an exclamation mark", () => {
+    expect(ENTRIES.length).toBe(13);
+    const found = ENTRIES.flatMap((entry) =>
+      [entry.title, ...entry.lines].flatMap((text) => BANNED.filter(({ pattern }) => pattern.test(text)).map(({ word }) => `${entry.id}: ${word} in ${JSON.stringify(text)}`)),
+    );
     expect(found).toEqual([]);
   });
 

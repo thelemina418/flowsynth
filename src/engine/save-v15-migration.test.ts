@@ -66,7 +66,9 @@ describe("the v15 → v16 migration (issue #19)", () => {
     const state = migrated();
     // The fixture's collection: the opening additive on the board, and a
     // focus-keyed generator, an infusor and a forge in the inventory.
-    expect(state.game).toEqual({ ...fresh().game, legacyLine: "Legacy era · 4 modules · archived" });
+    // Its completed sessions reveal Classes (issue #44).
+    const book = { revealed: [...fresh().game.encyclopedia.revealed, "classes"], seen: [] };
+    expect(state.game).toEqual({ ...fresh().game, encyclopedia: book, legacyLine: "Legacy era · 4 modules · archived" });
   });
 
   it("starts the board from the opening: four open cells, in Sketch (issue #24)", () => {
