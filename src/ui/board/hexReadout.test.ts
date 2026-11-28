@@ -91,7 +91,7 @@ describe("the Hex detail readout", () => {
 
   it("names the class a marked wall opens", () => {
     expect(texts(laid([]), { q: 0, r: -2 })).toEqual(["Flint · Wall · ring 2 · opens Roadie", `60${T}000 / 60${T}000 HP · regen 10.0/s`, "Only Arm damage", "Pressure 10%"]);
-    expect(texts(laid([]), { q: -2, r: 1 })).toEqual(["Schist · Wall · ring 2 · opens Mixer", "1e6 / 1e6 HP · regen 100.0/s", "Pressure 12%"]);
+    expect(texts(laid([]), { q: -2, r: 1 })).toEqual(["Schist · Wall · ring 2 · opens Mixer", `300${T}000 / 300${T}000 HP · regen 15.0/s`, "Pressure 12%"]);
   });
 
   it("adds the damage a patched wall takes as its effect line", () => {

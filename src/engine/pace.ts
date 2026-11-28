@@ -2,12 +2,15 @@ import { advance } from "./advance";
 import { apply, type Action, type ApplyResult } from "./apply";
 import { createInitialState } from "./state";
 import { cableName } from "./cables";
-import { cellKey, FACING_NAMES, lifetimeCells, type Cell } from "./hex";
-import { wallAt } from "./map";
+import { cellKind, isOpen } from "./board";
+import { addCell, cellKey, DIRECTIONS, distance, FACING_NAMES, lifetimeCells, neighbours, sameCell, type Cell } from "./hex";
+import { goalOf } from "./goal";
+import { BASALT_CELLS, FLINT_CELL, SCHIST_CELL, SHALE_CELL, wallAt, type WallKind } from "./map";
+import { cableFrom, moduleAt } from "./placement";
 import { classLevel, grantsOf } from "./levels";
-import { hasFacing, isOscillator, moduleName } from "./modules";
+import { hasFacing, isArm, isModulator, isOscillator, moduleName } from "./modules";
 import { add, D, fmt, fmtRate, gt, type Num } from "./num";
-import type { AdvanceMode, AdvanceResult, Cable, GameState, HabitClass, Placement } from "./types";
+import type { AdvanceMode, AdvanceResult, Cable, GameState, HabitClass, ModuleType, Placement } from "./types";
 
 // The pace runner (spec chunk 01, `npm run pace`): a scripted reasonable
 // player driven only through `apply` and `advance`. It reports the credited
@@ -30,7 +33,7 @@ export interface MilestoneProbe {
 const classOpen = (habitClass: HabitClass) => (s: GameState) => s.game.openClasses.includes(habitClass);
 
 const WALLS: { kind: string; target: string }[] = [
-  { kind: "Shale", target: "Sketch, 0–15h (ring 1)" },
+  { kind: "Shale", target: "the first session or two, under about 1h (spec 05)" },
   { kind: "Basalt", target: "Sketch, 0–15h (ring 1)" },
   { kind: "Flint", target: "Sketch, 0–15h (rings 1–2)" },
   { kind: "Schist", target: "Demo, 15–60h (rings 1–2)" },
@@ -46,7 +49,7 @@ const CLASSES: HabitClass[] = ["engineer", "producer", "roadie", "mixer"];
 const CLASS_OPENS: Record<HabitClass, string> = {
   engineer: "at the start (0h)",
   producer: "at the start (0h)",
-  roadie: "first contact with Flint (Sketch, 0–15h)",
+  roadie: "first contact with Flint, by about 3h (spec 05)",
   mixer: "conquering the marked Schist (Demo, 15–60h)",
 };
 
@@ -54,9 +57,21 @@ const classAtLevel = (habitClass: HabitClass, level: number) => (s: GameState) =
 
 const title = (word: string) => word[0]!.toUpperCase() + word.slice(1);
 
+// A wall kind's first conquest: an owned cell whose authored wall is of
+// that kind (spec chunk 05, issue #55).
+const kindConquered = (kind: WallKind) => (s: GameState) => s.game.board.open.some((cell) => wallAt(cell)?.kind === kind);
+const cellConquered = (cell: Cell) => (s: GameState) => isOpen(s.game.board, cell);
+
 export const PROGRESSION_MILESTONES: MilestoneProbe[] = [
   ...CLASSES.map((c) => ({ id: `class-open:${c}`, label: `${title(c)} opens`, target: CLASS_OPENS[c], reached: classOpen(c) })),
-  ...WALLS.map((w) => ({ id: `wall:${w.kind.toLowerCase()}`, label: `First ${w.kind} conquered`, target: w.target })),
+  ...WALLS.map((w) => ({
+    id: `wall:${w.kind.toLowerCase()}`,
+    label: `First ${w.kind} conquered`,
+    target: w.target,
+    reached: kindConquered(w.kind.toLowerCase() as WallKind),
+  })),
+  { id: "wall:marked-flint", label: "Marked Flint conquered", target: "after Roadie opens (Sketch, 0–15h)", reached: cellConquered(FLINT_CELL) },
+  { id: "wall:marked-schist", label: "Marked Schist conquered", target: "about 8–12h (spec 05)", reached: cellConquered(SCHIST_CELL) },
   ...CLASSES.map((c) => ({ id: `class-level-5:${c}`, label: `${title(c)} level 5`, target: "8h on the class", reached: classAtLevel(c, 5) })),
   { id: "first-prestige", label: "First prestige (Sketch gate)", target: "8–10h, Demo by 15h" },
   { id: "gate:obsidian", label: "Obsidian conquered (Demo gate)", target: "60h" },
@@ -89,7 +104,9 @@ export interface TendingHooks {
 export const DEFAULT_TENDING: TendingHooks = {
   takeBankedBreathers: takeBreatherInFull,
   buyCheapestFader: () => {},
-  placeAllowance: placeAllowanceGreedily,
+  placeAllowance: followGoal,
+  // The Goal-following layout (issue #55) already patches into the Goal's
+  // wall when that makes it fall soonest.
   patchChargeToNearestWall: () => {},
 };
 
@@ -118,10 +135,13 @@ export function takeBreatherInFull(turn: PaceTurn): void {
 // deterministic. Nothing placed is ever moved, turned or unplugged: a later
 // chunk may teach the player to rearrange. Patching into walls for damage
 // is chunk 05's, once damage leads to a milestone.
-export function placeAllowanceGreedily(turn: PaceTurn): void {
-  while (applyBest(turn, oscillatorCandidates(turn.state), true));
-  while (applyBest(turn, modulatorCandidates(turn.state), true));
-  while (applyBest(turn, cableCandidates(turn.state), false));
+// With `keep`, a candidate whose resulting state it rejects is dropped:
+// the fight layout uses it so the ν/s pass never slows the wall's fall.
+export function placeAllowanceGreedily(turn: PaceTurn, keep?: (state: GameState) => boolean): void {
+  while (applyBest(turn, oscillatorCandidates(turn.state), true, keep));
+  while (applyBest(turn, modulatorCandidates(turn.state), true, keep));
+  while (applyBest(turn, armCandidates(turn.state), false, keep));
+  while (applyBest(turn, cableCandidates(turn.state), false, keep));
 }
 
 type Candidate = Action[];
@@ -129,11 +149,12 @@ type Candidate = Action[];
 // Tries each candidate from the current state and applies the one that
 // most raises total ν/s. With `always`, the best is applied even when it
 // raises nothing. Returns whether one was applied.
-function applyBest(turn: PaceTurn, candidates: Candidate[], always: boolean): boolean {
+function applyBest(turn: PaceTurn, candidates: Candidate[], always: boolean, keep?: (state: GameState) => boolean): boolean {
   let best: { candidate: Candidate; total: Num } | null = null;
   for (const candidate of candidates) {
-    const total = trialTotal(turn.state, candidate);
-    if (total === null) continue;
+    const trial = trialState(turn.state, candidate);
+    if (trial === null || (keep && !keep(trial))) continue;
+    const total = trial.game.rates.total;
     if (best === null || gt(total, best.total)) best = { candidate, total };
   }
   if (best === null) return false;
@@ -142,15 +163,15 @@ function applyBest(turn: PaceTurn, candidates: Candidate[], always: boolean): bo
   return true;
 }
 
-// Total ν/s after the candidate's actions, or null when any is refused.
-function trialTotal(state: GameState, candidate: Candidate): Num | null {
+// The state after the candidate's actions, or null when any is refused.
+function trialState(state: GameState, candidate: Candidate): GameState | null {
   let trial = state;
   for (const action of candidate) {
     const result = apply(trial, action);
     if (!result.ok) return null;
     trial = result.state;
   }
-  return trial.game.rates.total;
+  return trial;
 }
 
 function oscillatorCandidates(state: GameState): Candidate[] {
@@ -173,8 +194,19 @@ function cableCandidates(state: GameState): Candidate[] {
 // placement (which faces NE) and then that many clockwise turns. A
 // facing-free modulator has the placement alone.
 function modulatorCandidates(state: GameState): Candidate[] {
+  return facedCandidates(state, grantsOf(state).arrived.filter(isModulator));
+}
+
+// Each arrived Arm likewise (issue #55). An Arm goes down only where it
+// raises ν/s, so a Guard Plate lands where it shields the most ν and a
+// Blade is left in the tray unless the fight layout feeds it.
+function armCandidates(state: GameState): Candidate[] {
+  return facedCandidates(state, grantsOf(state).arrived.filter(isArm));
+}
+
+function facedCandidates(state: GameState, modules: ModuleType[]): Candidate[] {
   const { game } = state;
-  return grantsOf(state).arrived.filter((module) => !isOscillator(module)).flatMap((module) =>
+  return modules.flatMap((module) =>
     game.board.open.flatMap((cell) => {
       const place: Action = { type: "placeModule", module, cell };
       if (!hasFacing(module)) return [[place]];
@@ -183,6 +215,225 @@ function modulatorCandidates(state: GameState): Candidate[] {
         ...Array.from({ length: turns }, (): Action => ({ type: "rotateModule", cell, turn: "clockwise" })),
       ]);
     }));
+}
+
+// ── The Goal-following player (spec chunk 05, issue #55) ─────────────────
+
+// The walls the Goal asks to bring down, while it names one, most useful
+// first: `Reach Flint` is done by conquering any wall bordering the marked
+// Flint, and of the two Basalts the one beside it also serves that next
+// Goal. Null when the Goal names no wall.
+export function goalWalls(state: GameState): Cell[] | null {
+  const standing = (cells: readonly Cell[]) => cells.filter((cell) => cellKind(state.game.board, cell) === "wall");
+  switch (goalOf(state)) {
+    case "Conquer Shale":
+      return standing([SHALE_CELL]);
+    case "Conquer Basalt":
+      return standing([...BASALT_CELLS].sort((a, b) => Number(distance(b, FLINT_CELL) === 1) - Number(distance(a, FLINT_CELL) === 1)));
+    case "Reach Flint":
+      return standing(neighbours(FLINT_CELL));
+    case "Conquer Flint":
+      return standing([FLINT_CELL]);
+    case "Conquer Schist":
+      return standing([SCHIST_CELL]);
+    default:
+      return null;
+  }
+}
+
+// Seconds of flow until the soonest of these walls falls under the
+// state's rates: HP ÷ net, Infinity while none is losing HP.
+export function secondsToFall(state: GameState, targets: readonly Cell[]): number {
+  return soonestFall(state, targets).seconds;
+}
+
+// The soonest fall and which target it is (its index, so the earlier,
+// more useful target wins a tie); index targets.length when none falls.
+function soonestFall(state: GameState, targets: readonly Cell[]): { seconds: number; rank: number } {
+  let best = { seconds: Infinity, rank: targets.length };
+  for (const rate of state.game.rates.walls) {
+    const rank = targets.findIndex((t) => sameCell(t, rate.cell));
+    if (rank === -1 || !gt(rate.net, 0)) continue;
+    const entry = state.game.board.walls.find((w) => sameCell(w.cell, rate.cell));
+    const hp = entry ? entry.hp : wallAt(rate.cell)!.hp;
+    const seconds = hp.toNumber() / rate.net.toNumber();
+    if (seconds < best.seconds || (seconds === best.seconds && rank < best.rank)) best = { seconds, rank };
+  }
+  return best;
+}
+
+// A layout under construction: a trial state and the actions that built
+// it, every one taken by `apply`. It is itself a PaceTurn (that never
+// advances), so the greedy placement can build on it.
+class Plan implements PaceTurn {
+  readonly actions: Action[] = [];
+  constructor(public state: GameState, readonly now: number) {}
+  apply(action: Action): ApplyResult {
+    const result = apply(this.state, action);
+    if (result.ok) {
+      this.state = result.state;
+      this.actions.push(action);
+    }
+    return result;
+  }
+  advance(): AdvanceResult {
+    throw new Error("pace runner: a plan does not advance");
+  }
+  // Tries a run of actions; keeps them only if all are taken.
+  tryAll(actions: readonly Action[]): GameState | null {
+    let trial = this.state;
+    for (const action of actions) {
+      const result = apply(trial, action);
+      if (!result.ok) return null;
+      trial = result.state;
+    }
+    return trial;
+  }
+  applyAll(actions: readonly Action[]): void {
+    for (const action of actions) must(this.apply(action), `the pace runner's planned ${action.type}`);
+  }
+}
+
+// An empty board: every module lifted, which unplugs every cable.
+function clearedPlan(state: GameState, now: number): Plan {
+  const plan = new Plan(state, now);
+  for (const placement of state.game.board.placements) must(plan.apply({ type: "removeModule", cell: placement.cell }), "lifting a module");
+  return plan;
+}
+
+const turns = (cell: Cell, facing: number): Action[] =>
+  Array.from({ length: facing }, (): Action => ({ type: "rotateModule", cell, turn: "clockwise" }));
+
+function emptyOwnedCells(state: GameState): Cell[] {
+  return state.game.board.open.filter((cell) => !moduleAt(state.game.board, cell));
+}
+
+// The layout that brings the Goal's wall down soonest, ties by ν/s:
+// Blades on cells bordering the wall, facing it; then, one at a time, the
+// modulator placement or Patch that most shortens the fall (into a Blade
+// for 10× damage, or into a wall that takes a Patch); then the Blades no
+// modulator feeds are lifted, and the rest of the allowance goes down by
+// ν/s, as before.
+function fightLayout(state: GameState, now: number, targets: readonly Cell[]): Plan {
+  const plan = clearedPlan(state, now);
+  const grants = grantsOf(plan.state);
+  if (grants.arrived.includes("blade")) {
+    const room = Math.min(grants.allowance.arm, grants.allowance.modulator);
+    let placed = 0;
+    for (const cell of emptyOwnedCells(plan.state)) {
+      if (placed >= room) break;
+      const facing = DIRECTIONS.findIndex((d) => targets.some((t) => sameCell(t, addCell(cell, d))));
+      if (facing === -1) continue;
+      plan.applyAll([{ type: "placeModule", module: "blade", cell }, ...turns(cell, facing)]);
+      placed++;
+    }
+  }
+  // Soonest fall; while none falls, the most damage on the Goal's walls,
+  // so feeders that only together outpace the regen still go down; then
+  // ν/s, then the more useful target.
+  const score = (s: GameState) => {
+    const fall = soonestFall(s, targets);
+    const damage = s.game.rates.walls.filter((w) => targets.some((t) => sameCell(t, w.cell))).reduce((sum, w) => sum + w.damage.toNumber(), 0);
+    return { time: fall.seconds, damage, rate: s.game.rates.total, rank: fall.rank };
+  };
+  type Scored = ReturnType<typeof score>;
+  const better = (a: Scored, b: Scored) => {
+    if (a.time !== b.time) return a.time < b.time;
+    if (!Number.isFinite(a.time) && a.damage !== b.damage) return a.damage > b.damage;
+    if (gt(a.rate, b.rate) || gt(b.rate, a.rate)) return gt(a.rate, b.rate);
+    return a.rank < b.rank;
+  };
+  for (;;) {
+    const current = score(plan.state);
+    let best: ({ actions: Action[] } & Scored) | null = null;
+    for (const actions of feederCandidates(plan.state)) {
+      const trial = plan.tryAll(actions);
+      if (!trial) continue;
+      const scored = score(trial);
+      if (best === null || better(scored, best)) best = { actions, ...scored };
+    }
+    const gains = best !== null && (best.time < current.time || (!Number.isFinite(best.time) && best.damage > current.damage));
+    if (!gains) break;
+    plan.applyAll(best!.actions);
+  }
+  for (const arm of plan.state.game.rates.arms) {
+    if (arm.module === "blade" && !gt(arm.chargeReceived, 0)) must(plan.apply({ type: "removeModule", cell: arm.cell }), "lifting an unfed Blade");
+  }
+  const fought = secondsToFall(plan.state, targets);
+  placeAllowanceGreedily(plan, (s) => !(secondsToFall(s, targets) > fought));
+  return plan;
+}
+
+// Each arrived modulator on each empty owned cell, in each facing or
+// patched to each cell a Patch reaches; and a Patch from each placed,
+// unpatched modulator. `apply` refuses what the rules don't allow.
+function feederCandidates(state: GameState): Candidate[] {
+  const board = state.game.board;
+  const grants = grantsOf(state);
+  const targetsFrom = (source: Cell) => lifetimeCells().filter((t) => distance(source, t) <= 3 && !sameCell(t, source));
+  const patches = (source: Cell): Candidate[] =>
+    grants.arrivedCables.flatMap((cable) => targetsFrom(source).map((target): Candidate => [{ type: "patchCable", cable, source, target }]));
+  const out: Candidate[] = [];
+  for (const module of grants.arrived.filter(isModulator)) {
+    for (const cell of emptyOwnedCells(state)) {
+      const place: Action = { type: "placeModule", module, cell };
+      const facings = hasFacing(module) ? [0, 1, 2, 3, 4, 5] : [0];
+      for (const facing of facings) out.push([place, ...turns(cell, facing)]);
+      for (const patch of patches(cell)) out.push([place, ...patch]);
+    }
+  }
+  for (const placement of board.placements) {
+    if (isModulator(placement.module) && !cableFrom(board, placement.cell)) out.push(...patches(placement.cell));
+  }
+  return out;
+}
+
+// The layout that makes the most ν/s: the greedy placement from an empty
+// board.
+function rateLayout(state: GameState, now: number): Plan {
+  const plan = clearedPlan(state, now);
+  placeAllowanceGreedily(plan);
+  return plan;
+}
+
+// The tending step (issue #55). While the Goal names a wall, the player
+// lays out the board to bring it down soonest, breaking ties by ν/s; when
+// no layout can (every one leaves it regenerating as fast as it's hit),
+// or the Goal names no wall, it lays out for ν/s. It rebuilds only when
+// that beats the board it has, so a layout is never churned for nothing.
+// What a layout choice depends on: the Goal, the owned cells, the grants,
+// and the Producer hour (a Flywheel's output grows 0.1 per hour). The
+// player replans only when one changes, since replanning is costly.
+function layoutKey(state: GameState): string {
+  const open = state.game.board.open.map(cellKey).join(" ");
+  const producerHour = Math.floor(state.records.classCredit.producer / 3600);
+  return JSON.stringify([goalOf(state), open, grantsOf(state), producerHour]);
+}
+
+const plannedFor = new WeakMap<PaceTurn, string>();
+
+export function followGoal(turn: PaceTurn): void {
+  const state = turn.state;
+  const key = layoutKey(state);
+  if (plannedFor.get(turn) === key) return;
+  plannedFor.set(turn, key);
+  const targets = goalWalls(state);
+  let plan: Plan | null = null;
+  if (targets && targets.length > 0) {
+    const fight = fightLayout(state, turn.now, targets);
+    const time = secondsToFall(fight.state, targets);
+    const held = secondsToFall(state, targets);
+    if (time < held || (time === held && Number.isFinite(time) && gt(fight.state.game.rates.total, state.game.rates.total))) plan = fight;
+    if (Number.isFinite(held) && !plan) return;
+  }
+  if (!plan) {
+    const nu = rateLayout(state, turn.now);
+    // Fill any allowance onto the board as it stands, the cheaper move.
+    const kept = new Plan(state, turn.now);
+    placeAllowanceGreedily(kept);
+    plan = gt(nu.state.game.rates.total, kept.state.game.rates.total) ? nu : kept;
+  }
+  for (const action of plan.actions) must(turn.apply(action), `the pace runner's ${action.type}`);
 }
 
 // ── The run ───────────────────────────────────────────────────────────────
@@ -240,6 +491,7 @@ export interface PaceReport {
 }
 
 export const DRY_STRETCH_HOURS = 2;
+const FLOW_STEP_SECONDS = 60;
 const START_EPOCH_MS = Date.UTC(2026, 0, 5, 9, 0, 0);
 const MAX_SESSIONS = 100_000;
 
@@ -314,8 +566,13 @@ export function runPace(script: PaceScript): PaceReport {
     if (sessions >= MAX_SESSIONS) throw new Error("pace runner: no credited progress");
     habitsForOpenClasses(turn);
     must(turn.apply({ type: "startSession", habitId: nextHabitId(state, sessions), target: sessionSeconds, now }), "starting a session");
-    const flowed = turn.advance(sessionSeconds, "flow");
-    if (flowed.fault) throw new Error(`pace runner: flow faulted on ${flowed.fault}`);
+    // Flow runs a minute at a time, and the milestones are read after
+    // each, so a conquest mid-session is reported within the minute.
+    for (let flowed = 0; flowed < sessionSeconds; flowed += FLOW_STEP_SECONDS) {
+      const step = turn.advance(Math.min(FLOW_STEP_SECONDS, sessionSeconds - flowed), "flow");
+      if (step.fault) throw new Error(`pace runner: flow faulted on ${step.fault}`);
+      observe();
+    }
     must(turn.apply({ type: "endSession", now }), "ending the session");
     must(turn.apply({ type: "dismissSummary" }), "dismissing the summary");
     sessions++;

@@ -72,7 +72,7 @@ describe("a wall's rate", () => {
     expect(wallRate(s, SHALE)!.damage.toNumber()).toBeCloseTo(1.4, 12);
   });
 
-  it("every wall carries its kind's regen: Basalt 1/s, Schist 100/s", () => {
+  it("every wall carries its kind's regen: Basalt 1/s, Schist 15/s", () => {
     const s = fresh();
     ownCells(s, [{ q: 1, r: 1 }]);
     // Producer Lv 2 (1.5 h): 2 modulators, 2 cables, 1.15 charge/s each.
@@ -82,8 +82,8 @@ describe("a wall's rate", () => {
     expect(patch(s, { q: 1, r: 0 }, SCHIST).ok).toBe(true);
     expect(patch(s, O, BASALT).ok).toBe(true);
     const schist = wallRate(s, SCHIST)!;
-    expect(schist.regen.toNumber()).toBe(100);
-    expect(schist.net.toNumber()).toBeCloseTo(-98.85, 12);
+    expect(schist.regen.toNumber()).toBe(15);
+    expect(schist.net.toNumber()).toBeCloseTo(-13.85, 12);
     const basalt = wallRate(s, BASALT)!;
     expect(basalt.regen.toNumber()).toBe(1);
     expect(basalt.net.toNumber()).toBeCloseTo(0.15, 12);
