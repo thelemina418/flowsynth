@@ -314,6 +314,8 @@ Issues #48–#55 (parent #47), on `integration/spec-05-walls`.
 - **Roadie opens, and the Blade (#53).** The wall step opens Roadie the moment a conquest leaves an open cell bordering the marked Flint (0,−2), so it can open mid-flow. Roadie's ladder brings the Blade and 1 Arm at Lv 0, +1 Arm at Lv 1, and +1 Arm a level from Lv 3. The Blade is an `arm` module with a facing, turned by the same `rotateModule` as the Flywheel. It takes charge from reach and Patches, and `rates.arms` gives each Arm the charge it receives, the cell it faces, whether that cell is a wall, and its damage (10 × charge). Blade damage joins Patch damage in `rates.walls`, so the wall step, the wall's `Taking` line and conquest read it unchanged. The Goal gains `Reach Flint`, `Conquer Flint` and `Conquer Schist`, all shown from the start. The Encyclopedia gains Arms, revealed when Roadie opens. The tray's `Arms <n>` group follows the cables entry once an Arm type has arrived.
 - **The Guard Plate (#54).** Roadie Lv 2 brings the Guard Plate, an `arm` module with no facing. While it borders a wall inside the arc it is active, and every oscillator beside it takes 0 pressure. `rates.arms` gives it `active` and `shields`. A conquest that leaves it bordering no wall turns it inactive in the same recompute, and its neighbours take pressure again from the walls still bordering them. Its Hex detail reads `Guard Plate · Arm`, then `Cancels pressure on <n> modules` or `No wall in reach`.
 
+- **The pace runner fights walls (#55).** The default tending step is now `followGoal`. While the Goal names a wall (`Conquer Shale`, `Conquer Basalt`, `Reach Flint`, `Conquer Flint`, `Conquer Schist`), the player rebuilds the board from empty in three passes. First it puts Blades on the cells bordering the wall, facing it. Then it adds modulators and Patches one at a time, each time the one that most shortens the fall. Last it runs the ν/s greedy on what's left, which may not slow the fall. It keeps the rebuild only if it brings the wall down sooner than the board it has. Otherwise, and whenever the Goal names no wall, it lays out for ν/s. The run opens a Roadie habit as soon as Roadie opens, so sessions rotate Engineer, Producer, Roadie. Every wall kind's first conquest is now a tracked milestone, and two new ones join them: `Marked Flint conquered` and `Marked Schist conquered`. Shale, Roadie and the marked Schist carry the spec's targets.
+
 ### Improvised
 
 - **Rings 3–5 (#48).** Each ring is walked clockwise from its upper-left cell (`ringCells` order, index 0 at (−n,0)).
@@ -326,6 +328,8 @@ Issues #48–#55 (parent #47), on `integration/spec-05-walls`.
   - Ring 4: `Only Arm damage` on Quartz (−2,−2) and (−2,4), and `Pressure ×2` on Granite (3,−4) and (3,1).
   - Ring 5 (all Corundum): `Pressure ×2` on (−2,−3) and (2,3), and `Only Arm damage` on (5,−4) and (−5,4).
   - They're spread around each ring. Gneiss (1,−3) borders the marked Flint, so once Flint falls, the next wall out presses twice as hard.
+- **The two Basalts and ring 2 (#48).** Ring 1's three walls are Shale (−1,1) and two Basalts: (−1,0), which carries `Pressure ×2`, and (0,−1), the only ring-1 wall bordering the marked Flint. So Roadie opens only when (0,−1) falls. Ring 2 is the agreed layout: the marked Flint at (0,−2), the marked Schist at (−2,1), and the other ten cells alternating Flint and Schist clockwise from a Flint at (2,−2).
+- **Arms placeable anywhere (#53, #54).** An Arm goes on any owned cell, like every module, and does nothing away from a wall. A Blade facing anything but a wall deals 0, and a Guard Plate bordering no wall is inactive. Both read `No wall in reach`, as the sketch's Arms rule has it.
 - **Ring 2's plain Flints border opening cells (#48).** The agreed alternation puts plain Flints at (2,−2) and (2,0), next to the opening cells. Only the marked Flint at (0,−2) opens Roadie, so they don't open it early.
 - **Doubled pressure in the Hex detail (#48).** The doubled Basalt reads `Pressure ×2` and then `Pressure 16%`: the line shows the pressure the wall actually exerts, not its kind's 8%.
 - **The Hex detail before HP (#48).** The HP line reads `<full> / <full> HP`, through `fmt` (so Schist reads `1e6 / 1e6 HP`), until walls take damage over time later in the chunk. `Taking <d>/s` becomes the wall's one effect line, so the old `Taking … · regen …` line splits into the HP line and the effect line. A full-HP, unfought wall has no effect line.
@@ -359,3 +363,53 @@ Issues #48–#55 (parent #47), on `integration/spec-05-walls`.
 - **`ArmRate` becomes a union (#54).** `BladeRate` keeps #53's fields. `GuardPlateRate` carries `active` and `shields` and no charge, because charge delivered to it is wasted (`takesCharge` stays false for it). The Roadie tests read the Blade's rate through a narrowing helper.
 - **The Guard Plate's glyph (#54).** A shield's outline, a flat top over a point, with a rib down its middle. Like the Blade's face, it has no jack, and with no facing it has no pointer either.
 - **The Arms entry (#54).** It gains `Guard Plate · cancels pressure on its neighbours`, the catalogue's effect line.
+- **Which wall the Goal means (#55).** For `Conquer Basalt`, either Basalt counts. For `Reach Flint`, any standing wall that borders the marked Flint counts. When two walls fall equally soon at equal ν/s, the player takes the one that also serves the next Goal: the Basalt at (0,−1), beside Flint. Without that tie-break, the run took the doubled Basalt (−1,0) first and Roadie opened a session later.
+- **Building up to a fall (#55).** When no single feeder outpaces a wall's regen, the feeder pass takes the step that most raises the damage on the Goal's wall, so two Flywheels that only win together still go down. If the finished layout still loses to the regen, the player lays out for ν/s and waits for growth.
+- **Arms in the ν/s pass (#55).** The greedy placement now puts an Arm down only where it raises ν/s, so a Guard Plate goes where it shields the most ν. A Blade the fight layout doesn't feed goes back to the tray. Modulators and oscillators are still placed even when they raise nothing.
+- **When the player replans (#55).** Only when the Goal, the owned cells, the grants or the whole Producer hour change. A Flywheel's output grows 0.1 per Producer hour, so that last one catches a fight that becomes winnable.
+- **Milestones read each minute (#55).** Flow now advances a minute at a time, and the probes are read after each minute, so a conquest is timed within a minute, not at the session's end. The two worked timings in `pace.test.ts` moved with it. Engineer Lv 5 now reads 15.5 h: it is reached 30 minutes into Engineer's 10th session, not at that session's end.
+- **Prior pace tests (#55).** The class-level and resonance tests are about the ν/s greedy, so they now pin `placeAllowance: placeAllowanceGreedily`. The Goal player opens Roadie, which would change the rotation, and it patches the Flywheel into walls.
+
+### Pace runner
+
+At the end of the chunk, `npm run pace` (250 credited hours):
+
+```
+Pace run: 300 sessions, 250.0h credited
+Board: 4 oscillators, 4 modulators, 43.76 ν/s, 9.0 charge/s — Saw (0,0), Saw (0,-2), Saw (0,-1), Saw (0,1), Flywheel (1,0) facing NW, Flywheel (-1,1) facing SE, Guard Plate (1,-1), Flywheel (-2,1) facing SE, Patch (-1,1) → (0,-1), Patch (-2,1) → (0,-2)
+Era ν: 5.19e7
+Classes: Engineer Lv 14, Producer Lv 14, Roadie Lv 14
+Breathers taken: 300
+
+Milestone                         Reached       Target
+--------------------------------  ------------  --------------------------------------------------
+Roadie opens                      3.7h          first contact with Flint, by about 3h (spec 05)
+Mixer opens                       not reached   conquering the marked Schist (Demo, 15–60h)
+First Shale conquered             0.2h          the first session or two, under about 1h (spec 05)
+First Basalt conquered            3.7h          Sketch, 0–15h (ring 1)
+First Flint conquered             5.0h          Sketch, 0–15h (rings 1–2)
+First Schist conquered            10.0h         Demo, 15–60h (rings 1–2)
+First Gneiss conquered            not reached   Demo, 15–60h (rings 2–3)
+...
+Marked Flint conquered            5.0h          after Roadie opens (Sketch, 0–15h)
+Marked Schist conquered           10.0h         about 8–12h (spec 05)
+Engineer level 5                  20.5h         8h on the class
+Producer level 5                  23.8h         8h on the class
+Roadie level 5                    27.2h         8h on the class
+...
+
+DRY 0.2h–3.7h: 3.5h with no new milestone
+DRY 5.0h–10.0h: 5.0h with no new milestone
+DRY 10.0h–20.5h: 10.5h with no new milestone
+DRY 20.5h–23.8h: 3.3h with no new milestone
+DRY 23.8h–27.2h: 3.3h with no new milestone
+DRY 27.2h–250.0h: 222.8h with no new milestone
+```
+
+- **Shale (target: the first session or two, under about 1 h).** It falls 12 minutes into the first session, at 0.2 h. Before that session, the opening Flywheel is patched into Shale, and 600 HP at a net 0.9/s falls in 667 s, as the spec's arithmetic says.
+- **Roadie (target: by about 3 h). Not tuned.** It opens at 3.7 h, the instant Basalt (0,−1) falls, which is inside the spec's own arithmetic of "near 3–4 h on an alternating schedule". Until Producer Lv 2, one patched Flywheel at about 1.08 charge/s barely beats Basalt's regen of 1. Lv 2 arrives with the fourth session (3.3 h), and the second Patch makes it 2.3/s, as the arithmetic has it. Reaching 3.0 h would take Basalt down with one cable, or a second cable at the start. Neither was needed to land in the spec's window, so the numbers stay.
+- **Flint (no spec target).** It falls at 5.0 h, 77 minutes of flow after Roadie opens. A Blade on (0,−1) faces it, and both Flywheels feed the Blade: one by Patch, one by reach. That is 23.3 damage/s against regen 10. The spec's arithmetic had about 100 minutes.
+- **The marked Schist (target: about 8–12 h). Tuned.** With Schist at 1e6 HP and regen 100 it never fell. From 5 h to 12 h the board has two modulators: Producer Lv 4 (the third) comes at 5 h on Producer, about 14 h credited. A Flywheel makes 1.2–1.4 charge/s, so the most a Blade on (−1,1) can deal is about 25 damage/s. The spec's "several Blades fed by capped Flywheels" needs 20 Producer hours for the cap, and even three capped Flywheels into Blades deal 90/s, under regen 100. The pacing law prefers an unlock to a flatter curve, but none of chunk 05's parts is charge, and charge is what limits damage. The next lever by design is the Console's Blade fader, which is chunk 06's. So Schist moves from 1e6 HP and regen 100/s to 3e5 HP and regen 15/s, in `mechanics-sketch.md` and in `map.ts`. The runner then has the marked Schist fall at 10.0 h, the middle of the window. Flint, at 6e4 and regen 10, stays the step before it, and Gneiss (3e7, 2e3) is past the Sketch radius. The tests that read Schist's figures moved with it (`walls.test.ts`, `hexReadout.test.ts`). #48's note that Schist reads `1e6 / 1e6 HP` is now out of date: it reads `300 000 / 300 000 HP · regen 15.0/s`.
+- **After the marked Schist.** Its conquest does not open Mixer yet, since that is Demo's. The Goal's next entry, `Prestige`, is not shown until chunk 06, so the Goal names nothing and the player lays out for ν/s from 10 h on. The board owns 8 cells by then, against chunk 04's 4. The queued grants find room, and the board ends at 43.76 ν/s with four Saws (chunk 04: 6.17). The era's ν is 5.19e7 (#52's run: 4.7e6). The dry stretch from 27 h on is the run waiting for prestige, the next milestone it can read.
+- **Levels.** Roadie joins the rotation at 3.7 h, so each class gets about a third of the credit from then on. Lv 5 (8 h on the class) arrives at 20.5 h for Engineer, 23.8 h for Producer and 27.2 h for Roadie.
+

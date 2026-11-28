@@ -62,7 +62,7 @@ An Arm must sit on a cell that borders a wall. If it doesn't, it does nothing an
 | Shale | ring 1 | 600 | 0.1 | 5% |
 | Basalt | ring 1 | 6e3 | 1 | 8% |
 | Flint | ring 1–2 | 6e4 | 10 | 10% |
-| Schist | ring 2 | 1e6 | 100 | 12% |
+| Schist | ring 2 | 3e5 | 15 | 12% |
 | Gneiss | ring 2–3 | 3e7 | 2e3 | 15% |
 | Obsidian | ring 3 | 1e9 | 5e4 | 20% |
 | Granite | ring 3–4 | 1e11 | 3e6 | 25% |

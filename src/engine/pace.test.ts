@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { applyIn, giveOscillators } from "./fixtures";
-import { creditedHoursOf, DEFAULT_TENDING, formatPaceReport, placeAllowanceGreedily, runPace, type MilestoneProbe, type PaceTurn } from "./pace";
+import { applyIn, giveOscillators, giveProducer, openRoadie, ownCells } from "./fixtures";
+import { creditedHoursOf, DEFAULT_TENDING, followGoal, formatPaceReport, placeAllowanceGreedily, runPace, type MilestoneProbe, type PaceTurn } from "./pace";
 import { createInitialState } from "./state";
 
 // The pace runner (spec chunk 01, issue #20): a scripted reasonable player
@@ -30,8 +30,8 @@ describe("the pace report", () => {
 });
 
 describe("dry stretches", () => {
-  // Two synthetic milestones: one at the first session past 1h, the next at
-  // the first past 4h. With 50-minute sessions they land at 1h40m and 4h10m.
+  // Two synthetic milestones: one at 1h credited, the next at 4h. Flow is
+  // read each minute, so they land on the hour.
   const synthetic: MilestoneProbe[] = [
     { id: "a", label: "A", target: "1h", reached: (s) => creditedHoursOf(s) >= 1 },
     { id: "b", label: "B", target: "4h", reached: (s) => creditedHoursOf(s) >= 4 },
@@ -40,8 +40,8 @@ describe("dry stretches", () => {
   it("flags a stretch over 2 credited hours with no new milestone", () => {
     const report = runPace({ creditedHours: 5, milestones: synthetic });
     expect(report.dryStretches).toHaveLength(1);
-    expect(report.dryStretches[0]!.fromHours).toBeCloseTo(5 / 3);
-    expect(report.dryStretches[0]!.toHours).toBeCloseTo(25 / 6);
+    expect(report.dryStretches[0]!.fromHours).toBeCloseTo(1);
+    expect(report.dryStretches[0]!.toHours).toBeCloseTo(4);
   });
 
   it("flags the tail from the last milestone to the end of the run", () => {
@@ -115,13 +115,15 @@ describe("the breather step", () => {
 describe("the class-level probes", () => {
   it("report Engineer and Producer level 5 with the credited hours they were reached at", () => {
     // Lv 5 is 8 h on the class. Sessions alternate, Engineer first, so
-    // Engineer passes 8 h on its 10th session, the run's 19th (8h20m on
-    // it, 15h50m credited), and Producer on the 20th (16h40m credited).
-    const report = runPace({ creditedHours: 20 });
+    // Engineer passes 8 h 30 minutes into its 10th session, the run's 19th
+    // (15h30m credited), and Producer 30 minutes into the 20th (16h20m).
+    // The ν/s greedy player fights no wall, so Roadie never opens to share
+    // the rotation.
+    const report = runPace({ creditedHours: 20, tending: { placeAllowance: placeAllowanceGreedily } });
     const at = (id: string) => report.milestones.find((m) => m.id === id)!;
     expect(at("class-level-5:engineer").tracked).toBe(true);
-    expect(at("class-level-5:engineer").reachedAtHours).toBeCloseTo(95 / 6);
-    expect(at("class-level-5:producer").reachedAtHours).toBeCloseTo(50 / 3);
+    expect(at("class-level-5:engineer").reachedAtHours).toBeCloseTo(15.5);
+    expect(at("class-level-5:producer").reachedAtHours).toBeCloseTo(16 + 20 / 60);
     expect(at("class-level-5:roadie").reachedAtHours).toBeNull();
   });
 });
@@ -135,6 +137,20 @@ function openingOnly(): { tending: { placeAllowance: (turn: PaceTurn) => void; t
     tending: {
       placeAllowance: (turn) => {
         if (first) placeAllowanceGreedily(turn);
+        first = false;
+      },
+      takeBankedBreathers: () => {},
+    },
+  };
+}
+
+// The Goal-following layout before the first session only.
+function openingOnlyGoal(): { tending: { placeAllowance: (turn: PaceTurn) => void; takeBankedBreathers: () => void } } {
+  let first = true;
+  return {
+    tending: {
+      placeAllowance: (turn) => {
+        if (first) followGoal(turn);
         first = false;
       },
       takeBankedBreathers: () => {},
@@ -170,7 +186,7 @@ describe("placing the allowance", () => {
     // Three oscillators of base 1 make exactly 3 ν/s unless one resonates.
     const start = createInitialState();
     giveOscillators(start, { allowance: 3 });
-    const report = runPace({ creditedHours: 3, start });
+    const report = runPace({ creditedHours: 3, start, tending: { placeAllowance: placeAllowanceGreedily } });
     expect(report.placements.filter((p) => p.module !== "flywheel")).toHaveLength(3);
     expect(report.rate.toNumber()).toBeGreaterThan(3);
   });
@@ -265,5 +281,60 @@ describe("placing the allowance", () => {
       return { creditedHours: 5, start };
     };
     expect(formatPaceReport(runPace(script()))).toBe(formatPaceReport(runPace(script())));
+  });
+});
+
+// The Goal-following player (spec chunk 05, issue #55): while the Goal
+// names a wall, the layout makes that wall fall soonest.
+describe("fighting the Goal's wall", () => {
+  it("conquers Shale in the first session: the opening Flywheel patched into it nets 0.9/s", () => {
+    // 600 HP at 1 − 0.1 = 0.9/s falls 667 s in, inside the first 50-minute
+    // session. Milestones are read each minute of flow, so at 12 min.
+    const report = runPace({ creditedHours: 0.1 });
+    const shale = report.milestones.find((m) => m.id === "wall:shale")!;
+    expect(shale.tracked).toBe(true);
+    expect(shale.reachedAtHours).toBeCloseTo(12 / 60);
+  });
+});
+
+describe("the Goal-following player's ties", () => {
+  it("brings down the Basalt beside the marked Flint, so Roadie opens with the first Basalt", () => {
+    // Both Basalts fall equally soon to the same patches; the one at
+    // (0,−1) also serves the next Goal, `Reach Flint`.
+    const report = runPace({ creditedHours: 6 });
+    const at = (id: string) => report.milestones.find((m) => m.id === id)!.reachedAtHours;
+    expect(at("wall:basalt")).not.toBeNull();
+    expect(at("class-open:roadie")).toBe(at("wall:basalt"));
+  });
+});
+
+describe("the fight layout", () => {
+  it("keeps every feeder on the Blade: the ν/s pass never re-patches one away", () => {
+    // Roadie open with Shale and Basalt (0,−1) owned: the Goal is
+    // `Conquer Flint`. A Blade at (0,−1) faces it; both Flywheels feed the
+    // Blade, so it receives their whole output.
+    const start = createInitialState();
+    openRoadie(start);
+    giveProducer(start, { modulators: 2, cables: 2 });
+    const report = runPace({ creditedHours: 0.1, start, ...openingOnlyGoal() });
+    expect(report.walls.map((w) => w.name)).toEqual(["Flint"]);
+    expect(report.walls[0]!.damage.toNumber()).toBeCloseTo(10 * report.charge.toNumber(), 6);
+  });
+});
+
+describe("building up to a fall", () => {
+  it("adds feeders that only together outpace the wall's regen", () => {
+    // Shale, Basalt (0,−1) and the marked Flint owned: the Goal is
+    // `Conquer Schist`. Two Flywheels at 1.15 charge/s (1.5 Producer
+    // hours) and two cables. One feeding the Blade on (−1,1) deals 11.5/s
+    // against Schist's regen 15, so it never falls; both net 8/s. Neither
+    // alone shortens a fall, but each raises the damage.
+    const start = createInitialState();
+    openRoadie(start);
+    ownCells(start, [{ q: 0, r: -2 }]);
+    giveProducer(start, { modulators: 2, cables: 2 });
+    const report = runPace({ creditedHours: 0.05, start, ...openingOnlyGoal() });
+    expect(report.walls.map((w) => w.name)).toEqual(["Schist"]);
+    expect(report.walls[0]!.damage.toNumber()).toBeCloseTo(23, 6);
   });
 });
