@@ -118,6 +118,13 @@ export function fmtRate(value: Num): string {
   return (hundredths / 100).toFixed(2).replace(/(\.\d)0$/, "$1");
 }
 
+// A fraction as a whole percent (0.29 → "29"), truncated like every shown
+// figure, with fmtRate's nudge past float noise (0.29 × 100 = 28.999…).
+// Pressure reads through this (issue #52).
+export function fmtPercent(value: NumLike): string {
+  return String(Math.floor(D(value).toNumber() * 100 + NUDGE));
+}
+
 // The save form of a Decimal: its own components, written so nothing is
 // recomputed on the way back. An optional minus, one `e` per layer, then the
 // magnitude in JavaScript's shortest round-trip form: 12480, -0.1,

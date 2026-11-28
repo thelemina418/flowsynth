@@ -73,7 +73,8 @@ function tick(shell: Shell, seconds: number, presence: "visible" | "away" = "vis
   act(() => shell.boundary(presence));
 }
 
-// Sine, Triangle, Triangle (4.5 ν/s) on Piano · Engineer, with a
+// Sine, Triangle, Triangle (2.9325 ν/s under the opening's pressure,
+// issue #52) on Piano · Engineer, with a
 // 10-minute breather banked by a 50-minute session.
 function banked(): GameState {
   let s = createInitialState();
@@ -136,9 +137,9 @@ describe("the breather in upgrade mode", () => {
     click("Take breather · 10 min");
     tick(shell, 1_000);
     expect(shell.screen.value.kind).toBe("breather-result");
-    // 2 × 4.5 ν/s × 600 s.
-    expect(shell.state.value.game.nous.sub(nous).toNumber()).toBe(5400);
-    expect(read("[data-breather-result]")).toBe("Breather complete · +5 400 ν");
+    // 2 × 2.9325 ν/s × 600 s.
+    expect(shell.state.value.game.nous.sub(nous).toNumber()).toBeCloseTo(3519, 9);
+    expect(read("[data-breather-result]")).toBe("Breather complete · +3 519 ν");
     click("Continue");
     expect(shell.screen.value.kind).toBe("ready");
     expect(buttons()).toContain("Begin flow");
@@ -175,7 +176,7 @@ describe("the full loop (spec chunk 04, Acceptance)", () => {
       expect(shell.act({ type: "placeModule", module, cell: { q, r } }).ok).toBe(true);
     }
     const total = shell.state.value.game.rates.breatherTotal;
-    expect(total.toNumber()).toBe(9);
+    expect(total.toNumber()).toBeCloseTo(5.865, 12);
     const before = shell.state.value.game.nous;
     // 5. Take breather · 6 min, and the calm screen shows.
     click("Take breather · 6 min");
@@ -187,7 +188,7 @@ describe("the full loop (spec chunk 04, Acceptance)", () => {
     // 7. Breather complete, with ν equal to breatherTotal × 360.
     expect(reopened.screen.value.kind).toBe("breather-result");
     expect(reopened.state.value.game.nous.sub(before).toNumber()).toBe(total.mul(360).toNumber());
-    expect(read("[data-breather-result]")).toBe("Breather complete · +3 240 ν");
+    expect(read("[data-breather-result]")).toBe("Breather complete · +2 111 ν");
     // 8. Dismissed, and Begin flow is shown.
     click("Continue");
     expect(buttons()).toContain("Begin flow");

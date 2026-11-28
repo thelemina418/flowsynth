@@ -211,12 +211,12 @@ describe("the Flywheel's reach and charge", () => {
     expect(lines()).toEqual([
       "Triangle · Oscillator",
       "Resonating ×1 · closes Sine–Triangle",
-      "1.0 ν/s base · ×1.75 resonance · ×1.69 charge",
-      "2.96 ν/s",
+      "1.0 ν/s base · ×1.75 resonance · ×1.69 charge · −34% pressure",
+      "1.95 ν/s",
     ]);
     // The other Triangle, out of reach, has no charge leg.
     click(cell("0,1"));
-    expect(lines()).toEqual(["Triangle · Oscillator", "Resonating ×1 · closes Sine–Triangle", "1.0 ν/s base · ×1.75 resonance", "1.75 ν/s"]);
+    expect(lines()).toEqual(["Triangle · Oscillator", "Resonating ×1 · closes Sine–Triangle", "1.0 ν/s base · ×1.75 resonance · −39% pressure", "1.06 ν/s"]);
 
     const alone = apply(charged(createInitialState()), { type: "placeModule", module: "triangle", cell: { q: 1, r: 0 } }).state;
     show(shell, alone);
@@ -224,8 +224,8 @@ describe("the Flywheel's reach and charge", () => {
     expect(lines()).toEqual([
       "Triangle · Oscillator",
       "Not resonating · needs two touching oscillators beside it",
-      "1.0 ν/s base · ×1.69 charge",
-      "1.69 ν/s",
+      "1.0 ν/s base · ×1.69 charge · −34% pressure",
+      "1.11 ν/s",
     ]);
   });
 });
