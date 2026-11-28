@@ -161,8 +161,8 @@ describe("a v15 save's records (issue #19)", () => {
     expect(result.error).toBeUndefined();
     expect(result.state!.game.mode).toBe("flow");
     expect(result.state!.game.session).toEqual({
-      target: 1_500, elapsed: 900, targetSignaled: false, startedAt: 5_000, goalSeconds: { g6: 300 }, nousMade: D(0),
-      accounting: { creditedSeconds: 600, poolSeconds: 300, pendingAwaySeconds: 12, events: [], provisionalNous: D(30) },
+      target: 1_500, elapsed: 900, targetSignaled: false, startedAt: 5_000, goalSeconds: { g6: 300 }, nousMade: D(0), walls: [],
+      accounting: { creditedSeconds: 600, poolSeconds: 300, pendingAwaySeconds: 12, events: [], provisionalNous: D(30), wallSeconds: 300 },
     });
     // The pool still settles through the honesty report, banking the
     // provisional nous.
@@ -204,7 +204,7 @@ describe("a v15 save's records (issue #19)", () => {
     // The retired game's `earned` isn't the session's ν: the new facts
     // default (issue #40).
     expect(state.game.summary).toEqual({
-      sessionNumber: 3, seconds: 1_500, plannedTarget: 1_500, honestyEvents: [], reflection: null, seen: false,
+      sessionNumber: 3, seconds: 1_500, plannedTarget: 1_500, honestyEvents: [], reflection: null, seen: false, walls: [],
       nous: D(0), habitClass: null, classSeconds: 0, levelBefore: 0, levelAfter: 0, breather: null,
     });
   });

@@ -2,15 +2,16 @@ import { createInitialState } from "./state";
 import { normalizeIntentions } from "./intentions";
 import { normalizeHabitColor } from "./habits";
 import { SAVE_VERSION } from "./constants";
-import { D, fromSave, isNum, NumFault, toSave, type Num } from "./num";
-import { ARCS, openingBoard } from "./board";
+import { D, fromSave, gte, isNum, lte, NumFault, toSave, type Num } from "./num";
+import { ARCS, cellKind, openingBoard } from "./board";
+import { wallAt } from "./map";
 import { cellKey, isFacing, LIFETIME_RADIUS, ring, type Cell } from "./hex";
 import { hasFacing, isModuleType } from "./modules";
 import { isCableType, newCableRefusal, type CableRoom } from "./cables";
 import { grantsOf } from "./levels";
 import { emptyEncyclopedia, isEntryId, revealEntries } from "./encyclopedia";
 import { computeBoardRates } from "./rates";
-import type { Arc, Board, BreatherState, Cable, EncyclopediaState, EntryId, GameState, Habit, HabitClass, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
+import type { Arc, Board, BreatherState, Cable, EncyclopediaState, EntryId, GameState, Habit, HabitClass, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary, SummaryWall, WallHp } from "./types";
 
 // The save boundary. Save v16 (issue #18) writes the nested GameState
 // (`records`, `game`) with every Decimal as num's save string, and reads it
@@ -175,13 +176,17 @@ function readHabit(raw: Habit): Habit {
 }
 
 // A v15 session holds its provisional nous as `bucketNous`.
+// An older save's held wall seconds are the pool's (issue #51): it banked
+// provisional ν for the whole pool the same way.
 function readAccounting(raw: Partial<SessionAccounting> & { bucketNous?: unknown }): SessionAccounting {
+  const poolSeconds = finiteOr(raw.poolSeconds, 0);
   return {
     creditedSeconds: finiteOr(raw.creditedSeconds, 0),
-    poolSeconds: finiteOr(raw.poolSeconds, 0),
+    poolSeconds,
     pendingAwaySeconds: finiteOr(raw.pendingAwaySeconds, 0),
     events: Array.isArray(raw.events) ? raw.events : [],
     provisionalNous: readLostable(raw.provisionalNous ?? raw.bucketNous),
+    wallSeconds: Math.max(0, finiteOr(raw.wallSeconds, poolSeconds)),
   };
 }
 
@@ -194,7 +199,27 @@ function readSession(raw: Partial<SessionState>): SessionState {
     startedAt: finiteOr(raw.startedAt, 0),
     goalSeconds: isRecord(raw.goalSeconds) ? raw.goalSeconds : {},
     nousMade: readLostable(raw.nousMade),
+    walls: readTally(raw.walls).map(({ fought: _fought, ...tally }) => tally),
   };
+}
+
+// The session's and the summary's walls (issue #50), additive v16 fields
+// that default to `[]`. An entry needs an authored wall's cell, its lost HP
+// as a save string and a boolean `conquered` (and, in the summary,
+// `fought`); otherwise, or for a second entry of one wall, it is dropped.
+// Lost HP is a readout, not money, so dropping it raises no recovery.
+function readTally(raw: unknown): SummaryWall[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const walls: SummaryWall[] = [];
+  for (const item of raw) {
+    if (!isRecord(item) || typeof item.lost !== "string" || !readableNum(item.lost) || typeof item.conquered !== "boolean") continue;
+    const cell = readCell(item.cell);
+    if (!cell || !wallAt(cell) || seen.has(cellKey(cell))) continue;
+    seen.add(cellKey(cell));
+    walls.push({ cell, lost: fromSave(item.lost), conquered: item.conquered, fought: item.fought === true && !item.conquered });
+  }
+  return walls;
 }
 
 function readSummary(raw: Partial<SessionSummary>): SessionSummary {
@@ -211,6 +236,7 @@ function readSummary(raw: Partial<SessionSummary>): SessionSummary {
     honestyEvents: Array.isArray(raw.honestyEvents) ? raw.honestyEvents : [],
     reflection: raw.reflection ?? null,
     seen: raw.seen === true,
+    walls: readTally(raw.walls),
   };
 }
 
@@ -243,7 +269,7 @@ function readBreather(raw: unknown): BreatherState {
       running && length !== null
         ? { seconds: length, elapsed: Math.min(length, Math.max(0, finiteOr(running.elapsed, 0))), startedAt: finiteOr(running.startedAt, 0) }
         : null,
-    result: result === undefined ? null : { nous: readNum(result, D(0)) },
+    result: result === undefined ? null : { nous: readNum(result, D(0)), walls: readTally(isRecord(source.result) ? source.result.walls : undefined) },
   };
 }
 
@@ -433,7 +459,31 @@ function readBoard(raw: unknown): Board {
   }
   if (open.length === 0) return opening;
   const arc = typeof raw.arc === "string" && (ARCS as readonly string[]).includes(raw.arc) ? (raw.arc as Arc) : opening.arc;
-  return { open, arc, placements: readPlacements(raw.placements, seen), cables: [] };
+  const board: Board = { open, arc, placements: readPlacements(raw.placements, seen), cables: [], walls: [] };
+  board.walls = readWalls(raw.walls, board);
+  return board;
+}
+
+// Wall HP (issue #49), an additive v16 field: missing, every wall is at
+// full HP. An entry is dropped, leaving its wall full, when its cell isn't
+// a wall inside the arc (a conquered cell is open), when its HP isn't a
+// finite figure, or when it is ≤ 0 or ≥ the kind's full HP. A second entry
+// for one wall is dropped too.
+function readWalls(raw: unknown, board: Board): WallHp[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const walls: WallHp[] = [];
+  for (const item of raw) {
+    if (!isRecord(item) || typeof item.hp !== "string" || !readableNum(item.hp)) continue;
+    const cell = readCell(item.cell);
+    const wall = cell && wallAt(cell);
+    if (!cell || !wall || cellKind(board, cell) !== "wall" || seen.has(cellKey(cell))) continue;
+    const hp = fromSave(item.hp);
+    if (!Number.isFinite(hp.toNumber()) || lte(hp, 0) || gte(hp, wall.hp)) continue;
+    seen.add(cellKey(cell));
+    walls.push({ cell, hp });
+  }
+  return walls;
 }
 
 // Placements (issue #25): a placement whose type is unknown, or whose cell

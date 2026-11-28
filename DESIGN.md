@@ -14,6 +14,7 @@ colors:
   hue-spacer: "#8a93a8"
   hue-booster: "#1f95b5"
   hue-forge: "#bc9239"
+  hue-arm: "#bc9239"
   hue-voice: "#9d7bea"
   hue-conduit: "#d9b84a"
   hue-ritual: "#cc603d"
@@ -135,7 +136,7 @@ The palette is a functional instrument table, not a decorative ramp: every color
 
 ### Tertiary
 
-- **Category hues** — modulator `#238858` (the retired generator green), oscillator `#6360d4`. The retired spacer `#8a93a8`, booster `#1f95b5`, forge `#bc9239`, silent voice `#9d7bea`, charge conduit `#d9b84a` and ritual `#cc603d` wait for the reset's Effect and Arm categories. Mid-lightness, full-chroma LED registers; hue = category, per-type identity rides the glyph and nameplate. Every hue is paired with a glyph — colorblind safety is structural.
+- **Category hues** — modulator `#238858` (the retired generator green), oscillator `#6360d4`, arm `#bc9239` (the retired forge amber). The retired spacer `#8a93a8`, booster `#1f95b5`, silent voice `#9d7bea`, charge conduit `#d9b84a` and ritual `#cc603d` wait for the reset's Effect category. Mid-lightness, full-chroma LED registers; hue = category, per-type identity rides the glyph and nameplate. Every hue is paired with a glyph — colorblind safety is structural.
 - **Rarity finishes** — common `#b4bdd8`, uncommon `#7fd0a8`, rare `#b39cf2`: a faint plate tint (4–14% mixed over the hex face), supplemented by the shared rarity shape marks below. Engraved rings belong to merge tier. Never glowing.
 - **Chord annotations** (eleven hues in `src/ui/theme.ts`) name the seams — annotation, never category; they never ride a module face.
 - **Habit palette** (six tokens, vermillion default): the habit editor's swatches, worn by the habit's goal tracks and the display well's goal meter wherever the habit — or the goal that inherits its color (issue #445) — renders.

@@ -1,4 +1,4 @@
-import type { ModuleCategory, ModuleType, OscillatorType, ReachHolds } from "./types";
+import type { ArmType, ModulatorType, ModuleCategory, ModuleType, OscillatorType, ReachHolds } from "./types";
 
 // The module catalogue (GLOSSARY: Module, Category): each type's category,
 // its nameplate, and for an oscillator its base rate and resonance pattern
@@ -59,6 +59,12 @@ interface ModuleSpec {
   // A modulator's output and reach (issue #32).
   output?: Output;
   reach?: Reach;
+  // An Arm's damage to the wall it faces per charge/s received (issue
+  // #53).
+  damagePerCharge?: number;
+  // An Arm that cancels pressure on its neighbours while it borders a
+  // wall (issue #54).
+  guards?: true;
 }
 
 const OSCILLATOR: PartnerRule = { kind: "category", category: "oscillator" };
@@ -103,6 +109,12 @@ const MODULES: Record<ModuleType, ModuleSpec> = {
     output: { base: 0.5 },
     reach: { paths: [[0], [1], [2], [3], [4], [5]], faced: false },
   },
+  // Arms (issue #53) make neither ν nor charge. The Blade turns the charge
+  // it receives into 10× damage on the wall it faces.
+  blade: { category: "arm", name: "Blade", base: 0, pattern: null, faces: true, damagePerCharge: 10 },
+  // The Guard Plate (issue #54) has no facing. Bordering a wall, it
+  // cancels pressure on its neighbours; charge delivered to it is wasted.
+  guardPlate: { category: "arm", name: "Guard Plate", base: 0, pattern: null, guards: true },
 };
 
 export const MODULE_TYPES = Object.keys(MODULES) as readonly ModuleType[];
@@ -119,10 +131,36 @@ export function isOscillator(module: ModuleType): module is OscillatorType {
   return categoryOf(module) === "oscillator";
 }
 
-// Whether a delivery onto a cell holding this charges it: only an
-// oscillator takes anything from charge in chunk 03.
-export function takesCharge(holds: ReachHolds): holds is OscillatorType {
-  return holds !== "empty" && holds !== "wall" && holds !== "dark" && isOscillator(holds);
+export function isModulator(module: ModuleType): module is ModulatorType {
+  return categoryOf(module) === "modulator";
+}
+
+export function isArm(module: ModuleType): module is ArmType {
+  return categoryOf(module) === "arm";
+}
+
+// Whether a delivery onto a cell holding this charges it: an oscillator
+// (its charge factor) and the Blade (its damage, issue #53).
+export function takesCharge(holds: ReachHolds): holds is OscillatorType | "blade" {
+  return holds !== "empty" && holds !== "wall" && holds !== "dark" && (isOscillator(holds) || MODULES[holds].damagePerCharge !== undefined);
+}
+
+// Whether this type cancels pressure on its neighbours while it borders a
+// wall: the Guard Plate (issue #54).
+export function guardsPressure(module: ModuleType): boolean {
+  return MODULES[module].guards === true;
+}
+
+// An Arm's role, from its capabilities: guarding while it cancels
+// pressure, otherwise striking the wall it faces. The rates, the Hex
+// detail and the pace runner branch on the role, never on the type.
+export function armRole(module: ArmType): "strike" | "guard" {
+  return guardsPressure(module) ? "guard" : "strike";
+}
+
+// An Arm's damage per charge/s received, 0 for every other type.
+export function damagePerCharge(module: ModuleType): number {
+  return MODULES[module].damagePerCharge ?? 0;
 }
 
 export function moduleName(module: ModuleType): string {
@@ -156,7 +194,7 @@ export function reachOf(module: ModuleType): Reach {
   return MODULES[module].reach ?? NO_REACH;
 }
 
-const CATEGORY_NAMES: Record<ModuleCategory, string> = { oscillator: "Oscillator", modulator: "Modulator" };
+const CATEGORY_NAMES: Record<ModuleCategory, string> = { oscillator: "Oscillator", modulator: "Modulator", arm: "Arm" };
 
 export function categoryName(category: ModuleCategory): string {
   return CATEGORY_NAMES[category];

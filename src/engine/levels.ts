@@ -55,10 +55,12 @@ type Grant =
 const OSCILLATOR: Grant = { kind: "allowance", category: "oscillator" };
 const MODULATOR: Grant = { kind: "allowance", category: "modulator" };
 const CABLE: Grant = { kind: "cable" };
+const ARM: Grant = { kind: "allowance", category: "arm" };
 
-// A ladder: the authored levels from Lv 1, then what every later level
-// grants.
+// A ladder: what the class brings the moment it opens (Lv 0), the
+// authored levels from Lv 1, then what every later level grants.
 interface Ladder {
+  start?: readonly Grant[];
   levels: readonly (Grant | null)[];
   after: (level: number) => Grant | null;
 }
@@ -80,10 +82,11 @@ const LADDERS: Record<HabitClass, Ladder> = {
     // Modulators.
     after: (level) => ((level - 2) % 2 === 0 ? MODULATOR : CABLE),
   },
-  // Declared for chunks 05 (Roadie: Lv 0 Blade, Lv 2 Guard Plate) and Demo
-  // (Mixer). Their types don't exist yet, and a closed class grants
-  // nothing, so the ladders are empty until those chunks fill them.
-  roadie: { levels: [], after: () => null },
+  // Lv 0 the Blade and 1 Arm, Lv 1 +1 Arm, Lv 2 the Guard Plate (issue
+  // #54), then +1 Arm each (issue #53).
+  roadie: { start: [{ kind: "type", module: "blade" }, ARM], levels: [ARM, { kind: "type", module: "guardPlate" }], after: () => ARM },
+  // Declared for Demo (Mixer): its types don't exist yet, and a closed
+  // class grants nothing, so the ladder is empty until that chunk fills it.
   mixer: { levels: [], after: () => null },
 };
 
@@ -108,7 +111,7 @@ const CLASS_ORDER: readonly HabitClass[] = ["engineer", "producer", "mixer", "ro
 // The opening grants: what a fresh start has before any level.
 function opening(): Grants {
   return {
-    allowance: { oscillator: 2, modulator: 1 },
+    allowance: { oscillator: 2, modulator: 1, arm: 0 },
     cableAllowance: 1,
     arrived: ["sine", "triangle", "flywheel"],
     arrivedCables: ["patch"],
@@ -124,6 +127,7 @@ export function grantsOf(state: GameState): Grants {
   for (const habitClass of CLASS_ORDER) {
     if (!state.game.openClasses.includes(habitClass)) continue;
     const { level } = classLevel(state, habitClass);
+    for (const grant of LADDERS[habitClass].start ?? []) arrivals.push({ at: 0, order: CLASS_ORDER.indexOf(habitClass), grant });
     for (let l = 1; l <= level; l++) {
       const grant = grantAt(habitClass, l);
       if (grant) arrivals.push({ at: thresholdHours(l), order: CLASS_ORDER.indexOf(habitClass), grant });

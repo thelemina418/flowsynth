@@ -33,6 +33,10 @@ export interface SessionAccounting {
   // time, held aside until the honesty report settles it. Didn't-practice
   // drops it; either other answer banks it into nous.
   provisionalNous: Num;
+  // The provisional wall seconds (issue #51): provisional time moves no
+  // wall, so its seconds are held here beside the provisional ν. A
+  // non-missed answer runs them through the wall step; `missed` drops them.
+  wallSeconds: number;
 }
 
 export interface SessionState {
@@ -49,6 +53,24 @@ export interface SessionState {
   // The ν the session made (issue #40): banked from trusted flow time,
   // plus provisional ν once a non-missed honesty answer settles it.
   nousMade: Num;
+  // The walls the session fought (issue #50): each wall's net HP lost
+  // since it was first fought, and whether it fell. The conquered ones are
+  // in conquest order.
+  walls: WallTally[];
+}
+
+// One wall the session fought (issue #50). `lost` is net: a wall that
+// healed after the fight stopped lost less.
+export interface WallTally {
+  cell: Cell;
+  lost: Num;
+  conquered: boolean;
+}
+
+// The summary's entry: `fought` marks the wall still being fought when
+// the session ended, standing.
+export interface SummaryWall extends WallTally {
+  fought: boolean;
 }
 
 // The summary's reflection (spec §8).
@@ -75,6 +97,8 @@ export interface SessionSummary {
   honestyEvents: HonestyEvent[];
   reflection: SessionReflection | null;
   seen: boolean;
+  // The walls the session fought (issue #50), from its tally.
+  walls: SummaryWall[];
 }
 
 export type SessionMode = "planned" | "open-ended";
@@ -174,11 +198,12 @@ export type FocusApp = "habit" | "time" | "notes";
 export interface BreatherState {
   banked: { seconds: number } | null;
   running: { seconds: number; elapsed: number; startedAt: number } | null;
-  result: { nous: Num } | null;
+  // The breather's ν and the walls it fought (issue #51).
+  result: { nous: Num; walls: SummaryWall[] } | null;
 }
 
 // The Encyclopedia's entries (spec chunk 04, issue #44).
-export type EntryId = "resonance" | OscillatorType | "charge" | "cables" | "walls" | "pressure" | "classes" | "breather" | "prestige";
+export type EntryId = "resonance" | OscillatorType | "charge" | "cables" | "walls" | "pressure" | "arms" | "classes" | "breather" | "prestige";
 
 // Revealed and seen entries: unions that only grow (engine/encyclopedia.ts).
 export interface EncyclopediaState {
@@ -209,8 +234,9 @@ export interface Records {
 export type Arc = "sketch" | "demo" | "record" | "master" | "encore";
 
 // The module categories (GLOSSARY: Category). Oscillators and Modulators
-// exist from chunk 03; Effects and Arms arrive later.
-export type ModuleCategory = "oscillator" | "modulator";
+// exist from chunk 03, Arms from chunk 05 (issue #53); Effects arrive
+// later.
+export type ModuleCategory = "oscillator" | "modulator" | "arm";
 
 // The oscillator types (mechanics-sketch.md). Square, Saw and Release are
 // declared now; chunk 04 makes them arrive.
@@ -221,8 +247,12 @@ export type OscillatorType = "sine" | "triangle" | "square" | "saw" | "release";
 // declared as data (issue #32) and chunk 04 makes it arrive.
 export type ModulatorType = "flywheel" | "pulsewell";
 
+// The Arm types (mechanics-sketch.md, Arms): Roadie's Blade (issue #53)
+// and Guard Plate (issue #54).
+export type ArmType = "blade" | "guardPlate";
+
 // Every module type.
-export type ModuleType = OscillatorType | ModulatorType;
+export type ModuleType = OscillatorType | ModulatorType | ArmType;
 
 // One module on one owned open cell (issue #25). A module whose type has a
 // facing (issue #31) carries it: an index into hex.ts's DIRECTIONS; a type
@@ -243,6 +273,15 @@ export interface Board {
   // The placed cables (issue #33), in placement order. A cable occupies no
   // cell.
   cables: Cable[];
+  // Every wall below its full HP (issue #49). A wall missing from the list
+  // is at full HP; a conquered wall is in `open` and never here.
+  walls: WallHp[];
+}
+
+// One wall's HP below full (issue #49): above 0 and below its kind's full HP.
+export interface WallHp {
+  cell: Cell;
+  hp: Num;
 }
 
 // The cable types (GLOSSARY: Cable). Patch arrives at the start; Mult,
@@ -265,8 +304,9 @@ export interface ResonanceInstance {
 }
 
 // One placed oscillator's rate (mechanics-sketch.md, Rates):
-// rate = base × resonance × charge × faders × (1 − pressure). Faders and
-// pressure are identity legs until chunks 06 and 05 fill them in.
+// rate = base × resonance × charge × faders × (1 − pressure). Faders are
+// an identity leg until chunk 06; pressure is the bordering walls' sum,
+// capped at 60% (issue #52).
 export interface OscillatorRate {
   cell: Cell;
   module: OscillatorType;
@@ -308,15 +348,51 @@ export interface ModulatorRate {
   deliveries: ChargeDelivery[];
 }
 
-// One wall a Patch targets (issue #34): the patched charge into it as
-// damage at 1:1, its regen from the authored map (null for a placeholder)
-// and net = damage − regen. A rate only: nothing applies it until chunk 05.
+// One wall taking damage (issues #34, #53): the damage from Patches and
+// Blades, its regen from the authored map and net = damage − regen; its
+// full HP; the pressure it exerts on each module bordering it (doubled for
+// `Pressure ×2`, issue #52); and how many bordering oscillators that
+// pressure reduces, so not one a Guard Plate shields (spec chunk 05).
 export interface WallRate {
   cell: Cell;
   damage: Num;
-  regen: Num | null;
+  regen: Num;
   net: Num;
+  full: Num;
+  pressure: number;
+  pressed: number;
 }
+
+// One placed Arm, by the role its type's capabilities give it
+// (modules.ts): a striking Arm (the Blade, issue #53) or a guarding one
+// (the Guard Plate, issue #54). A striking Arm carries the charge/s it
+// receives, the cell its facing points at, whether that cell is a wall,
+// and the damage it deals there (its damage per charge × charge received,
+// or 0).
+export interface StrikeRate {
+  cell: Cell;
+  role: "strike";
+  module: ArmType;
+  facing: Facing;
+  chargeReceived: Num;
+  faces: Cell;
+  facesWall: boolean;
+  damage: Num;
+}
+
+// A guarding Arm carries whether it's active (it borders at least one
+// wall) and how many modules it shields: the oscillators beside it that a
+// wall would otherwise press on, 0 while it's inactive. Charge delivered
+// to it is wasted, so it carries none.
+export interface GuardRate {
+  cell: Cell;
+  role: "guard";
+  module: ArmType;
+  active: boolean;
+  shields: number;
+}
+
+export type ArmRate = StrikeRate | GuardRate;
 
 // The board's rates (issue #26): one pure computation of the layout and
 // the credited Producer time, cached on the game state. Recomputed after
@@ -326,6 +402,8 @@ export interface WallRate {
 export interface BoardRates {
   oscillators: OscillatorRate[];
   modulators: ModulatorRate[];
+  // In placement order (issue #53).
+  arms: ArmRate[];
   // Walls in the order a Patch first targets them.
   walls: WallRate[];
   total: Num;

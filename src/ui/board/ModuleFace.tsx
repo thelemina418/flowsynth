@@ -1,5 +1,5 @@
 import { corners, FACING_NAMES, type Point } from "../../engine/hex";
-import { categoryOf, moduleName } from "../../engine/modules";
+import { categoryOf, isModulator, moduleName } from "../../engine/modules";
 import type { Placement } from "../../engine/types";
 import { Glyph } from "./glyphs";
 import { round } from "./svg";
@@ -38,14 +38,28 @@ function pointer(center: Point, size: number, facing: number): string {
 export function ModuleFace({ placement, center, size }: { placement: Placement; center: Point; size: number }) {
   const { module, facing } = placement;
   const faced = facing !== undefined;
+  // Only a modulator has a jack: a Blade turns, but a cable never starts
+  // from it (issue #53).
+  const jack = faced && isModulator(module);
+  // A two-word name (the Guard Plate) is too wide for one line inside the
+  // hex, so it breaks at its space onto two, under a raised glyph.
+  const words = moduleName(module).split(" ");
+  const x = round(center.x);
   return (
     <g class="module" data-module={module} data-category={categoryOf(module)}>
       <polygon class="module-face" points={points(center, size)} />
-      <Glyph module={module} x={round(center.x)} y={round(center.y - (faced ? 6 : 4))} />
-      {faced && <circle class="module-jack" data-jack="" cx={round(center.x)} cy={round(center.y + 3.5)} r="2.2" />}
-      <text class="module-name" x={round(center.x)} y={round(center.y + 13)} text-anchor="middle">
-        {moduleName(module)}
-      </text>
+      <Glyph module={module} x={x} y={round(center.y - (words.length > 1 ? 8 : faced ? 6 : 4))} />
+      {jack && <circle class="module-jack" data-jack="" cx={x} cy={round(center.y + 3.5)} r="2.2" />}
+      {words.length > 1 ? (
+        <text class="module-name" text-anchor="middle">
+          <tspan x={x} y={round(center.y + 5.5)}>{`${words[0]} `}</tspan>
+          <tspan x={x} y={round(center.y + 13)}>{words.slice(1).join(" ")}</tspan>
+        </text>
+      ) : (
+        <text class="module-name" x={x} y={round(center.y + 13)} text-anchor="middle">
+          {words[0]}
+        </text>
+      )}
       {/* Last, so the nameplate never hides it on the lower facings. */}
       {faced && <polygon class="module-pointer" data-facing={FACING_NAMES[facing]} points={pointer(center, size, facing)} />}
     </g>

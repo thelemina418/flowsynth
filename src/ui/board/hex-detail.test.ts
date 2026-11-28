@@ -57,7 +57,7 @@ describe("the Hex detail panel", () => {
   it("fills on a click, and moves to the next clicked cell", () => {
     mount();
     click(cell("-1,1"));
-    expect(lines()).toEqual(["Shale · Wall"]);
+    expect(lines()).toEqual(["Shale · Wall · ring 1", "600 / 600 HP · regen 0.1/s", "Pressure 5%"]);
     click(cell("3,0"));
     expect(lines()).toEqual(["Dark cell · beyond this arc"]);
     expect(cell("3,0").hasAttribute("data-inspected")).toBe(true);
@@ -66,8 +66,8 @@ describe("the Hex detail panel", () => {
 
   it("opens from the keyboard on a focused cell and closes on Escape", () => {
     mount();
-    press(cell("2,-1"), "Enter");
-    expect(lines()).toEqual(["Flint · Wall · opens Roadie"]);
+    press(cell("0,-2"), "Enter");
+    expect(lines()).toEqual(["Flint · Wall · ring 2 · opens Roadie", "60\u2009000 / 60\u2009000 HP · regen 10.0/s", "Only Arm damage", "Pressure 10%"]);
     press(document, "Escape");
     expect(panel().textContent).toBe("");
   });
@@ -88,7 +88,8 @@ describe("the Hex detail panel", () => {
       shell.state.value = acceptanceLayout();
     });
     click(cell("1,0"));
-    expect(lines()).toEqual(["Triangle · Oscillator", "Resonating ×1 · closes Sine–Triangle", "1.0 ν/s base · ×1.75 resonance", "1.75 ν/s"]);
+    // Under the opening's 34% pressure on (1,0) (issue #52).
+    expect(lines()).toEqual(["Triangle · Oscillator", "Resonating ×1 · closes Sine–Triangle", "1.0 ν/s base · ×1.75 resonance · −34% pressure", "1.15 ν/s"]);
     expect(cell("1,0").hasAttribute("data-picked")).toBe(true);
     // Placing it reads the cell it lands on.
     click(cell("1,-1"));
@@ -97,13 +98,22 @@ describe("the Hex detail panel", () => {
     expect(cell("1,-1").hasAttribute("data-inspected")).toBe(true);
   });
 
+  it("reads Shale's pressure on the two oscillators it borders (issue #52)", () => {
+    const shell = mount();
+    act(() => {
+      shell.state.value = acceptanceLayout();
+    });
+    click(cell("-1,1"));
+    expect(lines()).toEqual(["Shale · Wall · ring 1", "600 / 600 HP · regen 0.1/s", "Pressure 5% on 2 modules"]);
+  });
+
   it("in flow, only inspects: a click and a key move nothing", () => {
     const shell = mount();
     act(() => {
       shell.state.value = started(acceptanceLayout(), 5_000_000_000_000);
     });
     click(cell("1,0"));
-    expect(lines()[3]).toBe("1.75 ν/s");
+    expect(lines()[3]).toBe("1.15 ν/s");
     click(cell("1,-1"));
     press(cell("0,0"), "Enter");
     expect(lines()[0]).toBe("Sine · Oscillator");
@@ -118,12 +128,12 @@ describe("the Hex detail panel", () => {
       shell.state.value = s;
     });
     click(cell("1,0"));
-    expect(lines()[3]).toBe("1.75 ν/s");
+    expect(lines()[3]).toBe("1.15 ν/s");
     s = advance(s, 60, "flow").state;
     act(() => {
       shell.state.value = s;
     });
-    expect(lines()[3]).toBe("1.75 ν/s");
+    expect(lines()[3]).toBe("1.15 ν/s");
     // The state changes under the open panel (here a new layout between
     // sessions; later chunks' charge and pressure arrive the same way):
     // the readout follows the new rates without another click.
@@ -134,7 +144,7 @@ describe("the Hex detail panel", () => {
       shell.state.value = s;
     });
     expect(s.game.mode).toBe("flow");
-    expect(lines()).toEqual(["Triangle · Oscillator", "Not resonating · needs two touching oscillators beside it", "1.0 ν/s"]);
+    expect(lines()).toEqual(["Triangle · Oscillator", "Not resonating · needs two touching oscillators beside it", "1.0 ν/s base · −34% pressure", "0.66 ν/s"]);
   });
 });
 

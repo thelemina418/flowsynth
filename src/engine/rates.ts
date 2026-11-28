@@ -1,11 +1,11 @@
 import { cellKind } from "./board";
-import { addCell, cellKey, DIRECTIONS, type Cell } from "./hex";
-import { add, D, div, ln, min, mul, pow, sub, type Num } from "./num";
-import { baseRate, breatherBaseRate, hasFacing, isOscillator, outputOf, patternOf, reachOf, takesCharge } from "./modules";
-import { wallAt } from "./map";
+import { addCell, cellKey, DIRECTIONS, neighbours, sameCell, type Cell } from "./hex";
+import { add, D, div, gt, ln, min, mul, pow, sub, type Num } from "./num";
+import { armRole, baseRate, breatherBaseRate, damagePerCharge, hasFacing, isArm, isModulator, isOscillator, outputOf, patternOf, reachOf, takesCharge } from "./modules";
+import { wallOf } from "./map";
 import { cableFrom, moduleAt } from "./placement";
 import { instancesOf } from "./resonance";
-import type { Board, BoardRates, ChargeDelivery, ModulatorRate, ModulatorType, OscillatorRate, Placement, ReachHolds, WallRate } from "./types";
+import type { ArmRate, Board, BoardRates, ChargeDelivery, ModulatorRate, ModulatorType, OscillatorRate, Placement, ReachHolds, WallRate } from "./types";
 
 // The board's rates (spec chunk 02, issue #26; mechanics-sketch.md,
 // Rates). One pure function of the layout and the credited Producer time
@@ -47,29 +47,84 @@ function holdsAt(board: Board, cell: Cell): ReachHolds {
   return moduleAt(board, cell)?.module ?? "empty";
 }
 
+// The pressure cap (mechanics-sketch.md, Rates): a crowded corner hurts
+// but never shuts an oscillator off.
+const PRESSURE_CAP = 0.6;
+
+// The pressure one wall exerts on each module bordering it, doubled for
+// `Pressure ×2` (issue #52).
+function wallPressure(cell: Cell): number {
+  const wall = wallOf(cell);
+  return wall.pressure * (wall.modifier === "pressureDouble" ? 2 : 1);
+}
+
+// A wall's rate at `damage`, read against the oscillators' rates: the one
+// owner of a wall's full HP, pressure and pressed count. An oscillator is
+// pressed while its pressure leg isn't identity, so one a Guard Plate
+// shields isn't counted, and nor is a modulator or an Arm.
+function wallRateOf(cell: Cell, damage: Num, oscillators: readonly OscillatorRate[]): WallRate {
+  const wall = wallOf(cell);
+  const around = neighbours(cell);
+  const pressed = oscillators.filter((o) => gt(o.pressure, 0) && around.some((n) => sameCell(n, o.cell))).length;
+  return { cell, damage, regen: wall.regen, net: sub(damage, wall.regen), full: wall.hp, pressure: wallPressure(cell), pressed };
+}
+
+// Any wall's rate from the cached rates: its `rates.walls` entry while it
+// takes damage, otherwise the same reading at no damage. The Hex detail
+// reads a wall through this.
+export function wallRateAt(rates: BoardRates, cell: Cell): WallRate {
+  return rates.walls.find((w) => sameCell(w.cell, cell)) ?? wallRateOf({ q: cell.q, r: cell.r }, D(0), rates.oscillators);
+}
+
+// Whether a cell holds an oscillator that a bordering wall would press on,
+// a Guard Plate aside: what a Guard Plate shields (issue #54).
+function isPressed(board: Board, cell: Cell): boolean {
+  const module = moduleAt(board, cell)?.module;
+  return module !== undefined && isOscillator(module) && bordersWall(board, cell);
+}
+
+function bordersWall(board: Board, cell: Cell): boolean {
+  return neighbours(cell).some((n) => cellKind(board, n) === "wall");
+}
+
+// The pressure on a cell: the sum over its bordering walls inside the
+// arc, capped. A pure derivation from the board's cell kinds, so a dark
+// cell presses on nothing and a conquered (open) cell stops pressing at
+// once (issue #52). A cell beside an active Guard Plate takes none (issue
+// #54).
+function pressureOn(board: Board, cell: Cell, guarded: ReadonlySet<string>): Num {
+  if (guarded.has(cellKey(cell))) return D(0);
+  let sum = 0;
+  for (const n of neighbours(cell)) if (cellKind(board, n) === "wall") sum += wallPressure(n);
+  return D(Math.min(sum, PRESSURE_CAP));
+}
+
 // A board with no module placed.
 export function noRates(): BoardRates {
-  return { oscillators: [], modulators: [], walls: [], total: D(0), breatherTotal: D(0) };
+  return { oscillators: [], modulators: [], arms: [], walls: [], total: D(0), breatherTotal: D(0) };
 }
 
 export function computeBoardRates(board: Board, producerSeconds: number): BoardRates {
-  // Every module in a reach (or at a Patch's target) receives the full output; only an oscillator
-  // takes anything from it, and several deliveries sum before the log.
+  // Every module in a reach (or at a Patch's target) receives the full
+  // output; only an oscillator or a Blade takes anything from it, and
+  // several deliveries sum (before the log, for an oscillator).
   const modulators: ModulatorRate[] = [];
   const received = new Map<string, Num>();
-  // Damage per wall cell, from Patches only (issue #34): reach onto a wall
-  // does nothing.
+  // Damage per wall cell, from Patches (issue #34) and Blades (issue #53):
+  // reach onto a wall does nothing.
   const damage = new Map<string, { cell: Cell; damage: Num }>();
   for (const placement of board.placements) {
     const module = placement.module;
-    if (isOscillator(module)) continue;
+    if (!isModulator(module)) continue;
     const output = modulatorOutput(module, producerSeconds);
     // A patched modulator delivers to its cable's target alone, in place
     // of its reach (issue #33).
     const cable = cableFrom(board, placement.cell);
     const cells = cable ? [{ q: cable.target.q, r: cable.target.r }] : reachCells(placement);
     const deliveries: ChargeDelivery[] = cells.map((cell) => ({ cell, holds: holdsAt(board, cell) }));
-    if (cable && deliveries[0]!.holds === "wall") {
+    // A Patch into an `Only Arm damage` wall deals nothing (the route
+    // rule refuses one, issue #48).
+    if (cable && deliveries[0]!.holds === "wall" && wallOf(cable.target).modifier !== "armOnly") {
       const key = cellKey(cable.target);
       const wall = damage.get(key) ?? { cell: { q: cable.target.q, r: cable.target.r }, damage: D(0) };
       damage.set(key, { ...wall, damage: add(wall.damage, output) });
@@ -87,6 +142,36 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
       deliveries,
     });
   }
+  // Arms (issue #53): a striking Arm (the Blade) deals its damage per
+  // charge × the charge it receives to the cell it faces, when that cell
+  // is a wall; otherwise it does nothing. A guarding Arm (the Guard Plate)
+  // bordering a wall guards its neighbours from pressure (issue #54).
+  const arms: ArmRate[] = [];
+  const guarded = new Set<string>();
+  for (const placement of board.placements) {
+    const module = placement.module;
+    if (!isArm(module)) continue;
+    const cell = { q: placement.cell.q, r: placement.cell.r };
+    if (armRole(module) === "guard") {
+      const active = bordersWall(board, cell);
+      if (active) for (const n of neighbours(cell)) guarded.add(cellKey(n));
+      // It shields the oscillators beside it that a wall would press on.
+      const shields = active ? neighbours(cell).filter((n) => isPressed(board, n)).length : 0;
+      arms.push({ cell, role: "guard", module, active, shields });
+      continue;
+    }
+    const facing = placement.facing ?? 0;
+    const faces = addCell(placement.cell, DIRECTIONS[facing]!);
+    const facesWall = cellKind(board, faces) === "wall";
+    const chargeReceived = received.get(cellKey(placement.cell)) ?? D(0);
+    const dealt = facesWall ? mul(damagePerCharge(module), chargeReceived) : D(0);
+    if (facesWall && gt(dealt, 0)) {
+      const key = cellKey(faces);
+      const wall = damage.get(key) ?? { cell: faces, damage: D(0) };
+      damage.set(key, { ...wall, damage: add(wall.damage, dealt) });
+    }
+    arms.push({ cell, role: "strike", module, facing, chargeReceived, faces, facesWall, damage: dealt });
+  }
   const oscillators: OscillatorRate[] = [];
   let total = D(0);
   let breatherSum = D(0);
@@ -99,9 +184,10 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
     const resonance = resonanceFactor(strength, instances.length);
     const chargeReceived = received.get(cellKey(placement.cell)) ?? D(0);
     const charge = chargeFactor(chargeReceived);
-    // Identity legs until chunks 06 (faders) and 05 (pressure).
+    // Faders are an identity leg until chunk 06. Pressure (issue #52)
+    // reduces ν only: modulator output and wall damage ignore it.
     const faders = D(1);
-    const pressure = D(0);
+    const pressure = pressureOn(board, placement.cell, guarded);
     const product = (b: Num): Num => mul(mul(mul(mul(b, resonance), charge), faders), sub(1, pressure));
     const rate = product(base);
     // The same product on the breather base (issue #41).
@@ -123,11 +209,7 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
     total = add(total, rate);
     breatherSum = add(breatherSum, breatherRate);
   }
-  const walls: WallRate[] = [...damage.values()].map(({ cell, damage }) => {
-    const authored = wallAt(cell).regen;
-    const regen = authored === null ? null : D(authored);
-    return { cell, damage, regen, net: regen === null ? damage : sub(damage, regen) };
-  });
+  const walls: WallRate[] = [...damage.values()].map(({ cell, damage }) => wallRateOf(cell, damage, oscillators));
   // The board runs ×2 in a breather (issue #41).
-  return { oscillators, modulators, walls, total, breatherTotal: mul(2, breatherSum) };
+  return { oscillators, modulators, arms, walls, total, breatherTotal: mul(2, breatherSum) };
 }

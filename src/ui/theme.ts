@@ -41,13 +41,16 @@ const substrate = {
 // kept their values through the category rename (issue #219). The design
 // reset (spec chunk 03, issue #31) re-maps the retired generator green to
 // the Modulator: the modulator makes charge, so the Register Rule holds.
-// The other retired hues wait for the Effect and Arm chunks.
+// The Arm (spec chunk 05, issue #53) takes the retired forge amber, so
+// Arms read as force beside the oscillator's indigo and the modulator's
+// green. The other retired hues wait for the Effect chunk.
 const hues = {
   "hue-modulator": "#238858",
   "hue-oscillator": "#6360d4",
   "hue-spacer": "#8a93a8",
   "hue-booster": "#1f95b5",
   "hue-forge": "#bc9239",
+  "hue-arm": "#bc9239",
   "hue-voice": "#9d7bea",
   "hue-conduit": "#d9b84a",
   "hue-ritual": "#cc603d",

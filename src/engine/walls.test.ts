@@ -1,21 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { apply } from "./apply";
-import { advanceIn, applyIn, begin, fresh, giveHabit, giveProducer, ownCells } from "./fixtures";
+import { advanceIn, applyIn, fresh, giveHabit, giveProducer, ownCells } from "./fixtures";
 import type { Cell } from "./hex";
 import { deserialize, serialize } from "./save";
 import { cloneState } from "./state";
+import type { Action } from "./apply";
 import type { GameState, ModuleType } from "./types";
 
 // Patching into walls (spec chunk 03, issue #34), through the GameState
 // seam: a Patch may target a wall in the current arc, which takes the
-// charge as damage at 1:1. Damage is a rate only here; HP, damage over
-// time and regen over time are chunk 05's, so nothing ever changes a wall.
+// charge as damage at 1:1, except into an `Only Arm damage` wall (issue
+// #48), which refuses it. Damage is a rate here; HP over time is
+// conquest.test.ts's (issue #49).
 
 const O = { q: 0, r: 0 };
 const NE = { q: 1, r: -1 };
 const SHALE = { q: -1, r: 1 };
-const FLINT = { q: 2, r: -1 };
-const PLACEHOLDER = { q: 0, r: -1 };
+const FLINT = { q: 0, r: -2 };
+const SCHIST = { q: 2, r: -1 };
+const BASALT = { q: 0, r: -1 };
 const HOUR = 3600;
 
 function must(s: GameState, action: Parameters<typeof applyIn>[1]): void {
@@ -56,7 +59,7 @@ describe("the spec's acceptance", () => {
     expect(oscillatorAt(s, NE).charge.toNumber()).toBe(1);
     const shale = wallRate(s, SHALE)!;
     expect(shale.damage.toNumber()).toBe(1);
-    expect(shale.regen!.toNumber()).toBe(0.1);
+    expect(shale.regen.toNumber()).toBe(0.1);
     expect(shale.net.toNumber()).toBeCloseTo(0.9, 12);
   });
 });
@@ -70,21 +73,38 @@ describe("a wall's rate", () => {
     expect(wallRate(s, SHALE)!.damage.toNumber()).toBeCloseTo(1.4, 12);
   });
 
-  it("Flint carries its 10/s regen, and a placeholder wall carries none", () => {
+  it("every wall carries its kind's regen: Basalt 1/s, Schist 15/s", () => {
     const s = fresh();
     ownCells(s, [{ q: 1, r: 1 }]);
     // Producer Lv 2 (1.5 h): 2 modulators, 2 cables, 1.15 charge/s each.
     giveProducer(s, { modulators: 2, cables: 2 });
     place(s, "flywheel", { q: 1, r: 0 });
     place(s, "flywheel", O);
-    expect(patch(s, { q: 1, r: 0 }, FLINT).ok).toBe(true);
-    expect(patch(s, O, PLACEHOLDER).ok).toBe(true);
-    const flint = wallRate(s, FLINT)!;
-    expect(flint.regen!.toNumber()).toBe(10);
-    expect(flint.net.toNumber()).toBeCloseTo(-8.85, 12);
-    const placeholder = wallRate(s, PLACEHOLDER)!;
-    expect(placeholder.regen).toBeNull();
-    expect(placeholder.net.toNumber()).toBeCloseTo(1.15, 12);
+    expect(patch(s, { q: 1, r: 0 }, SCHIST).ok).toBe(true);
+    expect(patch(s, O, BASALT).ok).toBe(true);
+    const schist = wallRate(s, SCHIST)!;
+    expect(schist.regen.toNumber()).toBe(15);
+    expect(schist.net.toNumber()).toBeCloseTo(-13.85, 12);
+    const basalt = wallRate(s, BASALT)!;
+    expect(basalt.regen.toNumber()).toBe(1);
+    expect(basalt.net.toNumber()).toBeCloseTo(0.15, 12);
+  });
+
+  it("carries its full HP, its pressure and the oscillators it presses (spec chunk 05)", () => {
+    // Basalt (8%) presses on the Sine and the Triangle beside it,
+    // not on the Flywheel patched into it.
+    const s = fresh();
+    place(s, "sine", O);
+    place(s, "triangle", NE);
+    place(s, "flywheel", { q: 0, r: 1 });
+    expect(patch(s, { q: 0, r: 1 }, BASALT).ok).toBe(true);
+    const basalt = wallRate(s, BASALT)!;
+    expect([basalt.full.toNumber(), basalt.pressure, basalt.pressed]).toEqual([6000, 0.08, 2]);
+    // Shale borders the Sine and the Flywheel.
+    expect(patch(s, { q: 0, r: 1 }, SHALE).ok).toBe(false);
+    must(s, { type: "repatchCable", source: { q: 0, r: 1 }, target: SHALE });
+    const shale = wallRate(s, SHALE)!;
+    expect([shale.full.toNumber(), shale.pressure, shale.pressed]).toEqual([600, 0.05, 1]);
   });
 
   it("reach onto a wall deals no damage", () => {
@@ -117,8 +137,8 @@ describe("a wall's rate", () => {
   });
 });
 
-describe("advance applies nothing to a wall", () => {
-  it("in flow and in upgrade, the board and the wall rates stay as they were", () => {
+describe("upgrade mode applies nothing to a wall", () => {
+  it("in upgrade the board and the wall rates stay as they were; flow moves walls since issue #49 (conquest.test.ts)", () => {
     const s = fresh();
     giveHabit(s);
     place(s, "flywheel", O);
@@ -128,21 +148,39 @@ describe("advance applies nothing to a wall", () => {
     advanceIn(s, HOUR, "upgrade");
     expect(s.game.board).toEqual(board);
     expect(s.game.rates.walls).toEqual(walls);
-    expect(begin(s, null, 0).ok).toBe(true);
-    advanceIn(s, HOUR, "flow");
-    expect(s.game.board).toEqual(board);
-    expect(s.game.rates.walls).toEqual(walls);
   });
 });
 
 describe("the Patch rules for a wall target", () => {
+  it("a Patch into Flint is refused with `Only Arm damage.` and the state deep-equal", () => {
+    const s = fresh();
+    ownCells(s, [{ q: 1, r: -2 }]);
+    place(s, "flywheel", { q: 1, r: -2 });
+    const before = cloneState(s);
+    const done = apply(s, { type: "patchCable", cable: "patch", source: { q: 1, r: -2 }, target: FLINT });
+    expect(done.ok).toBe(false);
+    expect(done.reason).toBe("Only Arm damage.");
+    expect(done.state).toEqual(before);
+  });
+
+  it("re-aiming a Patch into Flint is refused the same way", () => {
+    const s = fresh();
+    ownCells(s, [{ q: 1, r: -2 }]);
+    place(s, "flywheel", { q: 1, r: -2 });
+    must(s, { type: "patchCable", cable: "patch", source: { q: 1, r: -2 }, target: BASALT });
+    const before = cloneState(s);
+    const done = apply(s, { type: "repatchCable", source: { q: 1, r: -2 }, target: FLINT });
+    expect(done.reason).toBe("Only Arm damage.");
+    expect(done.state).toEqual(before);
+  });
+
   it("a wall beyond length 3 is refused with the state deep-equal", () => {
-    // (-2,0) to Flint at (2,-1) is 4 apart.
+    // (-2,0) to Schist at (2,-1) is 4 apart.
     const s = fresh();
     ownCells(s, [{ q: -2, r: 0 }]);
     place(s, "flywheel", { q: -2, r: 0 });
     const before = cloneState(s);
-    const done = apply(s, { type: "patchCable", cable: "patch", source: { q: -2, r: 0 }, target: FLINT });
+    const done = apply(s, { type: "patchCable", cable: "patch", source: { q: -2, r: 0 }, target: SCHIST });
     expect(done.ok).toBe(false);
     expect(done.reason).toBe("That cable is longer than 3.");
     expect(done.state).toEqual(before);
@@ -181,5 +219,61 @@ describe("a cable into a wall in the save", () => {
     const shale = wallRate(loaded, SHALE)!;
     expect(shale.damage.toNumber()).toBeCloseTo(1.4, 12);
     expect(shale.net.toNumber()).toBeCloseTo(1.3, 12);
+  });
+});
+
+// The spec's acceptance (chunk 05): no wall's HP changes in upgrade mode.
+// Two walls fought for 100 s, then the session ended; every upgrade-mode
+// action, each from that state, leaves `board.walls` as it was.
+describe("no upgrade-mode apply changes a wall's HP", () => {
+  function damaged(): GameState {
+    const s = fresh();
+    giveProducer(s, { modulators: 2, cables: 2 });
+    place(s, "flywheel", O);
+    place(s, "flywheel", { q: 1, r: 0 });
+    must(s, { type: "patchCable", cable: "patch", source: O, target: SHALE });
+    must(s, { type: "patchCable", cable: "patch", source: { q: 1, r: 0 }, target: BASALT });
+    giveHabit(s, "Piano", "engineer");
+    must(s, { type: "startSession", habitId: s.records.activeHabitId!, target: 1500, now: 0 });
+    advanceIn(s, 100, "flow");
+    must(s, { type: "endSession", now: 100_000 });
+    return s;
+  }
+
+  it("moves no wall for a layout, cable, habit, note, Intention, summary or Encyclopedia action", () => {
+    const start = damaged();
+    expect(start.game.mode).toBe("upgrade");
+    expect(start.game.board.walls).toHaveLength(2);
+    expect(start.game.encyclopedia.revealed.length).toBeGreaterThan(0);
+    const walls = cloneState(start).game.board.walls;
+    const habitId = start.records.activeHabitId!;
+    const NOW = 200_000;
+    const actions: Action[] = [
+      { type: "placeModule", module: "sine", cell: NE },
+      { type: "moveModule", from: O, to: NE },
+      { type: "rotateModule", cell: { q: 1, r: 0 }, turn: "clockwise" },
+      { type: "removeModule", cell: O },
+      { type: "unplugCable", source: O },
+      { type: "repatchCable", source: O, target: { q: 0, r: 1 } },
+      { type: "createHabit", name: "Cello", habitClass: "producer" },
+      { type: "renameHabit", id: habitId, name: "Organ" },
+      { type: "recolorHabit", id: habitId, color: "cyan" },
+      { type: "selectHabit", id: null },
+      { type: "reattuneHabit", habitId, habitClass: "producer" },
+      { type: "logPractice", habitId, minutes: 30, now: NOW },
+      { type: "reflect", text: "Steady.", slider: 4 },
+      { type: "dismissSummary" },
+      { type: "writeNote", text: "A note.", now: NOW },
+      { type: "createIntention", habitId, minutes: 30, schedule: "daily", now: NOW },
+      { type: "rollIntentions", now: NOW },
+      { type: "readEntry", id: start.game.encyclopedia.revealed[0]! },
+      { type: "archiveHabit", id: habitId },
+    ];
+    for (const action of actions) {
+      const s = cloneState(start);
+      const done = apply(s, action);
+      expect(done.ok, `${action.type}: ${done.reason}`).toBe(true);
+      expect(done.state.game.board.walls, action.type).toEqual(walls);
+    }
   });
 });

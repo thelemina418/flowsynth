@@ -6,7 +6,9 @@ Fully specified for the opening arc. All numbers can be tuned through the pace r
 
 - Axial hex coordinates. A cell's ring is its hex distance from (0,0).
 - **Opening**: open cells at (0,0), (1,0), (0,1) and (1,−1). Every other cell up to the current arc's radius is a wall. Cells beyond that radius are dark.
-- **Shale** sits at (−1,1), bordering (0,0) and (0,1). **Flint** (which opens Roadie) sits at (2,−1).
+- **Shale** sits at (−1,1), bordering (0,0) and (0,1). The two ring-1 **Basalts** sit at (−1,0), with `Pressure ×2`, and at (0,−1).
+- **Flint** (which opens Roadie) sits at (0,−2), with `Only Arm damage`. It borders Basalt (0,−1) and no opening cell. The **marked Schist** (which opens Mixer) sits at (−2,1). The other ten ring-2 cells alternate Flint and Schist going clockwise, starting with Flint at (2,−2).
+- Those are Sketch's two modifiers. At most 1 wall in 6 carries one (`src/engine/map.ts` holds the whole map).
 - Modules and cables can be freely rearranged in upgrade mode. During flow and breathers, placement is locked.
 
 ## Rates (analytic)
@@ -60,7 +62,7 @@ An Arm must sit on a cell that borders a wall. If it doesn't, it does nothing an
 | Shale | ring 1 | 600 | 0.1 | 5% |
 | Basalt | ring 1 | 6e3 | 1 | 8% |
 | Flint | ring 1–2 | 6e4 | 10 | 10% |
-| Schist | ring 2 | 1e6 | 100 | 12% |
+| Schist | ring 2 | 3e5 | 15 | 12% |
 | Gneiss | ring 2–3 | 3e7 | 2e3 | 15% |
 | Obsidian | ring 3 | 1e9 | 5e4 | 20% |
 | Granite | ring 3–4 | 1e11 | 3e6 | 25% |
@@ -92,4 +94,4 @@ An Arm must sit on a cell that borders a wall. If it doesn't, it does nothing an
 - Every session needs a habit (a name plus its class), which can be created inline. Only open classes can be chosen.
 - Away time is reconciled by the existing trust accounting and honesty report (ADR-0019).
 - A session with at least 10 credited minutes banks a breather. At most one is held, and a newer one replaces it. Starting a flow session does not consume it.
-- Breather length is credited time ÷ 5, from a 5-minute minimum to a 15-minute maximum. During it the board runs ×2 and breather oscillators wake. It pays out only if completed, and its result appears the next time the app is opened.
+- Breather length is credited time ÷ 5, from a 5-minute minimum to a 15-minute maximum. During it the board runs ×2 and breather oscillators wake. Walls take double damage, and their regen doesn't double. It pays out only if completed, and its result appears the next time the app is opened.

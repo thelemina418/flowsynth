@@ -13,6 +13,11 @@ const PATHS: Record<ModuleType, string> = {
   flywheel: "M -4 0 A 4 4 0 1 0 4 0 A 4 4 0 1 0 -4 0 M -9 0 L -4 0 M 4 0 L 9 0 M 0 -4 L 0 4",
   // A pulse rising out of a flat line and back (chunk 04 brings it on).
   pulsewell: "M -9 2 L -4 2 L -2 -4 L 2 4 L 4 2 L 9 2",
+  // A blade's edge: a hilt, then a wedge tapering to its point (issue #53).
+  blade: "M -9 0 L -5 0 M -5 -4 L -5 4 M -5 -2.5 L 9 0 L -5 2.5",
+  // A plate's outline: a flat top over a shield's point, with a rib down
+  // its middle (issue #54).
+  guardPlate: "M -6 -4 L 6 -4 L 6 0 L 0 4 L -6 0 Z M 0 -4 L 0 4",
 };
 
 // The glyph inside the board's SVG, at a cell's centre.

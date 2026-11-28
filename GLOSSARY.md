@@ -68,6 +68,10 @@ _Avoid_: Formation, voicing, recipe
 A hostile presence that occupies a cell on the board. It has HP and regen, and applies pressure. Conquering it gains that cell for the player's lifetime. Walls come in nine named kinds, from Shale to Corundum, in an authored outward order.
 _Avoid_: Enemy (in copy), boss, blocker, creature
 
+**Modifier**:
+A wall's authored rule that changes how it is fought, e.g. `Pressure ×2`, `Only Arm damage`. Copy names the rule, never the word itself.
+_Avoid_: Affix, trait, mutator, (in copy) modifier
+
 **Pressure**:
 A wall's reduction of nous from the modules bordering it.
 _Avoid_: Penalty, debuff, drain

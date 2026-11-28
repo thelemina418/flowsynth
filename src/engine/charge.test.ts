@@ -48,7 +48,8 @@ describe("the spec's acceptance", () => {
     expect(triangle.chargeReceived.toNumber()).toBe(1);
     expect(triangle.charge.toNumber()).toBeCloseTo(1 + Math.log(2), 12);
     expect(triangle.charge.toFixed(2)).toBe("1.69");
-    expect(triangle.rate.toNumber()).toBeCloseTo(1 + Math.log(2), 12);
+    // (2,0) borders two Schists inside the arc: 24% pressure (issue #52).
+    expect(triangle.rate.toNumber()).toBeCloseTo((1 + Math.log(2)) * 0.76, 12);
   });
 });
 
@@ -108,14 +109,15 @@ describe("what charge does on arrival", () => {
     expect(flywheel(s, { q: 1, r: -1 }).output.toNumber()).toBeCloseTo(1.05, 12);
     expect(oscillatorAt(s, { q: 0, r: 1 }).chargeReceived.toNumber()).toBe(0);
     expect(oscillatorAt(s, { q: 0, r: 1 }).charge.toNumber()).toBe(1);
-    expect(s.game.rates.total.toNumber()).toBe(1);
+    // The Sine's only leg is its 39% pressure (issue #52).
+    expect(s.game.rates.total.toNumber()).toBeCloseTo(0.61, 12);
 
     // Facing SE onto the empty (1,0), then a wall.
     const empty = fresh();
     flywheelAt(empty, 1);
     place(empty, "sine", { q: 0, r: 1 });
     expect(flywheel(empty).deliveries.map((d) => d.holds)).toEqual(["empty", "wall"]);
-    expect(empty.game.rates.total.toNumber()).toBe(1);
+    expect(empty.game.rates.total.toNumber()).toBeCloseTo(0.61, 12);
   });
 
   it("two modulators on one oscillator sum before the log: 1 + ln(1 + 2 × 1.05) at Producer Lv 1", () => {
@@ -180,7 +182,8 @@ describe("nous on a charged layout", () => {
 
   it("an hour of trusted flow yields exactly total ν/s × 3600", () => {
     const s = charged();
-    expect(s.game.rates.total.toNumber()).toBeCloseTo(2 + Math.log(2), 12);
+    // Pressure (issue #52): 34% on (1,0), 39% on (0,1).
+    expect(s.game.rates.total.toNumber()).toBeCloseTo((1 + Math.log(2)) * 0.66 + 0.61, 12);
     start(s);
     advanceIn(s, HOUR, "flow");
     expect(s.game.nous.eq(s.game.rates.total.mul(HOUR))).toBe(true);

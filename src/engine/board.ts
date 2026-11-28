@@ -1,4 +1,6 @@
 import { cellKey, lifetimeCells, ring, type Cell } from "./hex";
+import { wallOf } from "./map";
+import type { Num } from "./num";
 import type { Arc, Board } from "./types";
 
 // The board (spec chunk 02, issue #24): the cells the player owns and the
@@ -27,7 +29,7 @@ export const OPENING_CELLS: readonly Cell[] = [
 ];
 
 export function openingBoard(): Board {
-  return { open: OPENING_CELLS.map((cell) => ({ q: cell.q, r: cell.r })), arc: "sketch", placements: [], cables: [] };
+  return { open: OPENING_CELLS.map((cell) => ({ q: cell.q, r: cell.r })), arc: "sketch", placements: [], cables: [], walls: [] };
 }
 
 export function isOpen(board: Board, cell: Cell): boolean {
@@ -38,6 +40,13 @@ export function isOpen(board: Board, cell: Cell): boolean {
 export function cellKind(board: Board, cell: Cell): CellKind {
   if (isOpen(board, cell)) return "open";
   return ring(cell) > arcRadius(board.arc) ? "dark" : "wall";
+}
+
+// A wall's current HP: its board entry while below full, else its full HP
+// (issue #49). The one reader of `board.walls` for a wall's HP.
+export function wallHp(board: Board, cell: Cell): Num {
+  const key = cellKey(cell);
+  return board.walls.find((w) => cellKey(w.cell) === key)?.hp ?? wallOf(cell).hp;
 }
 
 // The lifetime board, ring by ring outward, each cell with its kind.

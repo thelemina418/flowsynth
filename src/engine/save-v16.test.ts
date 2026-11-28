@@ -79,7 +79,7 @@ describe("the board in a v16 save", () => {
     const loaded = deserialize(serialize(s, 1_000));
     expect(loaded.error).toBeUndefined();
     expect(loaded.state).toEqual(s);
-    expect(loaded.state!.game.board).toEqual({ open: [...fresh().game.board.open, { q: -1, r: 1 }, { q: 0, r: 3 }], arc: "demo", placements: [], cables: [] });
+    expect(loaded.state!.game.board).toEqual({ open: [...fresh().game.board.open, { q: -1, r: 1 }, { q: 0, r: 3 }], arc: "demo", placements: [], cables: [], walls: [] });
   });
 
   it("a v16 save written before the board loads the opening board", () => {
@@ -129,7 +129,7 @@ describe("placements in a v16 save", () => {
       { cell: { q: 1, r: -1 }, module: "square" },
     ]);
     // Engineer Lv 2 (1.5 h): 3 oscillators and the Square.
-    expect(grantsOf(loaded.state!).allowance).toEqual({ oscillator: 3, modulator: 1 });
+    expect(grantsOf(loaded.state!).allowance).toEqual({ oscillator: 3, modulator: 1, arm: 0 });
     expect(grantsOf(loaded.state!).arrived).toEqual(["sine", "triangle", "flywheel", "square"]);
   });
 
@@ -178,7 +178,7 @@ describe("placements in a v16 save", () => {
       expect(loaded.error).toBeUndefined();
       expect(loaded.state).toEqual(laidOut());
       expect(grantsOf(loaded.state!)).toEqual({
-        allowance: { oscillator: 3, modulator: 1 },
+        allowance: { oscillator: 3, modulator: 1, arm: 0 },
         cableAllowance: 1,
         arrived: ["sine", "triangle", "flywheel", "square"],
         arrivedCables: ["patch"],

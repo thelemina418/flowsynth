@@ -102,7 +102,7 @@ describe("the lost-money recovery (ADR-0082)", () => {
     expect(deserialize(source).lost).toContain("session.accounting.bucketNous");
     const state = recoverLostSave(source).state!;
     expect(state.game.mode).toBe("flow");
-    expect(state.game.session!.accounting).toEqual({ creditedSeconds: 300, poolSeconds: 600, pendingAwaySeconds: 0, events: [], provisionalNous: D(0) });
+    expect(state.game.session!.accounting).toEqual({ creditedSeconds: 300, poolSeconds: 600, pendingAwaySeconds: 0, events: [], provisionalNous: D(0), wallSeconds: 600 });
     // Settling the report credits the minutes, never the retired money.
     expect(applyIn(state, { type: "settleHonestyReport", outcome: "full" }).ok).toBe(true);
     expect(state.game.session!.accounting.creditedSeconds).toBe(900);

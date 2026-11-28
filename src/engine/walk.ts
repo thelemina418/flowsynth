@@ -1,5 +1,6 @@
 import { EPS } from "./constants";
 import { add, mul, requireFinite, requireNotNaN } from "./num";
+import { stepWalls } from "./conquest";
 import { accrueLivePractice } from "./habits";
 import { accrueIntentionProgress } from "./intentions";
 import type { AdvanceResult, GameState } from "./types";
@@ -9,7 +10,8 @@ import type { AdvanceResult, GameState } from "./types";
 // (the session clock, credited seconds, the active habit, its class, and
 // its Intention) and banks nous. Provisional time runs the session clock,
 // joins the pool and adds to the provisional nous; it credits nothing
-// until the honesty report settles it (§3, ADR-0019). Internal to the trust
+// until the honesty report settles it (§3, ADR-0019), and holds its wall
+// seconds aside for the same answer (issue #51). Internal to the trust
 // layer: callers pass time through `advance`.
 export type Sink = "trusted" | "provisional";
 
@@ -28,20 +30,28 @@ export function walkFlow(state: GameState, seconds: number, sink: Sink): Advance
   if (state.game.mode !== "flow" || !session || seconds <= 0) return result;
   session.elapsed = requireFinite(session.elapsed + seconds, "the session clock");
   const accounting = session.accounting;
-  // The board makes nous at its cached rate (issue #26): the layout is
-  // locked whenever time produces, so a span's nous is exactly rate × time.
-  const made = mul(state.game.rates.total, seconds);
   if (sink === "provisional") {
+    // The board makes nous at its cached rate (issue #26): the layout is
+    // locked whenever time produces, so a span's nous is exactly rate × time.
+    const made = mul(state.game.rates.total, seconds);
     accounting.poolSeconds = requireFinite(accounting.poolSeconds + seconds, "the provisional pool");
     accounting.provisionalNous = requireNotNaN(add(accounting.provisionalNous, made), "the provisional nous");
+    // Provisional time moves no wall: its seconds wait for the honesty
+    // report, beside its ν (issue #51).
+    accounting.wallSeconds = requireFinite(accounting.wallSeconds + seconds, "the provisional wall seconds");
     return result;
   }
-  state.game.nous = requireNotNaN(add(state.game.nous, made), "nous");
-  session.nousMade = requireNotNaN(add(session.nousMade, made), "the session's nous");
-  accounting.creditedSeconds = requireFinite(accounting.creditedSeconds + seconds, "the credited practice time");
-  if (seconds > EPS) {
-    accrueLivePractice(state, seconds);
-    result.intentionsCompleted += accrueIntentionProgress(state, state.records.activeHabitId, seconds);
-  }
+  // Trusted time moves the walls (issue #49): a conquest splits the span,
+  // and each piece pays at the rate that held through it.
+  stepWalls(state, seconds, (span) => {
+    const made = mul(state.game.rates.total, span);
+    state.game.nous = requireNotNaN(add(state.game.nous, made), "nous");
+    session.nousMade = requireNotNaN(add(session.nousMade, made), "the session's nous");
+    accounting.creditedSeconds = requireFinite(accounting.creditedSeconds + span, "the credited practice time");
+    if (span > EPS) {
+      accrueLivePractice(state, span);
+      result.intentionsCompleted += accrueIntentionProgress(state, state.records.activeHabitId, span);
+    }
+  }, session.walls);
   return result;
 }
