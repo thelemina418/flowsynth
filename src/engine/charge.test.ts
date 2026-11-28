@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceIn, applyIn, fresh, giveHabit, ownCells } from "./fixtures";
+import { begin, advanceIn, applyIn, fresh, giveHabit, giveProducer, ownCells } from "./fixtures";
 import type { Cell, Facing } from "./hex";
 import { deserialize, serialize } from "./save";
 import { cloneState } from "./state";
@@ -31,7 +31,7 @@ function flywheel(s: GameState, cell: Cell = O) {
 }
 
 function start(s: GameState): void {
-  if (!applyIn(s, { type: "startSession", target: null, now: 0 }).ok) throw new Error("fixture session failed");
+  if (!begin(s, null, 0).ok) throw new Error("fixture session failed");
 }
 
 function end(s: GameState): void {
@@ -94,8 +94,10 @@ describe("the Flywheel's reach", () => {
 
 describe("what charge does on arrival", () => {
   it("charge to a modulator, an empty cell, a wall or a dark cell does nothing", () => {
+    // Producer Lv 1 (0.5 h) allows the second Flywheel, and makes each
+    // 1.05 charge/s.
     const s = fresh();
-    s.game.allowance.modulator = 2;
+    giveProducer(s, { modulators: 2 });
     // (0,0) faces NE onto the second Flywheel at (1,-1), then a wall; the
     // second faces N onto a wall, then a dark cell.
     flywheelAt(s, 0);
@@ -103,7 +105,7 @@ describe("what charge does on arrival", () => {
     place(s, "sine", { q: 0, r: 1 });
     expect(flywheel(s).deliveries.map((d) => d.holds)).toEqual(["flywheel", "wall"]);
     expect(flywheel(s, { q: 1, r: -1 }).deliveries.map((d) => d.holds)).toEqual(["wall", "dark"]);
-    expect(flywheel(s, { q: 1, r: -1 }).output.toNumber()).toBe(1);
+    expect(flywheel(s, { q: 1, r: -1 }).output.toNumber()).toBeCloseTo(1.05, 12);
     expect(oscillatorAt(s, { q: 0, r: 1 }).chargeReceived.toNumber()).toBe(0);
     expect(oscillatorAt(s, { q: 0, r: 1 }).charge.toNumber()).toBe(1);
     expect(s.game.rates.total.toNumber()).toBe(1);
@@ -116,16 +118,16 @@ describe("what charge does on arrival", () => {
     expect(empty.game.rates.total.toNumber()).toBe(1);
   });
 
-  it("two modulators on one oscillator sum before the log: 1 + ln 3", () => {
+  it("two modulators on one oscillator sum before the log: 1 + ln(1 + 2 × 1.05) at Producer Lv 1", () => {
     const s = fresh();
-    s.game.allowance.modulator = 2;
+    giveProducer(s, { modulators: 2 });
     ownCells(s, [{ q: 2, r: 0 }]);
     flywheelAt(s, 1);
     flywheelAt(s, 4, { q: 2, r: 0 });
     place(s, "triangle", { q: 1, r: 0 });
     const triangle = oscillatorAt(s, { q: 1, r: 0 });
-    expect(triangle.chargeReceived.toNumber()).toBe(2);
-    expect(triangle.charge.toNumber()).toBeCloseTo(1 + Math.log(3), 12);
+    expect(triangle.chargeReceived.toNumber()).toBeCloseTo(2.1, 12);
+    expect(triangle.charge.toNumber()).toBeCloseTo(1 + Math.log(3.1), 12);
   });
 });
 

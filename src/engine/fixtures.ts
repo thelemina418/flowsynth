@@ -2,6 +2,7 @@ import { advance, type Advanced } from "./advance";
 import { apply, type ApplyResult } from "./apply";
 import { isOpen } from "./board";
 import type { Cell } from "./hex";
+import { classLevel, grantsOf, type Grants } from "./levels";
 import { isNum } from "./num";
 import { createInitialState } from "./state";
 import type { Presence } from "./trust";
@@ -61,11 +62,61 @@ export function giveHabit(state: GameState, name = "Piano", habitClass?: HabitCl
   return { habit: state.records.habits.find((h) => h.id === created.id)! };
 }
 
-// Oscillator allowance and arrived types beyond the opening, as chunk 04's
-// class levels will grant them (issue #25).
+// A started session (issue #39): `startSession` carries a classed habit,
+// so this starts on the given habit, the active one, or the first live
+// one, and makes an Engineer "Piano" when there is none. Two shapes the
+// engine never starts stand for what a migrated save can hold: a null
+// target is an open-ended session, and a habit still awaiting its class
+// runs unclassed (the fixture lends it a class for the start only).
+export function begin(state: GameState, target: number | null = 1500, now = 0, habitId?: string): ApplyResult {
+  const live = (h: Habit) => !h.archived;
+  const habit =
+    state.records.habits.find((h) => h.id === habitId) ??
+    (habitId === undefined ? state.records.habits.find((h) => h.id === state.records.activeHabitId && live(h)) : undefined) ??
+    (habitId === undefined ? state.records.habits.find((h) => live(h) && h.habitClass !== null) : undefined) ??
+    (habitId === undefined && state.game.mode === "upgrade" ? habitOf(state, applyIn(state, { type: "createHabit", name: "Piano", habitClass: "engineer" })) : undefined);
+  const awaiting = habit !== undefined && habit.habitClass === null;
+  if (habit && awaiting) habit.habitClass = "engineer";
+  const result = applyIn(state, { type: "startSession", habitId: habit?.id ?? habitId ?? "none", target: target ?? 1500, now });
+  if (habit && awaiting) state.records.habits.find((h) => h.id === habit.id)!.habitClass = null;
+  if (result.ok && target === null) state.game.session!.target = null;
+  return result;
+}
+
+// The same, for tests that pass states along: starts on `state` and
+// returns it.
+export function started(state: GameState, now = 0, target: number | null = 1500): GameState {
+  const result = begin(state, target, now);
+  if (!result.ok) throw new Error(`fixture session failed: ${result.reason}`);
+  return state;
+}
+
+// Class credit at the lowest level of `habitClass` whose derived grants
+// (engine/levels.ts, issue #38) satisfy `enough`: allowance and types come
+// from levels alone, so a test reaches them by credit.
+function creditUntil(state: GameState, habitClass: HabitClass, enough: (grants: Grants) => boolean): void {
+  for (let guard = 0; !enough(grantsOf(state)); guard++) {
+    if (guard > 100) throw new Error(`no ${habitClass} level grants that`);
+    state.records.classCredit[habitClass] = classLevel(state, habitClass).next;
+  }
+}
+
+// Oscillator allowance and arrived types beyond the opening: Engineer
+// credit at the lowest level that grants them (an Engineer level changes
+// no rate). The allowance is at least the one asked for.
 export function giveOscillators(state: GameState, grant: { allowance?: number; arrive?: ModuleType[] }): void {
-  if (grant.allowance !== undefined) state.game.allowance.oscillator = grant.allowance;
-  for (const module of grant.arrive ?? []) if (!state.game.arrived.includes(module)) state.game.arrived.push(module);
+  creditUntil(state, "engineer", (g) => g.allowance.oscillator >= (grant.allowance ?? 0) && (grant.arrive ?? []).every((m) => g.arrived.includes(m)));
+}
+
+// Modulator and cable allowance and arrived modulators beyond the
+// opening: Producer credit at the lowest level that grants them. Producer
+// credit also raises a Flywheel's output (0.1 charge/s per hour).
+export function giveProducer(state: GameState, grant: { modulators?: number; cables?: number; arrive?: ModuleType[] }): void {
+  creditUntil(
+    state,
+    "producer",
+    (g) => g.allowance.modulator >= (grant.modulators ?? 0) && g.cableAllowance >= (grant.cables ?? 0) && (grant.arrive ?? []).every((m) => g.arrived.includes(m)),
+  );
 }
 
 // Owned open cells beyond the opening, as chunk 05's conquest will add

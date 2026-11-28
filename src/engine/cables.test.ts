@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { apply, type Action } from "./apply";
-import { applyIn, fresh, ownCells } from "./fixtures";
+import { begin, applyIn, fresh, giveProducer, ownCells } from "./fixtures";
 import { cellsWithin, type Cell } from "./hex";
 import { cloneState } from "./state";
 import type { GameState, ModuleType } from "./types";
@@ -67,13 +67,13 @@ describe("a Patch carries the whole output to its target, in place of the reach"
   });
 });
 
-// Every cell within ring 2 owned, a modulator allowance and cable
-// allowance of `n`, and a Flywheel on each of `sources`.
+// Every cell within ring 2 owned, Producer credit for a modulator
+// allowance and cable allowance of at least `n`, and a Flywheel on each of
+// `sources`.
 function patchboard(sources: Cell[], n = 3): GameState {
   const s = fresh();
   ownCells(s, cellsWithin(2));
-  s.game.allowance.modulator = n;
-  s.game.cableAllowance = n;
+  giveProducer(s, { modulators: n, cables: n });
   for (const source of sources) place(s, "flywheel", source);
   return s;
 }
@@ -89,7 +89,7 @@ describe("the one refusal", () => {
   it("refuses all three outside upgrade mode, in flow and paused", () => {
     const s = patchboard([O]);
     patch(s, O, SE);
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     for (const mode of ["flow", "paused"]) {
       if (mode === "paused") applyIn(s, { type: "pauseSession" });
       expect(s.game.mode).toBe(mode);
@@ -124,8 +124,11 @@ describe("the one refusal", () => {
   });
 
   it("refuses a cable beyond the allowance", () => {
-    const s = patchboard([O, { q: -1, r: 0 }], 2);
-    s.game.cableAllowance = 1;
+    // Producer Lv 1: 2 modulators, 1 cable.
+    const s = fresh();
+    ownCells(s, cellsWithin(2));
+    giveProducer(s, { modulators: 2 });
+    for (const source of [O, { q: -1, r: 0 }]) place(s, "flywheel", source);
     expect(patch(s, O, SE).ok).toBe(true);
     expect(refusal(s, { type: "patchCable", cable: "patch", source: { q: -1, r: 0 }, target: { q: -1, r: 1 } })).toBe("Cable allowance is full.");
   });

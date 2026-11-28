@@ -1,13 +1,14 @@
 import { D, isNum, isNaNNum, NumFault } from "./num";
 import { openingBoard } from "./board";
+import { emptyEncyclopedia, revealEntries } from "./encyclopedia";
 import { noRates } from "./rates";
 import type { GameState } from "./types";
 
 // A fresh start: empty real-life records, and a game state with no nous,
-// no session, Engineer and Producer open, no legacy line, and the opening
-// board.
+// no session, Engineer and Producer open, no legacy line, the opening
+// board, and the Encyclopedia's opening reveals.
 export function createInitialState(): GameState {
-  return {
+  const state: GameState = {
     records: {
       habits: [],
       activeHabitId: null,
@@ -25,17 +26,18 @@ export function createInitialState(): GameState {
       mode: "upgrade",
       session: null,
       summary: null,
+      breather: { banked: null, running: null, result: null },
+      encyclopedia: emptyEncyclopedia(),
       openClasses: ["engineer", "producer"],
       legacyLine: null,
       board: openingBoard(),
-      allowance: { oscillator: 2, modulator: 1 },
-      arrived: ["sine", "triangle", "flywheel"],
-      cableAllowance: 1,
-      arrivedCables: ["patch"],
       // The opening board holds no module, so it makes nothing.
       rates: noRates(),
     },
   };
+  // Walls and the start types are revealed from the start.
+  revealEntries(state);
+  return state;
 }
 
 // A deep copy that keeps Decimals as Decimals. structuredClone would strip

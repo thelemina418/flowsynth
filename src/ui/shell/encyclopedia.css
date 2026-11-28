@@ -1,0 +1,44 @@
+/* The Encyclopedia (issue #44): one floating panel like the Almanac's, a
+   ruled list of revealed entries and one entry's readout lines. */
+.encyclopedia { width: min(100%, 520px); }
+
+.encyclopedia-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.encyclopedia-list,
+.encyclopedia-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+
+.encyclopedia-list li { border-top: 1px solid var(--line-soft); }
+.encyclopedia-list button { width: 100%; text-align: left; border-color: transparent; }
+
+.encyclopedia-entry { display: grid; gap: 10px; justify-items: start; }
+.encyclopedia-title { margin: 0; font-size: 16px; }
+
+.encyclopedia-lines { gap: 6px; width: 100%; }
+.encyclopedia-lines li {
+  font-size: 13px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 6px;
+  overflow-wrap: anywhere;
+}
+
+/* The door's one quiet unseen-dot (ported from the old console). */
+.encyclopedia-door { position: relative; }
+.encyclopedia-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  clip-path: circle(50%);
+  background: var(--ink);
+}

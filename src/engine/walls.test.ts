@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { apply } from "./apply";
-import { advanceIn, applyIn, fresh, giveHabit, ownCells } from "./fixtures";
+import { advanceIn, applyIn, begin, fresh, giveHabit, giveProducer, ownCells } from "./fixtures";
 import type { Cell } from "./hex";
 import { deserialize, serialize } from "./save";
 import { cloneState } from "./state";
@@ -73,18 +73,18 @@ describe("a wall's rate", () => {
   it("Flint carries its 10/s regen, and a placeholder wall carries none", () => {
     const s = fresh();
     ownCells(s, [{ q: 1, r: 1 }]);
-    s.game.allowance.modulator = 2;
-    s.game.cableAllowance = 2;
+    // Producer Lv 2 (1.5 h): 2 modulators, 2 cables, 1.15 charge/s each.
+    giveProducer(s, { modulators: 2, cables: 2 });
     place(s, "flywheel", { q: 1, r: 0 });
     place(s, "flywheel", O);
     expect(patch(s, { q: 1, r: 0 }, FLINT).ok).toBe(true);
     expect(patch(s, O, PLACEHOLDER).ok).toBe(true);
     const flint = wallRate(s, FLINT)!;
     expect(flint.regen!.toNumber()).toBe(10);
-    expect(flint.net.toNumber()).toBe(-9);
+    expect(flint.net.toNumber()).toBeCloseTo(-8.85, 12);
     const placeholder = wallRate(s, PLACEHOLDER)!;
     expect(placeholder.regen).toBeNull();
-    expect(placeholder.net.toNumber()).toBe(1);
+    expect(placeholder.net.toNumber()).toBeCloseTo(1.15, 12);
   });
 
   it("reach onto a wall deals no damage", () => {
@@ -98,15 +98,14 @@ describe("a wall's rate", () => {
 
   it("two Patches into one wall sum", () => {
     const s = fresh();
-    s.game.allowance.modulator = 2;
-    s.game.cableAllowance = 2;
+    giveProducer(s, { modulators: 2, cables: 2 });
     place(s, "flywheel", O);
     place(s, "flywheel", { q: 0, r: 1 });
     expect(patch(s, O, SHALE).ok).toBe(true);
     expect(patch(s, { q: 0, r: 1 }, SHALE).ok).toBe(true);
     expect(s.game.rates.walls).toHaveLength(1);
-    expect(wallRate(s, SHALE)!.damage.toNumber()).toBe(2);
-    expect(wallRate(s, SHALE)!.net.toNumber()).toBeCloseTo(1.9, 12);
+    expect(wallRate(s, SHALE)!.damage.toNumber()).toBeCloseTo(2.3, 12);
+    expect(wallRate(s, SHALE)!.net.toNumber()).toBeCloseTo(2.2, 12);
   });
 
   it("unplugging the Patch leaves the wall untargeted", () => {
@@ -129,7 +128,7 @@ describe("advance applies nothing to a wall", () => {
     advanceIn(s, HOUR, "upgrade");
     expect(s.game.board).toEqual(board);
     expect(s.game.rates.walls).toEqual(walls);
-    must(s, { type: "startSession", target: null, now: 0 });
+    expect(begin(s, null, 0).ok).toBe(true);
     advanceIn(s, HOUR, "flow");
     expect(s.game.board).toEqual(board);
     expect(s.game.rates.walls).toEqual(walls);

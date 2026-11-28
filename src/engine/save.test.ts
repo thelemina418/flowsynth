@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { D, eq } from "./num";
-import { applyIn, advanceIn, fresh, giveHabit } from "./fixtures";
+import { begin, applyIn, advanceIn, fresh, giveHabit } from "./fixtures";
 import { SAVE_VERSION } from "./constants";
 import { deserialize, serialize, SaveRefusedError } from "./save";
 import type { GameState } from "./types";
@@ -57,7 +57,7 @@ describe("persistence", () => {
     const { habit } = giveHabit(s);
     applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 20, schedule: "daily", now: 1 });
     applyIn(s, { type: "writeNote", text: "between sessions", now: 500 });
-    applyIn(s, { type: "startSession", target: 600, now: 1_000 });
+    begin(s, 600, 1_000);
     advanceIn(s, 123.25, "flow");
     applyIn(s, { type: "writeNote", text: "in flow", now: 1_200 });
     const text = serialize(s, 1_000);
@@ -74,7 +74,7 @@ describe("persistence", () => {
     const build = () => {
       const s = fresh();
       giveHabit(s);
-      applyIn(s, { type: "startSession", target: 600, now: 0 });
+      begin(s, 600, 0);
       return s;
     };
     const straight = build();
@@ -89,7 +89,7 @@ describe("persistence", () => {
 
   it("an unseen summary, its events, and its reflection survive a reload together (§8)", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 600, "flow");
     advanceIn(s, 300, "flow", "away", 0);
     advanceIn(s, 0, "flow");
@@ -107,7 +107,7 @@ describe("persistence", () => {
   it("habits, the practice log, and session history survive a reload", () => {
     const s = fresh();
     const { habit } = giveHabit(s);
-    applyIn(s, { type: "startSession", target: 600, now: 1_000 });
+    begin(s, 600, 1_000);
     advanceIn(s, 600, "flow");
     applyIn(s, { type: "endSession", now: 601_000 });
     applyIn(s, { type: "logPractice", habitId: habit.id, minutes: 5, now: 700_000 });
@@ -141,7 +141,9 @@ describe("a v15 save's records (issue #19)", () => {
     expect(state.records.classCredit).toEqual({ engineer: 0, producer: 0, mixer: 0, roadie: 0 });
     // The game starts fresh: the retired economy's nous stays behind, and
     // the collection leaves one Almanac line (issue #19).
-    expect(state.game).toEqual({ ...fresh().game, legacyLine: "Legacy era · 1 module · archived" });
+    // Its completed sessions reveal Classes (issue #44).
+    const book = { revealed: [...fresh().game.encyclopedia.revealed, "classes"], seen: [] };
+    expect(state.game).toEqual({ ...fresh().game, encyclopedia: book, legacyLine: "Legacy era · 1 module · archived" });
     for (const retired of ["nous", "modules", "cells", "world", "forge", "achievements", "arete", "prestiges", "scrap"]) {
       expect(state, retired).not.toHaveProperty(retired);
     }
@@ -159,7 +161,7 @@ describe("a v15 save's records (issue #19)", () => {
     expect(result.error).toBeUndefined();
     expect(result.state!.game.mode).toBe("flow");
     expect(result.state!.game.session).toEqual({
-      target: 1_500, elapsed: 900, targetSignaled: false, startedAt: 5_000, goalSeconds: { g6: 300 },
+      target: 1_500, elapsed: 900, targetSignaled: false, startedAt: 5_000, goalSeconds: { g6: 300 }, nousMade: D(0),
       accounting: { creditedSeconds: 600, poolSeconds: 300, pendingAwaySeconds: 12, events: [], provisionalNous: D(30) },
     });
     // The pool still settles through the honesty report, banking the
@@ -199,7 +201,12 @@ describe("a v15 save's records (issue #19)", () => {
       summary: { sessionNumber: 3, earned: 150, seconds: 1_500, ratePerMinute: 6, plannedTarget: 1_500, honestyEvents: [],
         reflection: null, achievements: [], breatherAllowance: 300, seen: false },
     })).state!;
-    expect(state.game.summary).toEqual({ sessionNumber: 3, seconds: 1_500, plannedTarget: 1_500, honestyEvents: [], reflection: null, seen: false });
+    // The retired game's `earned` isn't the session's ν: the new facts
+    // default (issue #40).
+    expect(state.game.summary).toEqual({
+      sessionNumber: 3, seconds: 1_500, plannedTarget: 1_500, honestyEvents: [], reflection: null, seen: false,
+      nous: D(0), habitClass: null, classSeconds: 0, levelBefore: 0, levelAfter: 0, breather: null,
+    });
   });
 });
 
@@ -250,7 +257,7 @@ describe("serialization refuses what it cannot write (issue #486)", () => {
 
   it("a session's unrepresentable accounting refuses the save", () => {
     const s = fresh();
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     s.game.session!.accounting.poolSeconds = Infinity;
     expect(() => serialize(s, 0)).toThrow(/poolSeconds/);
   });

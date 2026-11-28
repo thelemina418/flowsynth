@@ -2,6 +2,7 @@ import { computed, signal, type ReadonlySignal } from "@preact/signals";
 import type { Action, ApplyResult } from "../../engine/apply";
 import { cableRefusal, jackRefusal } from "../../engine/cables";
 import { cellKey, lifetimeCells, sameCell, type Cell } from "../../engine/hex";
+import { grantsOf } from "../../engine/levels";
 import { hasFacing } from "../../engine/modules";
 import { cableFrom, moduleAt, placementRefusal, trayRefusal, type Turn } from "../../engine/placement";
 import type { CableType, GameState, ModuleType } from "../../engine/types";
@@ -68,8 +69,8 @@ export class Placing {
 
   // The cable allowance not yet patched (issue #33).
   unusedCables(): number {
-    const game = this.state.value.game;
-    return Math.max(0, game.cableAllowance - game.board.cables.length);
+    const state = this.state.value;
+    return Math.max(0, grantsOf(state).cableAllowance - state.game.board.cables.length);
   }
 
   // A cable entry is available while allowance is left, or as the place a

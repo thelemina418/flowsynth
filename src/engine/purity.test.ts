@@ -29,8 +29,7 @@ describe("apply and advance never mutate their input", () => {
   it("advance returns the walked state and leaves the input as it was", () => {
     let s = createInitialState();
     s = apply(s, { type: "createHabit", name: "Piano", habitClass: "engineer" }).state;
-    s = apply(s, { type: "selectHabit", id: s.records.habits[0]!.id }).state;
-    s = apply(s, { type: "startSession", target: null, now: 0 }).state;
+    s = apply(s, { type: "startSession", habitId: s.records.habits[0]!.id, target: 1500, now: 0 }).state;
     const before = cloneState(s);
     const walked = advance(s, 600, "flow");
     expect(s).toEqual(before);
@@ -40,9 +39,8 @@ describe("apply and advance never mutate their input", () => {
 
   it("a numeric fault in advance returns the input state, untouched, and names the figure", () => {
     let s = createInitialState();
-    s = apply(s, { type: "createHabit", name: "Piano" }).state;
-    s = apply(s, { type: "selectHabit", id: s.records.habits[0]!.id }).state;
-    s = apply(s, { type: "startSession", target: null, now: 0 }).state;
+    s = apply(s, { type: "createHabit", name: "Piano", habitClass: "engineer" }).state;
+    s = apply(s, { type: "startSession", habitId: s.records.habits[0]!.id, target: 1500, now: 0 }).state;
     s.game.session!.accounting.provisionalNous = D(Number.NaN);
     const walked = advance(s, 600, "flow");
     expect(walked.fault).toBeDefined();

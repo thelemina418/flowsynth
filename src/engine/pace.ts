@@ -4,6 +4,7 @@ import { createInitialState } from "./state";
 import { cableName } from "./cables";
 import { cellKey, FACING_NAMES, lifetimeCells, type Cell } from "./hex";
 import { wallAt } from "./map";
+import { classLevel, grantsOf } from "./levels";
 import { hasFacing, isOscillator, moduleName } from "./modules";
 import { add, D, fmt, fmtRate, gt, type Num } from "./num";
 import type { AdvanceMode, AdvanceResult, Cable, GameState, HabitClass, Placement } from "./types";
@@ -49,12 +50,14 @@ const CLASS_OPENS: Record<HabitClass, string> = {
   mixer: "conquering the marked Schist (Demo, 15–60h)",
 };
 
+const classAtLevel = (habitClass: HabitClass, level: number) => (s: GameState) => classLevel(s, habitClass).level >= level;
+
 const title = (word: string) => word[0]!.toUpperCase() + word.slice(1);
 
 export const PROGRESSION_MILESTONES: MilestoneProbe[] = [
   ...CLASSES.map((c) => ({ id: `class-open:${c}`, label: `${title(c)} opens`, target: CLASS_OPENS[c], reached: classOpen(c) })),
   ...WALLS.map((w) => ({ id: `wall:${w.kind.toLowerCase()}`, label: `First ${w.kind} conquered`, target: w.target })),
-  ...CLASSES.map((c) => ({ id: `class-level-5:${c}`, label: `${title(c)} level 5`, target: "8h on the class" })),
+  ...CLASSES.map((c) => ({ id: `class-level-5:${c}`, label: `${title(c)} level 5`, target: "8h on the class", reached: classAtLevel(c, 5) })),
   { id: "first-prestige", label: "First prestige (Sketch gate)", target: "8–10h, Demo by 15h" },
   { id: "gate:obsidian", label: "Obsidian conquered (Demo gate)", target: "60h" },
   { id: "gate:corundum", label: "Corundum conquered (Record gate)", target: "140h" },
@@ -63,18 +66,19 @@ export const PROGRESSION_MILESTONES: MilestoneProbe[] = [
 
 // ── The scripted player's seams ───────────────────────────────────────────
 
-// What a tending hook may touch: the current state to read, and the
-// engine's two doors to change it. Each door moves the turn to the state it
-// returns.
+// What a tending hook may touch: the current state and wall clock to read,
+// and the engine's two doors to change it. Each door moves the turn to the
+// state it returns, and `advance` moves the wall clock by its seconds.
 export interface PaceTurn {
   readonly state: GameState;
+  readonly now: number;
   apply(action: Action): ApplyResult;
   advance(seconds: number, mode: AdvanceMode): AdvanceResult;
 }
 
-// Between sessions the player takes each banked breather, then tends in
-// upgrade mode. Each hook is a named seam a later chunk fills; all are
-// empty until the engine has the thing they act on.
+// Between sessions the player tends in upgrade mode first, then takes the
+// banked breather (ADR-0095). Each hook is a named seam a later chunk
+// fills; a hook stays empty until the engine has the thing it acts on.
 export interface TendingHooks {
   takeBankedBreathers(turn: PaceTurn): void;
   buyCheapestFader(turn: PaceTurn): void;
@@ -83,11 +87,22 @@ export interface TendingHooks {
 }
 
 export const DEFAULT_TENDING: TendingHooks = {
-  takeBankedBreathers: () => {},
+  takeBankedBreathers: takeBreatherInFull,
   buyCheapestFader: () => {},
   placeAllowance: placeAllowanceGreedily,
   patchChargeToNearestWall: () => {},
 };
+
+// The breather step (spec chunk 04, issue #45): the player takes the
+// banked breather, runs breather time for its whole length, and dismisses
+// the result, so the next session starts from upgrade mode.
+export function takeBreatherInFull(turn: PaceTurn): void {
+  const banked = turn.state.game.breather.banked;
+  if (!banked) return;
+  must(turn.apply({ type: "takeBreather", now: turn.now }), "taking the breather");
+  turn.advance(banked.seconds, "breather");
+  must(turn.apply({ type: "dismissBreatherResult" }), "dismissing the breather's result");
+}
 
 // The greedy placement (spec chunk 02, issue #28; chunk 03, issue #35).
 // The player fills its oscillator allowance one oscillator at a time, then
@@ -140,7 +155,7 @@ function trialTotal(state: GameState, candidate: Candidate): Num | null {
 
 function oscillatorCandidates(state: GameState): Candidate[] {
   const { game } = state;
-  return game.arrived.filter(isOscillator).flatMap((module) =>
+  return grantsOf(state).arrived.filter(isOscillator).flatMap((module) =>
     game.board.open.map((cell): Candidate => [{ type: "placeModule", module, cell }]));
 }
 
@@ -149,7 +164,7 @@ function oscillatorCandidates(state: GameState): Candidate[] {
 function cableCandidates(state: GameState): Candidate[] {
   const { game } = state;
   const sources = game.board.placements.filter((p) => !isOscillator(p.module)).map((p) => p.cell);
-  return game.arrivedCables.flatMap((cable) =>
+  return grantsOf(state).arrivedCables.flatMap((cable) =>
     sources.flatMap((source) =>
       lifetimeCells().map((target): Candidate => [{ type: "patchCable", cable, source, target }])));
 }
@@ -159,7 +174,7 @@ function cableCandidates(state: GameState): Candidate[] {
 // facing-free modulator has the placement alone.
 function modulatorCandidates(state: GameState): Candidate[] {
   const { game } = state;
-  return game.arrived.filter((module) => !isOscillator(module)).flatMap((module) =>
+  return grantsOf(state).arrived.filter((module) => !isOscillator(module)).flatMap((module) =>
     game.board.open.flatMap((cell) => {
       const place: Action = { type: "placeModule", module, cell };
       if (!hasFacing(module)) return [[place]];
@@ -183,7 +198,7 @@ export interface PaceScript {
   milestones?: MilestoneProbe[];
   tending?: Partial<TendingHooks>;
   // The state the player starts from; a fresh start when absent. Tests use
-  // it to grant what later chunks will (a larger allowance, say).
+  // it to start from given class credit, say.
   start?: GameState;
 }
 
@@ -216,6 +231,9 @@ export interface PaceReport {
   walls: { name: string; cell: Cell; damage: Num }[];
   // The era's nous at the end of the run.
   nous: Num;
+  // Each open class's level at the end of the run, in class order.
+  classLevels: { habitClass: HabitClass; level: number }[];
+  breathersTaken: number;
   // Every stretch longer than DRY_STRETCH_HOURS with no new milestone,
   // including the one from the last milestone to the end of the run.
   dryStretches: DryStretch[];
@@ -256,18 +274,25 @@ export function runPace(script: PaceScript): PaceReport {
   const tending: TendingHooks = { ...DEFAULT_TENDING, ...script.tending };
 
   let state = script.start ?? createInitialState();
+  let now = START_EPOCH_MS;
+  let breathersTaken = 0;
   const turn: PaceTurn = {
     get state() {
       return state;
     },
+    get now() {
+      return now;
+    },
     apply: (action) => {
       const result = apply(state, action);
       state = result.state;
+      if (result.ok && action.type === "takeBreather") breathersTaken++;
       return result;
     },
     advance: (seconds, mode) => {
       const result = advance(state, seconds, mode);
       state = result.state;
+      now += seconds * 1000;
       return result;
     },
   };
@@ -279,7 +304,6 @@ export function runPace(script: PaceScript): PaceReport {
     }
   };
 
-  let now = START_EPOCH_MS;
   let sessions = 0;
   observe();
   // A fresh start is upgrade mode: the player lays out the allowance
@@ -289,21 +313,19 @@ export function runPace(script: PaceScript): PaceReport {
   while (creditedHoursOf(state) < script.creditedHours) {
     if (sessions >= MAX_SESSIONS) throw new Error("pace runner: no credited progress");
     habitsForOpenClasses(turn);
-    must(turn.apply({ type: "selectHabit", id: nextHabitId(state, sessions) }), "selecting the habit");
-    must(turn.apply({ type: "startSession", target: sessionSeconds, now }), "starting a session");
+    must(turn.apply({ type: "startSession", habitId: nextHabitId(state, sessions), target: sessionSeconds, now }), "starting a session");
     const flowed = turn.advance(sessionSeconds, "flow");
     if (flowed.fault) throw new Error(`pace runner: flow faulted on ${flowed.fault}`);
-    now += sessionSeconds * 1000;
     must(turn.apply({ type: "endSession", now }), "ending the session");
     must(turn.apply({ type: "dismissSummary" }), "dismissing the summary");
     sessions++;
     observe();
 
-    tending.takeBankedBreathers(turn);
-    tending.buyCheapestFader(turn);
     tending.placeAllowance(turn);
     tending.patchChargeToNearestWall(turn);
+    tending.buyCheapestFader(turn);
     turn.advance(tendSeconds, "upgrade");
+    tending.takeBankedBreathers(turn);
     observe();
     now += restMs;
   }
@@ -329,6 +351,8 @@ export function runPace(script: PaceScript): PaceReport {
     charge: state.game.rates.modulators.reduce((sum, m) => add(sum, m.output), D(0)),
     walls: state.game.rates.walls.map((w) => ({ name: wallAt(w.cell).name ?? "Wall", cell: { ...w.cell }, damage: w.damage })),
     nous: state.game.nous,
+    classLevels: CLASSES.filter((c) => state.game.openClasses.includes(c)).map((habitClass) => ({ habitClass, level: classLevel(state, habitClass).level })),
+    breathersTaken,
     dryStretches: dryStretches([...reachedAt.values()], creditedHours),
   };
 }
@@ -374,6 +398,8 @@ export function formatPaceReport(report: PaceReport): string {
     `Pace run: ${report.sessions} sessions, ${hours(report.creditedHours)} credited`,
     `Board: ${rates}${layout ? ` — ${layout}` : ""}`,
     `Era ν: ${fmt(report.nous)}`,
+    `Classes: ${report.classLevels.map((c) => `${title(c.habitClass)} Lv ${c.level}`).join(", ")}`,
+    `Breathers taken: ${report.breathersTaken}`,
     "",
     line(head),
     line(widths.map((w) => "-".repeat(w))),

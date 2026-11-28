@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyIn, advanceIn, fresh, giveHabit, habitOf, intentionOf } from "./fixtures";
+import { begin, applyIn, advanceIn, fresh, giveHabit, habitOf, intentionOf } from "./fixtures";
 import { accrueIntentionProgress, normalizeIntentions, occurrenceKeyFor, pendingIntentionsOf, activeIntentionOf } from "./intentions";
 import { deserialize, serialize } from "./save";
 import type { Intention } from "./types";
@@ -50,7 +50,7 @@ describe("one intention per habit", () => {
     const habit = withHabit(s);
     expect(applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 0, schedule: "daily", now: 1 }).ok).toBe(false);
     expect(applyIn(s, { type: "createIntention", habitId: "nope", minutes: 5, schedule: "daily", now: 1 }).ok).toBe(false);
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     expect(applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 5, schedule: "daily", now: 1 }).ok).toBe(false);
     applyIn(s, { type: "endSession", now: 0 });
     expect(applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 5, schedule: "daily", now: 1 }).ok).toBe(true);
@@ -75,7 +75,7 @@ describe("intention progress and completion", () => {
     const s = fresh();
     const habit = withHabit(s);
     applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 10, schedule: "daily", now: 1 });
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     const result = advanceIn(s, 600, "flow");
     expect(result.intentionsCompleted).toBe(1);
     expect(s.records.intentions[0]!.completed).toBe(true);
@@ -86,7 +86,7 @@ describe("intention progress and completion", () => {
     const s = fresh();
     const habit = withHabit(s);
     applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 10, schedule: "daily", now: 1 });
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     advanceIn(s, 600, "flow");
     expect(s.records.intentions[0]!.completed).toBe(true);
     const before = structuredClone(s);
@@ -123,7 +123,7 @@ describe("intention progress and completion", () => {
   it("does not count practice from before the intention existed", () => {
     const s = fresh();
     const habit = withHabit(s);
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     advanceIn(s, 600, "flow");
     applyIn(s, { type: "endSession", now: 5_000 });
     applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 10, schedule: "daily", now: 6_000 });
@@ -145,7 +145,7 @@ describe("intention edits (issue #445)", () => {
     const s = fresh();
     const habit = withHabit(s);
     const intention = intentionOf(s, applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 30, schedule: "daily", now: 1 }));
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     advanceIn(s, 20 * 60, "flow");
     applyIn(s, { type: "endSession", now: 0 });
     expect(applyIn(s, { type: "editIntention", id: intention.id, minutes: 60, schedule: "daily", now: 9_000 }).ok).toBe(true);
@@ -154,7 +154,7 @@ describe("intention edits (issue #445)", () => {
     expect(intention.completed).toBe(false);
     // The retained minutes ride toward the raised target: forty more
     // completes it.
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     expect(advanceIn(s, 40 * 60, "flow").intentionsCompleted).toBe(1);
     applyIn(s, { type: "endSession", now: 0 });
     expect(intention.completedCount).toBe(1);
@@ -164,7 +164,7 @@ describe("intention edits (issue #445)", () => {
     const s = fresh();
     const habit = withHabit(s);
     const intention = intentionOf(s, applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 10, schedule: "once", now: 1 }));
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     advanceIn(s, 600, "flow");
     applyIn(s, { type: "endSession", now: 0 });
     expect(intention.completed).toBe(true);
@@ -177,7 +177,7 @@ describe("intention edits (issue #445)", () => {
     applyIn(s, { type: "editIntention", id: intention.id, minutes: 15, schedule: "once", now: 9_100 });
     expect(intention.completed).toBe(false);
     expect(intention.progressSeconds).toBeCloseTo(600, 6);
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     expect(advanceIn(s, 300, "flow").intentionsCompleted).toBe(1);
     applyIn(s, { type: "endSession", now: 0 });
     // The raised target's completion is the intention's second lifetime
@@ -190,7 +190,7 @@ describe("intention edits (issue #445)", () => {
     const habit = withHabit(s);
     const midnight = new Date(2026, 9, 21).getTime();
     const intention = intentionOf(s, applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 60, schedule: "weekly", now: midnight - DAY }));
-    applyIn(s, { type: "startSession", target: null, now: midnight - 600_000 });
+    begin(s, null, midnight - 600_000);
     advanceIn(s, 1200, "flow");
     applyIn(s, { type: "endSession", now: midnight + 600_000 });
     applyIn(s, { type: "editIntention", id: intention.id, minutes: 60, schedule: "daily", now: midnight + 600_000 });
@@ -203,7 +203,7 @@ describe("intention edits (issue #445)", () => {
     const s = fresh();
     const habit = withHabit(s);
     const intention = intentionOf(s, applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 30, schedule: "daily", now: 1 }));
-    applyIn(s, { type: "startSession", target: null, now: 1000 });
+    begin(s, null, 1000);
     advanceIn(s, 600, "flow");
     applyIn(s, { type: "endSession", now: 601000 });
     applyIn(s, { type: "editIntention", id: intention.id, minutes: 60, schedule: "weekly", now: 602000 });
@@ -221,7 +221,7 @@ describe("intention edits (issue #445)", () => {
     const intention = intentionOf(s, applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 10, schedule: "once", now: 1 }));
     expect(applyIn(s, { type: "editIntention", id: intention.id, minutes: 0, schedule: "once", now: 9_000 }).ok).toBe(false);
     expect(applyIn(s, { type: "editIntention", id: "nope", minutes: 10, schedule: "once", now: 9_000 }).ok).toBe(false);
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     expect(applyIn(s, { type: "editIntention", id: intention.id, minutes: 20, schedule: "once", now: 9_000 }).ok).toBe(false);
     applyIn(s, { type: "endSession", now: 0 });
     expect(intention.condition.minutes).toBe(10);
@@ -233,14 +233,14 @@ describe("intention edits (issue #445)", () => {
     const wednesday = Date.UTC(2026, 9, 21, 10); // 2026-10-21 Wed
     const intention = intentionOf(s, applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 30, schedule: "daily", now: wednesday - 3 * DAY }));
     // Yesterday's credited session (10 min) and last week's (12 min).
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     advanceIn(s, 600, "flow");
     applyIn(s, { type: "endSession", now: wednesday - DAY });
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     advanceIn(s, 720, "flow");
     applyIn(s, { type: "endSession", now: wednesday - 8 * DAY });
     // Today's live practice and manual condition progress both survive.
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     advanceIn(s, 300, "flow");
     applyIn(s, { type: "endSession", now: wednesday });
     applyIn(s, { type: "logPractice", habitId: habit.id, minutes: 10, now: wednesday + 1_000 });
@@ -257,7 +257,7 @@ describe("intention edits (issue #445)", () => {
     const habit = withHabit(s);
     const created = new Date(2026, 9, 19, 23).getTime(); // created late on the 19th
     const intention = intentionOf(s, applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 60, schedule: "once", now: created }));
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     advanceIn(s, 1_200, "flow");
     applyIn(s, { type: "endSession", now: created + DAY + 3_600_000 + 1_200_000 }); // the 21st, 00:00 local
     applyIn(s, { type: "editIntention", id: intention.id, minutes: 60, schedule: "daily", now: created + DAY + 3_600_000 + 1_200_000 });
@@ -297,7 +297,7 @@ describe("the migration's retain-one choice (issue #445)", () => {
     const [a, b] = pendingPair(s);
     expect(activeIntentionOf(s, s.records.habits[0]!.id)).toBeUndefined();
     // An unresolved choice never blocks a session.
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     advanceIn(s, 3_600, "flow");
     applyIn(s, { type: "endSession", now: 0 });
     expect(a.progressSeconds).toBe(0);
@@ -330,7 +330,7 @@ describe("the migration's retain-one choice (issue #445)", () => {
     const s = fresh();
     withHabit(s);
     const [a] = pendingPair(s);
-    applyIn(s, { type: "startSession", target: 600, now: 0 });
+    begin(s, 600, 0);
     expect(applyIn(s, { type: "retainIntention", id: a.id }).ok).toBe(false);
     applyIn(s, { type: "endSession", now: 0 });
     expect(a.pendingChoice).toBe(true);
@@ -430,7 +430,7 @@ describe("the completion tick", () => {
       const s = fresh();
       const habit = giveHabit(s).habit;
       applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 1, schedule: "once", now: 1 });
-      applyIn(s, { type: "startSession", target: 600, now: 0 });
+      begin(s, 600, 0);
       return s;
     }
     const batch = scenario();
@@ -449,7 +449,7 @@ describe("the completion tick", () => {
     const s = fresh();
     const habit = withHabit(s);
     applyIn(s, { type: "createIntention", habitId: habit.id, minutes: 10, schedule: "once", now: 1 });
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     advanceIn(s, 900, "flow", "away", 0); // open-ended past the floor: provisional
     advanceIn(s, 0, "flow");
     expect(s.records.intentions[0]!.progressSeconds).toBe(0);

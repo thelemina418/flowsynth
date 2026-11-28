@@ -1,5 +1,6 @@
 import { cellKind } from "./board";
 import { cellKey, sameCell, turnFacing, type Cell } from "./hex";
+import { grantsOf } from "./levels";
 import { categoryOf, categoryName, hasFacing, moduleName } from "./modules";
 import type { Board, Cable, GameState, ModuleCategory, ModuleType, Placement } from "./types";
 
@@ -37,13 +38,24 @@ export function placedCount(board: Board, category: ModuleCategory): number {
   return board.placements.filter((placement) => categoryOf(placement.module) === category).length;
 }
 
+// The module allowance not yet on the board, per category: the tray's
+// counts and the flow screen's Ready count read it.
+export function unplacedOf(state: GameState): Record<ModuleCategory, number> {
+  const allowance = grantsOf(state).allowance;
+  const board = state.game.board;
+  return {
+    oscillator: Math.max(0, allowance.oscillator - placedCount(board, "oscillator")),
+    modulator: Math.max(0, allowance.modulator - placedCount(board, "modulator")),
+  };
+}
+
 // The cable plugged into the jack on `source`, if any.
 export function cableFrom(board: Board, source: Cell): Cable | undefined {
   return board.cables.find((cable) => sameCell(cable.source, source));
 }
 
 // The layout, cables included, is locked whenever time produces
-// (ADR-0001): in flow, paused, and the breather once chunk 04 adds it.
+// (ADR-0001): in flow, paused, and a breather (issue #41).
 export function locked(state: GameState): string | null {
   return state.game.mode === "upgrade" ? null : "The board is locked while a session runs.";
 }
@@ -62,9 +74,10 @@ function unbuildable(board: Board, cell: Cell): string | null {
 export function trayRefusal(state: GameState, module: ModuleType): string | null {
   const refused = locked(state);
   if (refused) return refused;
-  if (!state.game.arrived.includes(module)) return `${moduleName(module)} hasn't arrived yet.`;
+  const grants = grantsOf(state);
+  if (!grants.arrived.includes(module)) return `${moduleName(module)} hasn't arrived yet.`;
   const category = categoryOf(module);
-  if (placedCount(state.game.board, category) >= state.game.allowance[category]) {
+  if (placedCount(state.game.board, category) >= grants.allowance[category]) {
     return `${categoryName(category)} allowance is full.`;
   }
   return null;
@@ -78,7 +91,7 @@ export function placementRefusal(state: GameState, action: PlacementAction): str
   const board = state.game.board;
   switch (action.type) {
     case "placeModule": {
-      if (!state.game.arrived.includes(action.module)) return `${moduleName(action.module)} hasn't arrived yet.`;
+      if (!grantsOf(state).arrived.includes(action.module)) return `${moduleName(action.module)} hasn't arrived yet.`;
       const blocked = unbuildable(board, action.cell);
       if (blocked) return blocked;
       if (moduleAt(board, action.cell)) return "That cell already holds a module.";

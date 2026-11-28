@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { apply, type Action } from "./apply";
-import { applyIn, fresh, giveHabit } from "./fixtures";
+import { begin, applyIn, fresh, giveHabit } from "./fixtures";
+import { grantsOf } from "./levels";
 import { cloneState } from "./state";
 import type { GameState } from "./types";
 
@@ -33,8 +34,8 @@ function expectRefused(s: GameState, action: Action) {
 describe("the Flywheel's allowance", () => {
   it("a fresh start has the Flywheel and one Modulator allowance beside the oscillators'", () => {
     const s = fresh();
-    expect(s.game.allowance).toEqual({ oscillator: 2, modulator: 1 });
-    expect(s.game.arrived).toEqual(["sine", "triangle", "flywheel"]);
+    expect(grantsOf(s).allowance).toEqual({ oscillator: 2, modulator: 1 });
+    expect(grantsOf(s).arrived).toEqual(["sine", "triangle", "flywheel"]);
   });
 
   it("allows one Flywheel and refuses a second, independently of the oscillator allowance", () => {
@@ -123,7 +124,7 @@ describe("facing", () => {
     const s = fresh();
     applyIn(s, { type: "placeModule", module: "flywheel", cell: O });
     giveHabit(s, "Piano", "producer");
-    applyIn(s, { type: "startSession", target: null, now: 1_000 });
+    begin(s, null, 1_000);
     expectRefused(s, { type: "rotateModule", cell: O, turn: "clockwise" });
     applyIn(s, { type: "pauseSession" });
     expect(s.game.mode).toBe("paused");

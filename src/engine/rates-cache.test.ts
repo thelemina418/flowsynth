@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { applyIn, advanceIn, fresh, giveHabit, giveOscillators } from "./fixtures";
+import { begin, applyIn, advanceIn, fresh, giveHabit, giveOscillators } from "./fixtures";
+import { grantsOf } from "./levels";
 import { computeBoardRates } from "./rates";
 import { deserialize, serialize } from "./save";
 import { cloneState } from "./state";
@@ -53,7 +54,7 @@ describe("recomputing the board's rates", () => {
   it("recomputes zero times across any number of flow advances", () => {
     const s = acceptanceLayout();
     giveHabit(s, "Piano", "engineer");
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     counted.mockClear();
     for (let i = 0; i < 500; i++) advanceIn(s, 1, "flow");
     advanceIn(s, 600, "flow", "away");
@@ -72,7 +73,7 @@ describe("recomputing the board's rates", () => {
     counted.mockClear();
     applyIn(s, { type: "rotateModule", cell: { q: 0, r: 0 }, turn: "clockwise" });
     giveHabit(s, "Synthesis", "producer");
-    applyIn(s, { type: "startSession", target: null, now: 0 });
+    begin(s, null, 0);
     applyIn(s, { type: "rotateModule", cell: { q: 0, r: 1 }, turn: "clockwise" });
     for (let i = 0; i < 100; i++) advanceIn(s, 36, "flow");
     expect(counted).not.toHaveBeenCalled();
@@ -112,7 +113,7 @@ describe("recomputing the board's rates", () => {
     const idle = applyIn(s, { type: "createHabit", name: "Bass" }).id!;
     for (const id of [flowed, other]) {
       applyIn(s, { type: "selectHabit", id });
-      applyIn(s, { type: "startSession", target: null, now: 0 });
+      begin(s, null, 0);
       for (let i = 0; i < 100; i++) advanceIn(s, 36, "flow");
       applyIn(s, { type: "endSession", now: 1 });
     }
@@ -128,10 +129,40 @@ describe("recomputing the board's rates", () => {
     expect(counted).not.toHaveBeenCalled();
   });
 
+  it("a class level crossed mid-flow raises the derived allowance in the same advance and recomputes nothing (issue #38)", () => {
+    const s = fresh();
+    giveHabit(s, "Piano", "engineer");
+    applyIn(s, { type: "placeModule", module: "sine", cell: { q: 0, r: 0 } });
+    begin(s, null, 0);
+    advanceIn(s, 1_799, "flow");
+    expect(grantsOf(s).allowance.oscillator).toBe(2);
+    counted.mockClear();
+    advanceIn(s, 1, "flow");
+    expect(grantsOf(s).allowance.oscillator).toBe(3);
+    expect(counted).not.toHaveBeenCalled();
+  });
+
+  it("recomputes nothing to take, complete or end a breather early (issue #41)", () => {
+    const s = acceptanceLayout();
+    begin(s, 1500, 0);
+    advanceIn(s, 1500, "flow");
+    applyIn(s, { type: "endSession", now: 0 });
+    applyIn(s, { type: "dismissSummary" });
+    counted.mockClear();
+    expect(applyIn(s, { type: "takeBreather", now: 0 }).ok).toBe(true);
+    expect(applyIn(s, { type: "endBreatherEarly" }).ok).toBe(true);
+    expect(applyIn(s, { type: "takeBreather", now: 0 }).ok).toBe(true);
+    advanceIn(s, 300, "breather");
+    expect(s.game.breather.result).not.toBeNull();
+    expect(applyIn(s, { type: "dismissBreatherResult" }).ok).toBe(true);
+    expect(counted).not.toHaveBeenCalled();
+  });
+
   it("recomputes once on load, from the layout, and never writes the rates to the save", () => {
     const s = acceptanceLayout();
     const text = serialize(s, 0);
-    expect(text).not.toMatch(/rates|resonance|instances/);
+    // "resonance" may be a revealed Encyclopedia entry id (issue #44), never a rate key.
+    expect(text).not.toMatch(/"rates"|"resonance":|"instances"/);
     counted.mockClear();
     const loaded = deserialize(text).state!;
     expect(counted).toHaveBeenCalledTimes(1);

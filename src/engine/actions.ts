@@ -1,5 +1,7 @@
 import { EPS, REFLECTION_SLIDER_MIN, REFLECTION_SLIDER_NEUTRAL, REFLECTION_SLIDER_POSITIONS } from "./constants";
 import { logSessionPractice } from "./habits";
+import { classLevelOf } from "./levels";
+import { D } from "./num";
 import { rollIntentionOccurrences } from "./intentions";
 import { freshAccounting } from "./trust";
 import type { GameState, SessionReflection } from "./types";
@@ -19,8 +21,21 @@ function fail(reason: string): ActionResult {
   return { ok: false, reason };
 }
 
-export function startSession(state: GameState, target: number | null, now: number = 0): ActionResult {
+// The planned length a session may take (spec chunk 04, Begin flow), in
+// seconds. A migrated open-ended session still runs and ends under the old
+// rules, but none starts.
+export const SESSION_MIN_SECONDS = 10 * 60;
+export const SESSION_MAX_SECONDS = 180 * 60;
+
+// Begin flow (issue #39): select the habit and start in one action.
+export function startSession(state: GameState, habitId: string, target: number | null, now: number = 0): ActionResult {
   if (state.game.mode !== "upgrade") return fail("A session is already running.");
+  const habit = state.records.habits.find((h) => h.id === habitId);
+  if (!habit || habit.archived || habit.habitClass === null) return fail("Choose a habit first.");
+  if (target === null || !Number.isFinite(target) || target < SESSION_MIN_SECONDS - EPS || target > SESSION_MAX_SECONDS + EPS) {
+    return fail("Choose a length from 10 to 180 minutes.");
+  }
+  state.records.activeHabitId = habit.id;
   state.records.sessionIndex++;
   state.game.mode = "flow";
   state.game.session = {
@@ -30,12 +45,19 @@ export function startSession(state: GameState, target: number | null, now: numbe
     targetSignaled: false,
     startedAt: now,
     goalSeconds: {},
+    nousMade: D(0),
   };
   return ok;
 }
 
+// The breather's bounds (issue #41): banked from 10 credited minutes, and
+// 5 to 15 minutes long.
+const BREATHER_MIN_CREDITED = 10 * 60;
+const BREATHER_MIN_SECONDS = 5 * 60;
+const BREATHER_MAX_SECONDS = 15 * 60;
+
 export function endSession(state: GameState, now: number = 0): ActionResult {
-  if (state.game.mode === "upgrade") return fail("No session is running.");
+  if (state.game.mode !== "flow" && state.game.mode !== "paused") return fail("No session is running.");
   const session = state.game.session;
   // The exit gate (spec §1–2): the honesty report's answer is mandatory and
   // final. A still unclassified absence buffer counts too: it would have
@@ -47,6 +69,18 @@ export function endSession(state: GameState, now: number = 0): ActionResult {
   // summary's practice minutes key off C — never raw elapsed.
   const credited = session?.accounting.creditedSeconds ?? 0;
   const target = session?.target ?? null;
+  // The class's share: all credited time went to the session habit's
+  // class, if it had one (habits.accrueLivePractice).
+  const habitClass = state.records.habits.find((h) => h.id === state.records.activeHabitId)?.habitClass ?? null;
+  const classSeconds = habitClass !== null ? credited : 0;
+  const credit = habitClass !== null ? state.records.classCredit[habitClass] : 0;
+  const levelAfter = classLevelOf(credit).level;
+  const levelBefore = classLevelOf(Math.max(0, credit - classSeconds)).level;
+  // A session of at least 10 credited minutes banks a breather of
+  // credited ÷ 5, from 5 to 15 minutes, in place of any banked one; a
+  // shorter one leaves the bank alone (ADR-0095).
+  const breather = credited >= BREATHER_MIN_CREDITED - EPS ? Math.min(BREATHER_MAX_SECONDS, Math.max(BREATHER_MIN_SECONDS, credited / 5)) : null;
+  if (breather !== null) state.game.breather.banked = { seconds: breather };
   state.game.mode = "upgrade";
   state.game.session = null;
   state.records.sessionsCompleted++;
@@ -74,6 +108,12 @@ export function endSession(state: GameState, now: number = 0): ActionResult {
   state.game.summary = {
     sessionNumber: state.records.sessionsCompleted,
     seconds: credited,
+    nous: session?.nousMade ?? D(0),
+    habitClass,
+    classSeconds,
+    levelBefore,
+    levelAfter,
+    breather,
     plannedTarget: target,
     honestyEvents: events,
     reflection: null,

@@ -67,18 +67,23 @@ describe("the board on a fresh start", () => {
     for (const cell of [...cells("open"), ...cells("wall")]) expect(cell.querySelector("polygon")!.getAttribute("stroke-dasharray")).toBeNull();
   });
 
-  it("reads ν 0, and shows nothing beyond the board, the tray and the readout", () => {
+  it("shows exactly philosophy.md's nine first-screen things, and nothing else", () => {
     mountFresh();
     const readout = host.querySelector(".nous-readout")!;
     expect(readout.textContent).toBe("ν 0");
     // The tray (issues #25, #31, #33): Sine, Triangle and the Flywheel,
     // unplaced, and the one Patch cable.
-    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Sine", "Triangle", "Flywheel", "1 Patch cable"]);
+    // `Begin flow` (issue #39) closes the screen.
+    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Sine", "Triangle", "Flywheel", "1 Patch cable", "Begin flow"]);
     const visible = [...host.querySelectorAll("p, span, text, h2, h3, button")].filter((el) => !el.closest(".sr-only") && !el.querySelector("p, span, text")).map((el) => el.textContent);
-    // Seven of philosophy.md's nine things: the board, the walls with Shale
-    // marked (its initial; F is Flint's), Sine, Triangle, Flywheel, the
-    // Patch cable and ν 0. No cord is drawn.
-    expect(visible.sort()).toEqual(["F", "S", "Sine", "Triangle", "Flywheel", "1 Patch cable", "ν 0"].sort());
+    // The nine (issue #42): the board, the walls with Shale marked (its
+    // initial; F is Flint's), Sine, Triangle, Flywheel, the Patch cable,
+    // ν 0, the Goal and Begin flow. No cord is drawn.
+    expect(visible.sort()).toEqual(["F", "S", "Sine", "Triangle", "Flywheel", "1 Patch cable", "ν 0", "Conquer Shale", "Begin flow"].sort());
+    expect(host.querySelector("[data-goal]")!.textContent).toBe("Conquer Shale");
+    // No chips, doors, class line or breather control before the first
+    // completed session.
+    expect(host.querySelectorAll("[data-chip], [data-doors], [data-class-line], [data-breather]")).toHaveLength(0);
     expect(host.querySelectorAll(".cord, [data-plug], .bead")).toHaveLength(0);
     // The Hex detail is empty.
     expect(host.querySelector("[data-hex-detail]")!.textContent).toBe("");

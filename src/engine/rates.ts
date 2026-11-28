@@ -1,7 +1,7 @@
 import { cellKind } from "./board";
 import { addCell, cellKey, DIRECTIONS, type Cell } from "./hex";
 import { add, D, div, ln, min, mul, pow, sub, type Num } from "./num";
-import { baseRate, hasFacing, isOscillator, outputOf, patternOf, reachOf, takesCharge } from "./modules";
+import { baseRate, breatherBaseRate, hasFacing, isOscillator, outputOf, patternOf, reachOf, takesCharge } from "./modules";
 import { wallAt } from "./map";
 import { cableFrom, moduleAt } from "./placement";
 import { instancesOf } from "./resonance";
@@ -49,7 +49,7 @@ function holdsAt(board: Board, cell: Cell): ReachHolds {
 
 // A board with no module placed.
 export function noRates(): BoardRates {
-  return { oscillators: [], modulators: [], walls: [], total: D(0) };
+  return { oscillators: [], modulators: [], walls: [], total: D(0), breatherTotal: D(0) };
 }
 
 export function computeBoardRates(board: Board, producerSeconds: number): BoardRates {
@@ -89,6 +89,7 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
   }
   const oscillators: OscillatorRate[] = [];
   let total = D(0);
+  let breatherSum = D(0);
   for (const placement of board.placements) {
     const module = placement.module;
     if (!isOscillator(module)) continue;
@@ -101,7 +102,10 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
     // Identity legs until chunks 06 (faders) and 05 (pressure).
     const faders = D(1);
     const pressure = D(0);
-    const rate = mul(mul(mul(mul(base, resonance), charge), faders), sub(1, pressure));
+    const product = (b: Num): Num => mul(mul(mul(mul(b, resonance), charge), faders), sub(1, pressure));
+    const rate = product(base);
+    // The same product on the breather base (issue #41).
+    const breatherRate = product(D(breatherBaseRate(module)));
     oscillators.push({
       cell: { q: placement.cell.q, r: placement.cell.r },
       module,
@@ -114,13 +118,16 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
       faders,
       pressure,
       rate,
+      breatherRate,
     });
     total = add(total, rate);
+    breatherSum = add(breatherSum, breatherRate);
   }
   const walls: WallRate[] = [...damage.values()].map(({ cell, damage }) => {
     const authored = wallAt(cell).regen;
     const regen = authored === null ? null : D(authored);
     return { cell, damage, regen, net: regen === null ? damage : sub(damage, regen) };
   });
-  return { oscillators, modulators, walls, total };
+  // The board runs ×2 in a breather (issue #41).
+  return { oscillators, modulators, walls, total, breatherTotal: mul(2, breatherSum) };
 }

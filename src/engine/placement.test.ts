@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { apply, type Action } from "./apply";
-import { applyIn, fresh, giveHabit, giveOscillators } from "./fixtures";
+import { begin, applyIn, fresh, giveHabit, giveOscillators } from "./fixtures";
 import { lifetimeCells } from "./hex";
 import { placementRefusal, trayRefusal, type PlacementAction } from "./placement";
+import { grantsOf } from "./levels";
 import { cloneState } from "./state";
 import type { GameState } from "./types";
 
@@ -32,14 +33,14 @@ function expectRefused(s: GameState, action: Action) {
 
 function inFlow(s: GameState) {
   giveHabit(s, "Piano", "engineer");
-  applyIn(s, { type: "startSession", target: null, now: 1_000 });
+  begin(s, null, 1_000);
 }
 
 describe("a fresh start", () => {
   it("allows two oscillators of the types it has, Sine and Triangle", () => {
     const s = fresh();
-    expect(s.game.allowance.oscillator).toBe(2);
-    expect(s.game.arrived.filter((m) => m !== "flywheel")).toEqual(["sine", "triangle"]);
+    expect(grantsOf(s).allowance.oscillator).toBe(2);
+    expect(grantsOf(s).arrived.filter((m) => m !== "flywheel")).toEqual(["sine", "triangle"]);
     expect(s.game.board.placements).toEqual([]);
   });
 

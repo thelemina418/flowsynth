@@ -1,13 +1,15 @@
 import { transact } from "./state";
+import { dismissBreatherResult, endBreatherEarly, takeBreather } from "./breather";
 import { dismissSummary, endSession, pauseSession, recordSummaryReflection, resumeSession, signalTarget, startSession } from "./actions";
-import { addPracticeLog, archiveHabit, chooseHabitClass, createHabit, renameHabit, selectHabit, setHabitColor } from "./habits";
+import { addPracticeLog, archiveHabit, chooseHabitClass, createHabit, reattuneHabit, renameHabit, selectHabit, setHabitColor } from "./habits";
 import { createIntention, deleteIntention, editIntention, retainIntentionChoice, rollIntentionOccurrences } from "./intentions";
+import { readEntry, revealEntries } from "./encyclopedia";
 import { writeNote } from "./notes";
 import { recable, type CableAction } from "./cables";
 import { relayout, type PlacementAction } from "./placement";
 import { computeBoardRates } from "./rates";
 import { settleHonestyReport } from "./trust";
-import type { GameState, IntentionSchedule, HabitClass, HabitColor, HonestyOutcome } from "./types";
+import type { EntryId, GameState, IntentionSchedule, HabitClass, HabitColor, HonestyOutcome } from "./types";
 
 // Every player intent and every boundary event that changes state, as one
 // discriminated union. `now` is wall-clock epoch ms, passed in so the
@@ -20,9 +22,10 @@ export type Action =
   | { type: "archiveHabit"; id: string }
   | { type: "selectHabit"; id: string | null }
   | { type: "chooseClass"; habitId: string; habitClass: HabitClass }
+  | { type: "reattuneHabit"; habitId: string; habitClass: HabitClass }
   | { type: "logPractice"; habitId: string; minutes: number; now: number }
   // The session.
-  | { type: "startSession"; target: number | null; now: number }
+  | { type: "startSession"; habitId: string; target: number | null; now: number }
   | { type: "pauseSession" }
   | { type: "resumeSession" }
   | { type: "endSession"; now: number }
@@ -30,8 +33,14 @@ export type Action =
   | { type: "settleHonestyReport"; outcome: HonestyOutcome }
   | { type: "reflect"; text?: string; slider?: number }
   | { type: "dismissSummary" }
+  // The breather (issue #41), between sessions.
+  | { type: "takeBreather"; now: number }
+  | { type: "endBreatherEarly" }
+  | { type: "dismissBreatherResult" }
   // Notes.
   | { type: "writeNote"; text: string; now: number }
+  // The Encyclopedia (issue #44): opening an entry marks it seen.
+  | { type: "readEntry"; id: EntryId }
   // Intentions and their calendar.
   | { type: "createIntention"; habitId: string | null; minutes: number; schedule: IntentionSchedule["kind"]; now: number }
   | { type: "editIntention"; id: string; minutes: number; schedule: IntentionSchedule["kind"]; now: number }
@@ -73,8 +82,10 @@ function run(state: GameState, action: Action): Step {
       const step = chooseHabitClass(state, action.habitId, action.habitClass);
       return state.records.classCredit.producer === before ? step : relaid(state, step);
     }
+    // Re-attuning moves no credit, so no rate reads anything new.
+    case "reattuneHabit": return reattuneHabit(state, action.habitId, action.habitClass);
     case "logPractice": return addPracticeLog(state, action.habitId, action.minutes, action.now);
-    case "startSession": return startSession(state, action.target, action.now);
+    case "startSession": return startSession(state, action.habitId, action.target, action.now);
     case "pauseSession": return pauseSession(state);
     case "resumeSession": return resumeSession(state);
     case "endSession": return relaid(state, endSession(state, action.now));
@@ -87,7 +98,12 @@ function run(state: GameState, action: Action): Step {
       return recordSummaryReflection(state, part);
     }
     case "dismissSummary": return dismissSummary(state);
+    // Taking, completing or ending a breather recomputes nothing.
+    case "takeBreather": return takeBreather(state, action.now);
+    case "endBreatherEarly": return endBreatherEarly(state);
+    case "dismissBreatherResult": return dismissBreatherResult(state);
     case "writeNote": return writeNote(state, action.text, action.now);
+    case "readEntry": return readEntry(state, action.id);
     case "createIntention": {
       const made = createIntention(state, { habitId: action.habitId, minutes: action.minutes, schedule: action.schedule, now: action.now });
       return made.ok ? { ok: true, id: made.intention!.id } : { ok: false, reason: made.reason! };
@@ -128,7 +144,16 @@ function refusalOnFault(action: Action): string {
 // refusal — an invalid action, or a numeric fault (a nonfinite second, a
 // NaN Decimal) — returns it as it was, with the reason.
 export function apply(state: GameState, action: Action): ApplyResult {
-  const done = transact(state, (draft) => run(draft, action), (step) => step.ok);
+  // Every accepted commit adds the Encyclopedia entries its state reveals.
+  const done = transact(
+    state,
+    (draft) => {
+      const step = run(draft, action);
+      if (step.ok) revealEntries(draft);
+      return step;
+    },
+    (step) => step.ok,
+  );
   if (done.fault !== undefined) return { ok: false, state, reason: refusalOnFault(action) };
   if (!done.result.ok) return { ok: false, state, reason: done.result.reason ?? "That can't be done right now." };
   return { ...done.result, state: done.state };

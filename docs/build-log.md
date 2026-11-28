@@ -195,3 +195,107 @@ DRY 0.0h–250.0h: 250.0h with no new milestone
 ```
 
 The opening owns four cells. The two Sines take (0,0) and (1,0), and from either cell left the Flywheel's two-cell reach meets one Sine. The player keeps the first, (0,1) facing NE, which reaches (1,0) and then Flint. That Sine's charge factor starts at 1 + ln 2, so the board makes 2.69 ν/s before the first session. Sessions alternate Engineer and Producer, so the Flywheel reaches its 3 charge/s cap at 20 Producer hours, about 40 credited hours in, and the board holds 2 + ln 4 = 3.38 ν/s from there. The era's ν rises from 1.8e6 to 3e6. A Patch would deliver to that one Sine in place of the reach, which raises nothing, so the cable stays unused. Patching into Shale would cost ν/s and leads to no milestone until chunk 05 lets it fall, so no further milestone is reachable and the run is still flagged dry.
+
+## Chunk 04: Cadence
+
+Issues #38–#45 (parent #37), on `integration/spec-04-cadence`.
+
+### Built
+
+- **Class levels and grants (#38).** `levels.ts` owns the thresholds (0.5, 1.5, 3, 5, 8, 12, 17, 23, 30 h, then each step 1 h longer: 38, 47, 57, 68…) and the grant ladders as data. `classLevel` gives a class's level and its current and next thresholds. `grantsOf` is the one derivation of the allowance per category, the cable allowance and the arrived module and cable types, from `records.classCredit` and `game.openClasses`. The four old `game` fields are gone: the save no longer writes them and ignores them on read. Placement, cables, the saved-cable reader, the tray and the pace runner all read `grantsOf`.
+- **The tray's chips (#38).** Each category group is headed by its unplaced allowance (`Oscillators 1`), muted at 0, once a session has completed. The cable entry's count is the cables' chip.
+- **Begin flow and the flow screen (#39).** `startSession` takes `{ habitId, target, now }`: it selects the habit and starts, refused without a known, unarchived, classed habit (`Choose a habit first.`) or outside 10–180 minutes (`Choose a length from 10 to 180 minutes.`, null included). `Shell.boundary(presence)` advances flow or paused by the wall gap and drift step since the last boundary, marks the target once, and saves; `main.tsx` calls it every second and on `visibilitychange` (and `pagehide`). The flow screen shows the board, ν, the class line, `Ready · N`, the ported clock, Pause/Resume, End and the Notes door.
+- **End of session (#40).** `Shell.end()` flushes a visible boundary; with provisional time owed it shows the ported honesty report (its three answers and copy), whose answer settles the pool and then ends. Otherwise it ends directly. The session tracks `nousMade` (trusted flow ν, plus provisional ν on a non-missed answer). The summary gains `nous`, `habitClass`, `classSeconds`, `levelBefore` and `levelAfter`, all defaulting on read, and reads as one line (`+8 100 ν · Engineer +30 min`, ` → Lv 1` when crossed) with one `Continue` control; dismissed, it leads to upgrade mode.
+
+- **The Goal and the first screen (#42).** `goal.ts` holds each arc's priority list as data (label, `shown`, `done`); `goalOf` returns the first entry shown and not done. Sketch: `Place a third oscillator`, `Conquer Shale`, then `Conquer Basalt`, `Reach Flint`, `Prestige` declared with `shown` false. `disclosureOf` gives the chips, class levels and doors from the first completed session on. Upgrade mode draws the Goal under ν; the flow screen doesn't. A fresh start renders exactly the nine first-screen things.
+- **The Almanac (#43).** `reattuneHabit {habitId, habitClass}` changes only `habitClass`, upgrade mode only; it refuses an unknown or archived habit (`Habit not found.`), a habit awaiting its class (`Choose this habit's class first.`), a closed class and the same class (`Piano is already Engineer.`), each leaving the state deep-equal. `almanac.ts` `dayStrip(state, habitId, days, now)` buckets the practice log by the local day `intentions.localDayStart` gives (now exported), walking back by calendar date; `almanac.test.ts` joins `npm run test:calendar`. The door sits in `nav.shell-doors`; `Shell.openAlmanac()` opens it only in upgrade mode once the doors show, and rolls Intentions to today first. Four surface files (`AlmanacHabits`, `AlmanacIntentions`, `Notes`, `AlmanacHistory`) under `Almanac.tsx`, styled in `almanac.css`.
+
+- **The breather (#41).** `endSession` banks `{ seconds: clamp(credited ÷ 5, 300, 900) }` from 600 credited seconds, replacing any bank, and the summary carries `breather` (seconds or null) as its second line, `Breather banked · 10 min`. `Mode` gains `breather`; `game.breather` holds `banked`, `running` and `result`. `takeBreather`, `endBreatherEarly` and `dismissBreatherResult` live in `engine/breather.ts`. `advance(…, 'breather')` moves `running.elapsed` by the wall gap and, at the length, pays `rates.breatherTotal × seconds` once and lands in upgrade mode; in any other mode it changes nothing. Each `OscillatorRate` gains `breatherRate` (Release's breather base 6 in `modules.ts`), and `BoardRates` gains `breatherTotal`, in the same `computeBoardRates` call. The Shell's boundary runs breather time; upgrade mode shows `Take breather · N min` beside `Begin flow`, the calm screen shows only its line and `End early`, and `Breather complete · +… ν` shows with `Continue` until dismissed. The spec's full loop is `src/ui/shell/breather.test.ts`.
+
+- **The Encyclopedia (#44).** `engine/encyclopedia.ts` holds the thirteen entries as data (id, title, readout lines, reveal predicate). `game.encyclopedia = { revealed, seen }`: id lists that only grow. `revealEntries` runs inside every accepted `apply` commit, every flow and breather `advance` commit, `createInitialState` and both save readers, so a fresh start reveals Walls, Sine and Triangle. `readEntry {id}` marks a revealed entry seen and refuses an unrevealed one. The save reads each set as known ids once each (seen kept within revealed), empty when missing, then reveals from the loaded state. A v15 save's retired encyclopedia is dropped. The door sits beside the Almanac's in `nav.shell-doors` with one 6 px `[data-unseen]` dot while `hasUnseen`. `Encyclopedia.tsx` (list → entry view, `‹ Entries` back) is opened by `Shell.openEncyclopedia()` (upgrade mode, doors shown) and closes on Close, Escape, or a pointerdown outside the panel. The copy test checks every entry's title and lines.
+- **The pace runner's cadence (#45).** Each session starts through `startSession` with the round-robin habit. Tending after it follows ADR-0095, upgrade mode first: place the allowance (which grows with levels, the arrived types as candidates), the patch pass, buy faders (still empty), then `takeBreatherInFull`: `takeBreather`, `advance(length, 'breather')`, `dismissBreatherResult`. The `class-level-5` probes read `classLevel`. The report adds `Classes: Engineer Lv n, Producer Lv n` (open classes) and `Breathers taken: n`.
+
+### Improvised
+
+- **Arrival order (#38).** Credit history isn't kept, so a derived type arrives in the order of the threshold (in hours on its class) that brought it, ties by class order (Engineer, Producer, Mixer, Roadie). Start types come first.
+- **Roadie and Mixer ladders (#38).** Declared empty: their types (Blade, Guard Plate) don't exist yet, and a closed class grants nothing. Chunk 05 fills Roadie's.
+- **The Pulsewell's patched output (#38).** Per target, as chunk 03's outputs are: patched, it delivers its 0.5 charge/s to its one target, and unpatched 0.5 to each of its six neighbours.
+- **Test fixtures (#38).** `giveOscillators` and `giveProducer` set class credit at the lowest level that grants what a test asks for. Producer credit also raises the Flywheel's output, so chunk 03's charge and wall tests that needed a second modulator or cable now read Producer Lv 1 or 2 figures (1.05 or 1.15 charge/s).
+- **Reload mid-session (#39).** On boot, a flow session's wall gap since `savedAt` goes to `advance` as an `offline` absence, then a visible zero-second boundary settles it, as the old console's resume-from-save did. A paused session moves nothing. The old console opened the honesty report here; it doesn't any more (that's #40's End).
+- **Unclassed and open-ended test sessions (#39).** The engine starts neither now. The `begin` fixture stands in for a migrated save: a null target starts a planned session and clears its plan, and a habit still awaiting its class is lent a class for the start only. One records test makes an unstructured session by clearing `activeHabitId` after the start.
+- **The Begin flow panel's extras (#39).** A quiet `Back` closes the panel, and the custom length is a minutes field (10–180). The new habit's class buttons create it on click, and the panel selects it.
+- **Notes in flow (#39).** Ported with its CAPTURE/LOGGED faces, composer copy, live tag and stamp, as a panel under the console rather than a modal. The old chime, Notification, and tab-title flip are not ported: the spec asks only that the target be marked once, and nothing asks for notification permission.
+- **`End` with provisional time owed (#39).** `endSession` still refuses, and the flow screen shows that refusal as its one quiet line. #40 puts the honesty report there.
+- **The summary's class figures (#40).** `classSeconds` is the session's credited seconds when the session habit has a class at End (accrueLivePractice credits all live time to it), else 0. `levelBefore` is derived as the level of `classCredit − classSeconds`, not captured at start. A migrated habit that chose its class mid-session would overstate both; the case is rare. A classless summary reads `+N ν · +M min`. Minutes truncate, like every shown figure.
+- **Honesty report state (#40).** "Ending" is a Shell signal, not saved: a reload with the report open lands back on the flow screen, and End asks again. Answering from a paused session resumes it first (the report settles only in flow), with no time passing between.
+- **The dismiss control (#40).** `Continue`, the old summary's dismissal word. The honesty report keeps its eyebrow `BEFORE YOU WRAP UP` and its `Practiced the whole time away` label.
+- **v15 summaries (#40).** The retired game's `earned` isn't carried into the summary's `nous`; it defaults to 0.
+- **The Goal past Shale (#42).** With Shale's cell open and every later entry inert until chunks 05 and 06, `goalOf` returns null and no Goal line is drawn. The spec's "always exactly one Goal" holds again once chunk 05 fills `Conquer Basalt` and `Reach Flint`.
+- **First-session disclosure (#42).** Read off `records.sessionsCompleted > 0`, which a migrated save already carries; no new field. The doors' place is an empty `nav.shell-doors[data-doors]` at the start of the transport row, drawn only then; #43 and #44 put the Almanac and Encyclopedia doors inside it.
+- **The calm screen's clock (#41).** `9:41`: the ported `formatClock` with the leading minute zero dropped, counting the time left rounded up. Its line and clock sit centred with no board drawn, as the spec's "shows only" reads.
+- **Reload mid-breather (#41).** On boot, a running breather advances by the wall gap since `savedAt` at once, so the calm screen opens with the right time left, and a breather whose deadline passed while closed opens straight to its result. That boot step is the "first boundary after load".
+- **End early (#41).** It flushes a boundary first, so ending at or past the deadline completes the breather and pays rather than re-banking.
+- **The full loop's board (#41).** A fresh start places nothing, so its breather would pay 0 ν. The acceptance test places Sine, Triangle, Triangle (Engineer Lv 1's third oscillator) after dismissing the summary, so ν = `breatherTotal × 360` = 3 240 is a real figure.
+- **Breather save reads (#41).** Each part defaults to none when missing. A `breather` mode without a readable running breather loads as upgrade, and a running breather outside breather mode is dropped. A v15 summary's retired breather allowance banks nothing. An unreadable result ν drops the result: the ν was already paid into `game.nous`.
+- **Refusal copy (#41).** `takeBreather` refuses with `A breather is taken between sessions.`, `A breather is already running.`, `No breather is banked.` or `Read the session summary first.` No surface shows them: the button only appears when taking is allowed.
+- **Re-attune refusal order (#43).** Upgrade mode, then the habit, then awaiting-class, then the class's openness, then sameness: a closed class is named before "already". Re-attuning recomputes no rates, since no credit moves.
+- **Intention line figures (#43).** Progress minutes truncate and hold at the target once met, so an over-target week reads `40 / 40 min this week`, engraved. A migrated `once` Intention reads with no period (`Habit C · 45 / 45 min`); the form offers only today and this week, plus `once` when editing one that already is. Carried-over migration rows keep the old `Keep` choice.
+- **Strip scale (#43).** Each strip's bars scale to its own busiest day; an empty day is a hairline. No figures, no colours, no tooltips: the habit line carries the hours.
+- **Almanac surfaces (#43).** Habits awaiting a class and archived habits aren't listed (the class screen asks first; archived habits keep their history). The Notes surface reuses the flow screen's `Notes` panel, flat and without its own Close. History drops the old `Earned`, `Breather` and `Unlocked` rows (no data on main; `Unlocked` is banned) and renames `Goals advanced` to `Intentions advanced`. The legacy line heads the history list.
+- **Encyclopedia reveal predicates (#44).** Resonance: some oscillator rate has an instance. Charge: some oscillator's `chargeReceived` > 0. Patterns: `grantsOf(...).arrived`. Breather: a banked, running or result breather, so a save holding only a running one still reveals it. Pressure and Prestige stay `false` until chunks 05 and 06. Reveals are appended in authored order within one commit, and the list draws in authored order.
+- **Entry copy (#44).** These are readout lines built from each type's data in `modules.ts` and the chunk-04 rules. Walls name HP, regen and pressure ahead of chunk 05. Pressure's and Prestige's text is written now but stays unrevealed. `readEntry` also works during a session, but only upgrade mode has a door.
+- **Test expectations touched (#44).** The v15 load tests now expect `classes` revealed, because the fixture has completed sessions. The rates-cache test's "no rates in the save" regex now matches keys only, because `"resonance"` can be a revealed entry id.
+- **The pace runner's wall clock (#45).** `PaceTurn` gains `now`, and every `advance` through the turn moves it by its seconds (flow, the upgrade visit and the breather alike), so `takeBreather` gets a real `now`. The player takes the breather after its upgrade-mode visit, then rests before the next session. Breathers are counted as `takeBreather` actions the engine accepted.
+- **The pace tests' opening board (#45).** The hand-worked opening figures (`Era ν: 32 562`) take no breather, so they stay flow ν alone; the breather step has its own tests.
+
+### Flagged readings
+
+Decided where the spec is silent or self-contradictory, by philosophy.md (#37's Further Notes):
+
+- **The Producer ladder.** Agreed with the maintainer: the non-milestone levels alternate +1 Modulator and +1 cable, starting with a Modulator, and skip the milestone. Lv 1 +1 Modulator, Lv 2 +1 cable, Lv 3 Pulsewell, Lv 4 +1 Modulator, Lv 5 +1 cable, then alternating. This matches "Patch +1 at Lv 2 and 5"; mechanics-sketch.md's "odd / even levels" line is corrected to it.
+- **Levels start at Lv 0**, following Roadie's "Lv 0 Blade". The flow screen sketch's `Lv 2 · 1.1h / 1.5h` reads as Lv 1 under these thresholds, and the class line shows the current level.
+- **"No other controls"** on the flow screen means besides `Pause`, `End` and the ported focus apps (the clock and Notes), which the spec keeps.
+- **The honesty report shows only at End**, never on return mid-session, so flow never prompts.
+- **An early-ended breather** pays nothing and returns to the bank (ADR-0073 allows early exit; the glossary says it pays only if completed).
+- **The summary marks a crossed level** (` → Lv 2`).
+- **Habit colours stay in the records but aren't drawn.** Hue means category only.
+- **The `Place a third oscillator` Goal** is state-derived, so it comes back if a player drops below three placed oscillators with allowance for three.
+- **The Pulsewell's patched output is 0.5 charge/s per target**: patched, all of it goes to its one target, as chunk 03's per-target outputs do; unpatched, 0.5 to each of its six neighbours.
+- **One dot, not one per entry (#44).** The spec says "one quiet unseen-dot", so only the door carries it. List rows aren't marked, and the old `Title · Unseen` rows aren't ported. The dot clears once every revealed entry has been opened.
+- **Tap away (#44).** The panel stands in place of the board, as the Almanac does, and a `pointerdown` anywhere outside it closes it. Opening the Encyclopedia closes the Almanac, and the other way round.
+
+### Review fixes
+
+- **The honesty report freezes the session clock.** Once End shows the report, each boundary takes a fresh reading and moves nothing, so time spent reading it credits no practice, class credit or breather length. The clock boundary moved out of `shell.ts` into `clock.ts` (`SessionClock`, with `catchUpSinceSave` and `markTargetIfPassed`, formerly `reconciled` and `marked`). The Begin, Almanac and Encyclopedia panels share one `panel` signal over a `Panel` union, so only one is ever open. `unplacedOf` (`placement.ts`, beside `placedCount`, which `levels.ts` can't import without a cycle) is the tray's and the Ready count's one unplaced-allowance reading, and `wholeMinutes` (`readouts.ts`) is the one truncating minutes formatter. `disclosureOf` dropped its unread `classLevels` flag.
+
+### Pace runner
+
+At the end of the chunk, `npm run pace` (250 credited hours):
+
+```
+Pace run: 300 sessions, 250.0h credited
+Board: 3 oscillators, 1 modulator, 6.17 ν/s, 3.0 charge/s — Sine (0,0), Sine (1,0), Flywheel (0,1) facing NE, Triangle (1,-1), Patch (0,1) → (1,-1)
+Era ν: 7.66e6
+Classes: Engineer Lv 17, Producer Lv 17
+Breathers taken: 300
+
+Milestone                         Reached       Target
+--------------------------------  ------------  -------------------------------------------
+Engineer opens                    0.0h          at the start (0h)
+Producer opens                    0.0h          at the start (0h)
+...
+Engineer level 5                  15.8h         8h on the class
+Producer level 5                  16.7h         8h on the class
+Roadie level 5                    not reached   8h on the class
+Mixer level 5                     not reached   8h on the class
+...
+
+DRY 0.0h–15.8h: 15.8h with no new milestone
+DRY 16.7h–250.0h: 233.3h with no new milestone
+```
+
+- **The first resonance.** The first session is Engineer's: 50 minutes pass 0.5 h, so Engineer Lv 1 grants the third oscillator at 0.8 credited hours, and the greedy player resonates in that same tending visit, laying a Triangle at (1,-1) beside both Sines.
+- **Levels.** Sessions alternate Engineer and Producer, so each class gets half the credit: Lv 5 (8 h on the class) at 15.8 h (Engineer's 10th session, the run's 19th) and 16.7 h (Producer's), both about twice the progression map's 8 h, which counts hours on the class. Both end at Lv 17 (125 h each). The Pulsewell arrives at Producer Lv 3, 6.7 credited hours in.
+- **The board is cell-bound.** The opening's four owned cells fill with the two Sines, the Flywheel and the Triangle at 0.8 h, so every later grant (more oscillators and modulators, the Pulsewell, Square, Saw, Release) stays unplaced until the board owns more cells. The player patches the Flywheel into the Triangle, since that raises ν/s more than its reach into the Sine did. The Flywheel caps at 3 charge/s, and the board holds 6.17 ν/s.
+- **Breathers.** Every 50-minute session banks a 10-minute breather, and the player takes all 300, in full. They raise the era's ν from 5.47e6 (none taken) to 7.66e6, about 40%: the board runs ×2 for a fifth of the flow time.
+- Still no wall falls and nothing spends nous, so outside the two Lv 5 probes the run stays dry; chunk 05 is the next milestone.

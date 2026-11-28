@@ -6,9 +6,11 @@ import { D, fromSave, isNum, NumFault, toSave, type Num } from "./num";
 import { ARCS, openingBoard } from "./board";
 import { cellKey, isFacing, LIFETIME_RADIUS, ring, type Cell } from "./hex";
 import { hasFacing, isModuleType } from "./modules";
-import { isCableType, newCableRefusal } from "./cables";
+import { isCableType, newCableRefusal, type CableRoom } from "./cables";
+import { grantsOf } from "./levels";
+import { emptyEncyclopedia, isEntryId, revealEntries } from "./encyclopedia";
 import { computeBoardRates } from "./rates";
-import type { Arc, Board, Cable, CableType, Game, GameState, Habit, HabitClass, ModuleCategory, ModuleType, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
+import type { Arc, Board, BreatherState, Cable, EncyclopediaState, EntryId, GameState, Habit, HabitClass, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary } from "./types";
 
 // The save boundary. Save v16 (issue #18) writes the nested GameState
 // (`records`, `game`) with every Decimal as num's save string, and reads it
@@ -191,6 +193,7 @@ function readSession(raw: Partial<SessionState>): SessionState {
     targetSignaled: raw.targetSignaled === true,
     startedAt: finiteOr(raw.startedAt, 0),
     goalSeconds: isRecord(raw.goalSeconds) ? raw.goalSeconds : {},
+    nousMade: readLostable(raw.nousMade),
   };
 }
 
@@ -198,10 +201,49 @@ function readSummary(raw: Partial<SessionSummary>): SessionSummary {
   return {
     sessionNumber: finiteOr(raw.sessionNumber, 0),
     seconds: finiteOr(raw.seconds, 0),
+    nous: readLostable(raw.nous),
+    habitClass: readClass(raw.habitClass),
+    classSeconds: finiteOr(raw.classSeconds, 0),
+    levelBefore: finiteOr(raw.levelBefore, 0),
+    levelAfter: finiteOr(raw.levelAfter, 0),
+    breather: positiveOr(raw.breather),
     plannedTarget: typeof raw.plannedTarget === "number" ? raw.plannedTarget : null,
     honestyEvents: Array.isArray(raw.honestyEvents) ? raw.honestyEvents : [],
     reflection: raw.reflection ?? null,
     seen: raw.seen === true,
+  };
+}
+
+// A saved length in seconds: a positive finite figure, or null.
+function positiveOr(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+// The Encyclopedia (issue #44): each set keeps only known entry ids, once
+// each; seen keeps only revealed ones. Missing or unreadable, it is empty,
+// and the load then adds what the state reveals.
+function readEncyclopedia(raw: unknown): EncyclopediaState {
+  const ids = (value: unknown): EntryId[] => (Array.isArray(value) ? [...new Set(value.filter(isEntryId))] : []);
+  const revealed = isRecord(raw) ? ids(raw.revealed) : [];
+  const seen = isRecord(raw) ? ids(raw.seen).filter((id) => revealed.includes(id)) : [];
+  return { revealed, seen };
+}
+
+// The breather (issue #41): each part defaults to none when missing or
+// unreadable. A running breather needs its length; a result its ν.
+function readBreather(raw: unknown): BreatherState {
+  const source = isRecord(raw) ? raw : {};
+  const banked = isRecord(source.banked) ? positiveOr(source.banked.seconds) : null;
+  const running = isRecord(source.running) ? source.running : null;
+  const length = running ? positiveOr(running.seconds) : null;
+  const result = isRecord(source.result) && readableNum(source.result.nous) ? source.result.nous : undefined;
+  return {
+    banked: banked === null ? null : { seconds: banked },
+    running:
+      running && length !== null
+        ? { seconds: length, elapsed: Math.min(length, Math.max(0, finiteOr(running.elapsed, 0))), startedAt: finiteOr(running.startedAt, 0) }
+        : null,
+    result: result === undefined ? null : { nous: readNum(result, D(0)) },
   };
 }
 
@@ -256,7 +298,7 @@ function readSave(text: string, recovery: boolean): LoadResult {
 // The one earlier version this build reads (issue #19 migrates it).
 const LEGACY_VERSION = 15;
 
-const MODES = ["upgrade", "flow", "paused"];
+const MODES = ["upgrade", "flow", "paused", "breather"];
 
 function readClassCredit(raw: unknown): Record<HabitClass, number> {
   const source = isRecord(raw) ? raw : {};
@@ -290,7 +332,7 @@ function readableNum(value: unknown): boolean {
 function lostNestedFigures(game: Record<string, unknown>): string[] {
   const lost: string[] = [];
   if (!readableNum(game.nous)) lost.push("game.nous");
-  if (game.mode !== "upgrade" && isRecord(game.session)) {
+  if ((game.mode === "flow" || game.mode === "paused") && isRecord(game.session)) {
     // A session without its accounting lost its practice facts too.
     if (!isRecord(game.session.accounting)) lost.push("game.session.accounting");
     else if (!readableNum(game.session.accounting.provisionalNous)) lost.push("game.session.accounting.provisionalNous");
@@ -318,14 +360,24 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
   }
   if (lost.length && !recovery) return needsRecovery(lost);
   const fresh = createInitialState();
-  const flowing = game.mode !== "upgrade" && isRecord(game.session);
+  const flowing = (game.mode === "flow" || game.mode === "paused") && isRecord(game.session);
+  const breather = readBreather(game.breather);
+  // A breather mode needs its running breather; without one the game
+  // lands between sessions.
+  const mode = flowing ? (game.mode as GameState["game"]["mode"]) : game.mode === "breather" && breather.running ? "breather" : "upgrade";
+  if (mode !== "breather") breather.running = null;
   const intentions = records.intentions as GameState["records"]["intentions"];
   normalizeIntentions(intentions);
   const board = readBoard(game.board);
-  const cableAllowance = Number.isInteger(game.cableAllowance) && (game.cableAllowance as number) >= 0 ? (game.cableAllowance as number) : fresh.game.cableAllowance;
-  const arrivedCables = readArrivedCables(game.arrivedCables, fresh.game.arrivedCables);
-  board.cables = readCables(isRecord(game.board) ? game.board.cables : undefined, { board, cableAllowance, arrivedCables });
   const classCredit = readClassCredit(records.classCredit);
+  const openClasses = Array.isArray(game.openClasses)
+    ? game.openClasses.map(readClass).filter((c): c is HabitClass => c !== null)
+    : fresh.game.openClasses;
+  // The allowance and arrived types are derived from class credit (issue
+  // #38): a saved `allowance`, `arrived`, `cableAllowance` or
+  // `arrivedCables` is ignored.
+  const { cableAllowance, arrivedCables } = grantsOf({ records: { ...fresh.records, classCredit }, game: { ...fresh.game, openClasses } });
+  board.cables = readCables(isRecord(game.board) ? game.board.cables : undefined, { board, cableAllowance, arrivedCables });
   const state: GameState = {
     records: {
       habits: (records.habits as Habit[]).map(readHabit),
@@ -341,22 +393,19 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
     },
     game: {
       nous: readLostable(game.nous),
-      mode: flowing ? (game.mode as GameState["game"]["mode"]) : "upgrade",
+      mode,
       session: flowing ? readSession(game.session as Partial<SessionState>) : null,
       summary: isRecord(game.summary) ? readSummary(game.summary as Partial<SessionSummary>) : null,
-      openClasses: Array.isArray(game.openClasses)
-        ? game.openClasses.map(readClass).filter((c): c is HabitClass => c !== null)
-        : fresh.game.openClasses,
+      breather,
+      encyclopedia: readEncyclopedia(game.encyclopedia),
+      openClasses,
       legacyLine: typeof game.legacyLine === "string" ? game.legacyLine : null,
       board,
-      allowance: readAllowance(game.allowance, fresh.game.allowance),
-      arrived: readArrived(game.arrived, fresh.game.arrived),
-      cableAllowance,
-      arrivedCables,
       // Recomputed once from the layout; a saved rate is never read.
       rates: computeBoardRates(board, classCredit.producer),
     },
   };
+  revealEntries(state);
   const recovered = recovery && lost.length > 0 ? { fromVersion: version, lost } : undefined;
   return { state, ...(recovered && { recovered }) };
 }
@@ -415,7 +464,7 @@ function readPlacements(raw: unknown, owned: Set<string>): Placement[] {
 // rules a new cable is patched by. A wall in the current arc is a target
 // like an open cell (issue #34). Returns the cables kept; `game` is read,
 // never changed.
-function readCables(raw: unknown, game: Pick<Game, "board" | "cableAllowance" | "arrivedCables">): Cable[] {
+function readCables(raw: unknown, game: CableRoom): Cable[] {
   if (!Array.isArray(raw)) return [];
   const cables: Cable[] = [];
   const reading = { ...game, board: { ...game.board, cables } };
@@ -428,30 +477,6 @@ function readCables(raw: unknown, game: Pick<Game, "board" | "cableAllowance" | 
     if (newCableRefusal(reading, cable) === null) cables.push(cable);
   }
   return cables;
-}
-
-// The saved cable types, then any the opening holds that the save lacks.
-function readArrivedCables(raw: unknown, opening: CableType[]): CableType[] {
-  const saved = Array.isArray(raw) ? raw.filter(isCableType) : [];
-  return [...saved, ...opening].filter((type, index, all) => all.indexOf(type) === index);
-}
-
-function readAllowance(raw: unknown, opening: Record<ModuleCategory, number>): Record<ModuleCategory, number> {
-  const allowance = { ...opening };
-  if (!isRecord(raw)) return allowance;
-  for (const category of Object.keys(allowance) as ModuleCategory[]) {
-    const count = raw[category];
-    if (Number.isInteger(count) && (count as number) >= 0) allowance[category] = count as number;
-  }
-  return allowance;
-}
-
-// The saved arrival order, then any type the opening holds that the save
-// lacks: a type that arrives at the start is never missing, so a chunk-02
-// save gains the Flywheel (issue #31).
-function readArrived(raw: unknown, opening: ModuleType[]): ModuleType[] {
-  const saved = Array.isArray(raw) ? raw.filter(isModuleType) : [];
-  return [...saved, ...opening].filter((module, index, all) => all.indexOf(module) === index);
 }
 
 function needsRecovery(lost: string[]): LoadResult {
@@ -507,10 +532,15 @@ function readV15(raw: Record<string, unknown>, recovery: boolean): LoadResult {
       mode: flowing ? (raw.mode as GameState["game"]["mode"]) : "upgrade",
       session: flowing ? readSession(raw.session as Partial<SessionState>) : null,
       // Only a summary the player has yet to see carries its practice
-      // facts across; a dismissed one is the retired game's leftover.
-      summary: isRecord(raw.summary) && raw.summary.seen !== true ? readSummary(raw.summary as Partial<SessionSummary>) : null,
+      // facts across; a dismissed one is the retired game's leftover. The
+      // retired game's breather allowance banks nothing here.
+      summary: isRecord(raw.summary) && raw.summary.seen !== true ? { ...readSummary(raw.summary as Partial<SessionSummary>), breather: null } : null,
     },
   };
+  // The retired game's Encyclopedia is not carried; the migrated state
+  // reveals its own entries.
+  state.game.encyclopedia = emptyEncyclopedia();
+  revealEntries(state);
   const recovered = recovery && lost.length > 0 ? { fromVersion: LEGACY_VERSION, lost } : undefined;
   return { state, ...(recovered && { recovered }) };
 }

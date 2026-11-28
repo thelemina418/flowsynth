@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyIn, giveOscillators } from "./fixtures";
-import { creditedHoursOf, formatPaceReport, placeAllowanceGreedily, runPace, type MilestoneProbe } from "./pace";
+import { creditedHoursOf, DEFAULT_TENDING, formatPaceReport, placeAllowanceGreedily, runPace, type MilestoneProbe, type PaceTurn } from "./pace";
 import { createInitialState } from "./state";
 
 // The pace runner (spec chunk 01, issue #20): a scripted reasonable player
@@ -51,7 +51,7 @@ describe("dry stretches", () => {
 });
 
 describe("the tending seams", () => {
-  it("places the allowance once before the first session, then calls each named hook once per session, in order", () => {
+  it("places the allowance once before the first session, then per session places, patches, buys faders and takes the breather (ADR-0095)", () => {
     const calls: string[] = [];
     const hook = (name: string) => () => { calls.push(name); };
     runPace({
@@ -64,9 +64,83 @@ describe("the tending seams", () => {
         patchChargeToNearestWall: hook("patch"),
       },
     });
-    expect(calls).toEqual(["allowance", "breathers", "fader", "allowance", "patch"]);
+    expect(calls).toEqual(["allowance", "allowance", "patch", "fader", "breathers"]);
   });
 });
+
+describe("the breather step", () => {
+  it("takes each banked breather in full: take, run it to its length, dismiss the result", () => {
+    // Three 50-minute sessions each bank a 10-minute breather. The player
+    // takes it, runs breather time for its whole 600 s, and lands back in
+    // upgrade mode with the result dismissed.
+    const seen: { mode: string; seconds: number; after: string; result: boolean }[] = [];
+    const report = runPace({
+      creditedHours: 2.5,
+      milestones: [],
+      tending: {
+        takeBankedBreathers: (turn) =>
+          DEFAULT_TENDING.takeBankedBreathers({
+            get state() { return turn.state; },
+            get now() { return turn.now; },
+            apply: (action) => turn.apply(action),
+            advance: (seconds, mode) => {
+              const r = turn.advance(seconds, mode);
+              seen.push({ mode, seconds, after: turn.state.game.mode, result: turn.state.game.breather.result !== null });
+              return r;
+            },
+          }),
+      },
+    });
+    expect(report.sessions).toBe(3);
+    expect(seen).toEqual(Array.from({ length: 3 }, () => ({ mode: "breather", seconds: 600, after: "upgrade", result: true })));
+    expect(report.breathersTaken).toBe(3);
+  });
+
+  it("pays the breather's ν into the era", () => {
+    const without = runPace({ creditedHours: 2.5, milestones: [], tending: { takeBankedBreathers: () => {} } });
+    const taken = runPace({ creditedHours: 2.5, milestones: [] });
+    expect(without.breathersTaken).toBe(0);
+    expect(taken.nous.toNumber()).toBeGreaterThan(without.nous.toNumber());
+  });
+
+  it("prints the breathers taken and each open class's level", () => {
+    // Four 50-minute sessions alternate Engineer and Producer: 100 minutes
+    // each, past 0.5 h and 1.5 h, so both classes read Lv 2.
+    const text = formatPaceReport(runPace({ creditedHours: 3, milestones: [] }));
+    expect(text).toContain("Breathers taken: 4\n");
+    expect(text).toContain("Classes: Engineer Lv 2, Producer Lv 2\n");
+  });
+});
+
+describe("the class-level probes", () => {
+  it("report Engineer and Producer level 5 with the credited hours they were reached at", () => {
+    // Lv 5 is 8 h on the class. Sessions alternate, Engineer first, so
+    // Engineer passes 8 h on its 10th session, the run's 19th (8h20m on
+    // it, 15h50m credited), and Producer on the 20th (16h40m credited).
+    const report = runPace({ creditedHours: 20 });
+    const at = (id: string) => report.milestones.find((m) => m.id === id)!;
+    expect(at("class-level-5:engineer").tracked).toBe(true);
+    expect(at("class-level-5:engineer").reachedAtHours).toBeCloseTo(95 / 6);
+    expect(at("class-level-5:producer").reachedAtHours).toBeCloseTo(50 / 3);
+    expect(at("class-level-5:roadie").reachedAtHours).toBeNull();
+  });
+});
+
+// The greedy placement before the first session only: the board the
+// opening allowance makes, before any class level grants more. No breather
+// is taken, so the era's ν is flow ν alone.
+function openingOnly(): { tending: { placeAllowance: (turn: PaceTurn) => void; takeBankedBreathers: () => void } } {
+  let first = true;
+  return {
+    tending: {
+      placeAllowance: (turn) => {
+        if (first) placeAllowanceGreedily(turn);
+        first = false;
+      },
+      takeBankedBreathers: () => {},
+    },
+  };
+}
 
 describe("placing the allowance", () => {
   it("places the opening allowance, and the report gives the board's ν/s and the era's ν", () => {
@@ -75,11 +149,19 @@ describe("placing the allowance", () => {
     // Producer, and the Flywheel's 1 charge/s grows by 0.1 per Producer hour
     // when a session ends: sessions 1–2 run at 2 + ln 2 ν/s, sessions 3–4
     // at 2 + ln(2 + 1/12), each 3000 s. The board ends at 2 + ln(2 + 1/6).
-    const report = runPace({ creditedHours: 3 });
+    const report = runPace({ creditedHours: 3, ...openingOnly() });
     expect(report.sessions).toBe(4);
     expect(report.placements).toHaveLength(3);
     expect(report.rate.toNumber()).toBeCloseTo(2.77319, 4);
     expect(report.nous.toNumber()).toBeCloseTo(32_562.7, 0);
+  });
+
+  it("places the third oscillator Engineer Lv 1 grants after the first session, and resonates (issue #38)", () => {
+    // One 50-minute Engineer session passes 0.5 h: Lv 1, a third
+    // oscillator. The greedy player lays a Triangle beside both Sines.
+    const report = runPace({ creditedHours: 0.1 });
+    expect(report.placements.filter((p) => p.module !== "flywheel")).toHaveLength(3);
+    expect(report.rate.toNumber()).toBeGreaterThan(3);
   });
 
   it("finds a resonating layout given allowance 3", () => {
@@ -92,7 +174,7 @@ describe("placing the allowance", () => {
   });
 
   it("prints the board's ν/s, its charge/s, its layout and the era's ν", () => {
-    const text = formatPaceReport(runPace({ creditedHours: 3 }));
+    const text = formatPaceReport(runPace({ creditedHours: 3, ...openingOnly() }));
     // Rates read as the Hex detail reads them, truncated: 2.773… ν/s, and
     // the Flywheel's 1 + 0.1 × 5/3 Producer hours = 1.166… charge/s.
     expect(text).toContain(
@@ -107,7 +189,7 @@ describe("placing the allowance", () => {
     const start = createInitialState();
     applyIn(start, { type: "placeModule", module: "flywheel", cell: { q: 0, r: 1 } });
     applyIn(start, { type: "patchCable", cable: "patch", source: { q: 0, r: 1 }, target: { q: -1, r: 1 } });
-    const text = formatPaceReport(runPace({ creditedHours: 0.1, start }));
+    const text = formatPaceReport(runPace({ creditedHours: 0.1, start, ...openingOnly() }));
     expect(text).toContain(
       "Board: 2 oscillators, 1 modulator, 2.0 ν/s, 1.0 charge/s, Shale 1.0 damage/s — Flywheel (0,1) facing NE, Sine (0,0), Sine (1,0), Patch (0,1) → (-1,1)\n",
     );
@@ -118,7 +200,7 @@ describe("placing the allowance", () => {
     // from either cell left the Flywheel's reach meets one Sine at most.
     // That Sine's charge factor is 1 + ln 2 at 1 charge/s, so the board
     // makes 1 + 1.693… ν/s before the first session.
-    const report = runPace({ creditedHours: 0.1 });
+    const report = runPace({ creditedHours: 0.1, ...openingOnly() });
     expect(report.placements).toEqual([
       { cell: { q: 0, r: 0 }, module: "sine" },
       { cell: { q: 1, r: 0 }, module: "sine" },
@@ -131,7 +213,7 @@ describe("placing the allowance", () => {
     // Patched, the Flywheel would deliver to one cell in place of its
     // reach: at best the same Sine, which raises nothing, and a wall, which
     // lowers ν/s. Wall-seeking is chunk 05's.
-    const report = runPace({ creditedHours: 0.1 });
+    const report = runPace({ creditedHours: 0.1, ...openingOnly() });
     expect(report.cables).toEqual([]);
   });
 
@@ -140,7 +222,7 @@ describe("placing the allowance", () => {
     // The Sines take (0,0) and (1,0); a Patch onto either gives it 1 + ln 2.
     const start = createInitialState();
     applyIn(start, { type: "placeModule", module: "flywheel", cell: { q: 1, r: -1 } });
-    const report = runPace({ creditedHours: 0.1, start });
+    const report = runPace({ creditedHours: 0.1, start, ...openingOnly() });
     expect(report.cables).toHaveLength(1);
     const [cable] = report.cables;
     expect(cable!.type).toBe("patch");
@@ -159,6 +241,7 @@ describe("placing the allowance", () => {
         placeAllowance: (turn) =>
           placeAllowanceGreedily({
             get state() { return turn.state; },
+            get now() { return turn.now; },
             apply: (action) => { const r = turn.apply(action); results.push(r.ok); return r; },
             advance: (s, m) => turn.advance(s, m),
           }),
