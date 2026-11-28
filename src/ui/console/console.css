@@ -70,3 +70,16 @@
 
 .fader[data-muted] .fader-throw { border-color: var(--line-soft); }
 .fader[data-muted] .fader-fill { opacity: 0.45; }
+
+/* The master section (issue #63) is in the Arete register: its throws
+   fill in Arete, never a category hue, an affordable one is outlined in
+   Arete, and each carries its one effect line beneath the readout. */
+.fader[data-master] .fader-fill { background: var(--arete); }
+.fader[data-master]:not([data-muted]) { border-color: var(--arete-line); }
+
+.fader-effect {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: nowrap;
+}

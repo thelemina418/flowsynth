@@ -254,6 +254,18 @@ describe("recomputing the board's rates", () => {
     expect(counted).not.toHaveBeenCalled();
   });
 
+  it("recomputes once for a master purchase, and never for a refused one (issue #63)", () => {
+    const s = acceptanceLayout();
+    s.game.prestiges = 1;
+    s.game.arete = D(1);
+    counted.mockClear();
+    applyIn(s, { type: "buyFader", fader: { kind: "master", id: "drive" } });
+    expect(counted).toHaveBeenCalledTimes(1);
+    counted.mockClear();
+    applyIn(s, { type: "buyFader", fader: { kind: "master", id: "drive" } });
+    expect(counted).not.toHaveBeenCalled();
+  });
+
   it("recomputes once for a prestige, and never for a refused one (issue #62)", () => {
     const s = acceptanceLayout();
     s.game.eraNous = D(999_999);

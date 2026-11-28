@@ -2,7 +2,7 @@ import { cellKind } from "./board";
 import { addCell, cellKey, DIRECTIONS, neighbours, sameCell, type Cell } from "./hex";
 import { add, D, div, gt, ln, max, min, mul, pow, sub, type Num } from "./num";
 import { armRole, baseRate, breatherBaseRate, damagePerCharge, hasFacing, isArm, isModulator, isOscillator, outputOf, patternOf, reachOf, takesCharge } from "./modules";
-import { emptyConsole, faderMultiplier } from "./console";
+import { driveMultiplier, emptyConsole, faderMultiplier } from "./console";
 import { wallOf } from "./map";
 import { cableFrom, moduleAt } from "./placement";
 import { instancesOf } from "./resonance";
@@ -186,6 +186,8 @@ export function computeBoardRates(board: Board, producerSeconds: number, console
   const oscillators: OscillatorRate[] = [];
   let total = D(0);
   let breatherSum = D(0);
+  // The master section's Drive (issue #63) multiplies every oscillator's ν.
+  const drive = driveMultiplier(console);
   for (const placement of board.placements) {
     const module = placement.module;
     if (!isOscillator(module)) continue;
@@ -196,9 +198,10 @@ export function computeBoardRates(board: Board, producerSeconds: number, console
     const chargeReceived = received.get(cellKey(placement.cell)) ?? D(0);
     const charge = chargeFactor(chargeReceived);
     // The type's channel fader (issue #58) times its category bus (#60),
-    // times a shielding Guard Plate's (issue #59). Pressure (issue #52)
-    // reduces ν only: modulator output and wall damage ignore it.
-    const faders = mul(faderMultiplier(console, module), shielding.get(cellKey(placement.cell)) ?? 1);
+    // times a shielding Guard Plate's (issue #59), times Drive (#63).
+    // Pressure (issue #52) reduces ν only: modulator output and wall
+    // damage ignore it.
+    const faders = mul(mul(faderMultiplier(console, module), shielding.get(cellKey(placement.cell)) ?? 1), drive);
     const pressure = pressureOn(board, placement.cell, guarded);
     const product = (b: Num): Num => mul(mul(mul(mul(b, resonance), charge), faders), sub(1, pressure));
     const rate = product(base);

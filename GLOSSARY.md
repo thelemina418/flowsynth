@@ -117,8 +117,20 @@ One console upgrade. Its throw shows its level.
 _Avoid_: Upgrade button, perk, node
 
 **Arete**:
-The prestige currency. It is earned when an era ends and spent on the Arete row.
+The prestige currency. It is earned when an era ends and spent on the master section.
 _Avoid_: Prestige points
+
+**Master section**:
+The console's Arete faders, shown from the first prestige on. Their levels survive every prestige. It holds Channel Taper, Bus Taper and Drive.
+_Avoid_: Arete row, prestige shop, perks
+
+**Taper**:
+A master fader that makes one section's fader costs grow more slowly: **Channel Taper** for the channel faders, **Bus Taper** for the bus faders.
+_Avoid_: Discount, cost reduction
+
+**Drive**:
+The master fader that multiplies all oscillator ν.
+_Avoid_: Global multiplier
 
 **Era**:
 The span between prestiges. Prestige resets only nous and fader levels; the board, cables, class levels and allowance stay.

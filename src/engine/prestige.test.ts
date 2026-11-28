@@ -64,7 +64,7 @@ describe("a prestige", () => {
     const after = cloneState(s);
     advanceIn(s, 1e6, "upgrade");
     expect(s).toEqual(after);
-    const bare = computeBoardRates(s.game.board, s.records.classCredit.producer, { channels: {}, buses: {}, shown: s.game.console.shown }).total.toNumber();
+    const bare = computeBoardRates(s.game.board, s.records.classCredit.producer, { channels: {}, buses: {}, master: {}, shown: s.game.console.shown }).total.toNumber();
     expect(bare).toBeGreaterThan(0);
     expect(bare).toBeLessThan(faded);
     expect(s.game.rates.total.toNumber()).toBe(bare);

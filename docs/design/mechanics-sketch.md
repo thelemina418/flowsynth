@@ -87,7 +87,11 @@ An Arm must sit on a cell that borders a wall. If it doesn't, it does nothing an
 
 - Available once the era's ν reaches 1e6.
 - Arete gained = `floor(sqrt(era ν / 1e6))`.
-- The master section (Arete): faders that make channel and bus costs grow more slowly, and one fader that multiplies all ν. The builder authors 3–5 master faders.
+- The master section (Arete): faders that make channel and bus costs grow more slowly, and one fader that multiplies all ν. The builder authors 3–5 master faders. Shown from the first prestige on; levels survive every prestige. Three are authored:
+  - **Channel Taper** (`channel growth −0.03`): each level takes 0.03 off the channel faders' growth, 1.6 down to 1.30 (cap: level 10). The reduced growth applies over the whole curve, `base × g^level`, so a level lowers every channel fader's next cost at once.
+  - **Bus Taper** (`bus growth −0.03`): the same for the bus faders.
+  - **Drive** (`oscillator ν ×1.5`): each level multiplies all oscillator ν, flow and breather, by ×1.5. Uncapped.
+  - Each costs `level + 1` Arete. Click buys +1; shift-click buys the most affordable. A capped fader reads `max` in place of its cost.
 - It resets ν and fader levels only (ADR-0093).
 
 ## Sessions and breathers

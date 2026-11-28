@@ -418,9 +418,14 @@ export interface BoardRates {
 // affordable and never flips back (engine/console.ts). Each category's bus
 // level (absent = 0, issue #60) has its own flag: `shown.buses` flips the
 // first time a bus fader is affordable.
+// The master section's faders (issue #63), bought with Arete.
+export type MasterId = "channelTaper" | "busTaper" | "drive";
+
 export interface ConsoleState {
   channels: Partial<Record<ModuleType, number>>;
   buses: Partial<Record<ModuleCategory, number>>;
+  // The master levels (issue #63): prestige never resets them.
+  master: Partial<Record<MasterId, number>>;
   shown: { console: boolean; buses: boolean };
 }
 

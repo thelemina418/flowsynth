@@ -103,7 +103,7 @@ describe("wall HP in a v16 save", () => {
     const game = file.state.game;
     // The bus section (issue #60) shows with the console here: a save whose
     // ν affords a fader at all reaches a bus fader's 5 000 too.
-    expect(game.console).toEqual({ channels: {}, buses: {}, shown: { console: consoleShown, buses: consoleShown } });
+    expect(game.console).toEqual({ channels: {}, buses: {}, master: {}, shown: { console: consoleShown, buses: consoleShown } });
     delete game.console;
     // The era's ν (issue #61): the save's ν, since nothing was spendable before.
     expect(game.eraNous).toBe(game.nous);

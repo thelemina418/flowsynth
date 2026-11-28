@@ -11,7 +11,7 @@ import { isCableType, newCableRefusal, type CableRoom } from "./cables";
 import { grantsOf } from "./levels";
 import { emptyEncyclopedia, isEntryId, revealEntries } from "./encyclopedia";
 import { computeBoardRates } from "./rates";
-import { discloseConsole, emptyConsole } from "./console";
+import { discloseConsole, emptyConsole, isMasterId, masterCap } from "./console";
 import type { Arc, Board, BreatherState, Cable, ConsoleState, EncyclopediaState, EntryId, GameState, Habit, HabitClass, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary, SummaryWall, WallHp } from "./types";
 
 // The save boundary. Save v16 (issue #18) writes the nested GameState
@@ -480,6 +480,13 @@ function readConsole(raw: unknown): ConsoleState {
   // The bus levels and their own flag (issue #60), read the same way.
   for (const [category, level] of levelEntries(raw.buses)) {
     if (isModuleCategory(category)) console.buses[category] = level;
+  }
+  // The master levels (issue #63): an unknown id is dropped, and a level
+  // past its fader's cap reads as the cap.
+  for (const [id, level] of levelEntries(raw.master)) {
+    if (!isMasterId(id)) continue;
+    const cap = masterCap(id);
+    console.master[id] = cap === null ? level : Math.min(level, cap);
   }
   if (isRecord(raw.shown) && raw.shown.console === true) console.shown.console = true;
   if (isRecord(raw.shown) && raw.shown.buses === true) console.shown.buses = true;
