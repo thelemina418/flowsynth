@@ -181,6 +181,26 @@ describe("recomputing the board's rates", () => {
     expect(counted).not.toHaveBeenCalled();
   });
 
+  it("a conquest mid-breather recomputes once, at its instant (issue #51)", () => {
+    const s = fresh();
+    applyIn(s, { type: "placeModule", module: "flywheel", cell: { q: 0, r: 0 } });
+    applyIn(s, { type: "placeModule", module: "sine", cell: { q: 0, r: 1 } });
+    giveHabit(s, "Piano", "engineer");
+    begin(s, 3000, 0);
+    advanceIn(s, 3000, "flow");
+    applyIn(s, { type: "endSession", now: 0 });
+    applyIn(s, { type: "dismissSummary" });
+    // A 10-minute breather; at 2 × 1.0/s − 0.1/s Shale falls at 600 ÷ 1.9 s.
+    expect(applyIn(s, { type: "patchCable", cable: "patch", source: { q: 0, r: 0 }, target: { q: -1, r: 1 } }).ok).toBe(true);
+    expect(applyIn(s, { type: "takeBreather", now: 0 }).ok).toBe(true);
+    counted.mockClear();
+    advanceIn(s, 300, "breather");
+    expect(counted).not.toHaveBeenCalled();
+    advanceIn(s, 300, "breather");
+    expect(isOpen(s.game.board, { q: -1, r: 1 })).toBe(true);
+    expect(counted).toHaveBeenCalledTimes(1);
+  });
+
   it("two walls falling at the same instant are conquered together, with one recompute (issue #49)", () => {
     const s = fresh();
     giveProducer(s, { modulators: 2, cables: 2 });

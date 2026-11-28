@@ -33,6 +33,10 @@ export interface SessionAccounting {
   // time, held aside until the honesty report settles it. Didn't-practice
   // drops it; either other answer banks it into nous.
   provisionalNous: Num;
+  // The provisional wall seconds (issue #51): provisional time moves no
+  // wall, so its seconds are held here beside the provisional ν. A
+  // non-missed answer runs them through the wall step; `missed` drops them.
+  wallSeconds: number;
 }
 
 export interface SessionState {
@@ -194,7 +198,8 @@ export type FocusApp = "habit" | "time" | "notes";
 export interface BreatherState {
   banked: { seconds: number } | null;
   running: { seconds: number; elapsed: number; startedAt: number } | null;
-  result: { nous: Num } | null;
+  // The breather's ν and the walls it fought (issue #51).
+  result: { nous: Num; walls: SummaryWall[] } | null;
 }
 
 // The Encyclopedia's entries (spec chunk 04, issue #44).

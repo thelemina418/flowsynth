@@ -176,13 +176,17 @@ function readHabit(raw: Habit): Habit {
 }
 
 // A v15 session holds its provisional nous as `bucketNous`.
+// An older save's held wall seconds are the pool's (issue #51): it banked
+// provisional ν for the whole pool the same way.
 function readAccounting(raw: Partial<SessionAccounting> & { bucketNous?: unknown }): SessionAccounting {
+  const poolSeconds = finiteOr(raw.poolSeconds, 0);
   return {
     creditedSeconds: finiteOr(raw.creditedSeconds, 0),
-    poolSeconds: finiteOr(raw.poolSeconds, 0),
+    poolSeconds,
     pendingAwaySeconds: finiteOr(raw.pendingAwaySeconds, 0),
     events: Array.isArray(raw.events) ? raw.events : [],
     provisionalNous: readLostable(raw.provisionalNous ?? raw.bucketNous),
+    wallSeconds: Math.max(0, finiteOr(raw.wallSeconds, poolSeconds)),
   };
 }
 
@@ -265,7 +269,7 @@ function readBreather(raw: unknown): BreatherState {
       running && length !== null
         ? { seconds: length, elapsed: Math.min(length, Math.max(0, finiteOr(running.elapsed, 0))), startedAt: finiteOr(running.startedAt, 0) }
         : null,
-    result: result === undefined ? null : { nous: readNum(result, D(0)) },
+    result: result === undefined ? null : { nous: readNum(result, D(0)), walls: readTally(isRecord(source.result) ? source.result.walls : undefined) },
   };
 }
 
