@@ -274,3 +274,19 @@
 .breather-clock { color: var(--ink); }
 .summary-breather { font-size: 13px; color: var(--muted); }
 .shell-transport { gap: 8px; }
+
+/* The prestige confirmation (issue #62): a small panel over the board,
+   which stays in view beneath a dimmed scrim. */
+.prestige-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+
+.prestige-confirm { width: min(100%, 380px); }
+.prestige-label { color: var(--muted); }
+.prestige-gain { color: var(--arete); }

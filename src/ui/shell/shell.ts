@@ -335,6 +335,25 @@ export class Shell {
     this.act({ type: "buyFader", fader, max });
   }
 
+  // The prestige confirmation (issue #62), open over the board in upgrade
+  // mode. It carries no amount: confirming applies `prestige`, which works
+  // out the Arete from the state at that moment. Cancel and a refusal
+  // change nothing.
+  readonly confirmingPrestige = signal(false);
+
+  openPrestige(): void {
+    if (this.state.peek().game.mode === "upgrade") this.confirmingPrestige.value = true;
+  }
+
+  cancelPrestige(): void {
+    this.confirmingPrestige.value = false;
+  }
+
+  prestige(): void {
+    this.confirmingPrestige.value = false;
+    this.act({ type: "prestige" });
+  }
+
   // The one path for an action: apply, adopt and save on success. A
   // refusal leaves the state as it was.
   act(action: Action): ApplyResult {

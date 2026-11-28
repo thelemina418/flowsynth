@@ -108,6 +108,10 @@ describe("wall HP in a v16 save", () => {
     // The era's ν (issue #61): the save's ν, since nothing was spendable before.
     expect(game.eraNous).toBe(game.nous);
     delete game.eraNous;
+    // No Arete and no prestige yet (issue #62).
+    expect([game.arete, game.prestiges]).toEqual(["0", 0]);
+    delete game.arete;
+    delete game.prestiges;
     for (const holder of [game.board, game.session, game.summary, game.breather.result].filter((h) => h !== null)) {
       expect(holder.walls).toEqual([]);
       delete holder.walls;

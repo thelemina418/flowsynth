@@ -47,7 +47,7 @@ export function FlowScreen({ shell, error }: { shell: Shell; error: string | nul
         console={<Console state={state} live={false} onBuy={() => undefined} />}
         readouts={
           <div class="flow-readouts">
-            <NousReadout nous={game.nous} />
+            <NousReadout nous={game.nous} arete={game.prestiges > 0 ? game.arete : null} />
             <div class="flow-right">
               {line !== null && (
                 <p class="flow-class mono" data-class-line="">

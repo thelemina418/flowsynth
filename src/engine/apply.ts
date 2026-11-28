@@ -5,6 +5,7 @@ import { addPracticeLog, archiveHabit, chooseHabitClass, createHabit, reattuneHa
 import { createIntention, deleteIntention, editIntention, retainIntentionChoice, rollIntentionOccurrences } from "./intentions";
 import { readEntry, revealEntries } from "./encyclopedia";
 import { buyFader, discloseConsole, type FaderId } from "./console";
+import { prestige } from "./era";
 import { writeNote } from "./notes";
 import { recable, type CableAction } from "./cables";
 import { relayout, type PlacementAction } from "./placement";
@@ -51,6 +52,10 @@ export type Action =
   // The console (issue #58), in upgrade mode only: one level, or with
   // `max` as many as ν affords.
   | { type: "buyFader"; fader: FaderId; max?: boolean }
+  // Prestige (issue #62), in upgrade mode at 1e6 era ν. The Arete is
+  // worked out from the state at that moment, never carried in, so a
+  // stale confirmation never banks an old amount.
+  | { type: "prestige" }
   // The board, in upgrade mode only (issues #25, #31, #33).
   | PlacementAction
   | CableAction;
@@ -125,6 +130,8 @@ function run(state: GameState, action: Action): Step {
       return relaid(state, relayout(state, action));
     case "buyFader":
       return relaid(state, buyFader(state, action.fader, action.max === true));
+    case "prestige":
+      return relaid(state, prestige(state));
     case "patchCable":
     case "repatchCable":
     case "unplugCable":
@@ -133,7 +140,7 @@ function run(state: GameState, action: Action): Step {
 }
 
 // A layout, facing or cable change recomputes the board's rates once (issue #26),
-// and so does a fader purchase (issue #58),
+// and so does a fader purchase (issue #58) and a prestige (issue #62),
 // and so does a session's end or a class choice that credits Producer
 // time, so the Flywheel picks up that Producer credit (issue #32); a refusal changed nothing, so it recomputes
 // nothing.

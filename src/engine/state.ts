@@ -25,6 +25,8 @@ export function createInitialState(): GameState {
     game: {
       nous: D(0),
       eraNous: D(0),
+      arete: D(0),
+      prestiges: 0,
       mode: "upgrade",
       session: null,
       summary: null,

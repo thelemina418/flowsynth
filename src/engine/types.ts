@@ -430,6 +430,10 @@ export interface Game {
   // The era's ν (issue #61): everything made since the era began.
   // Spending never lowers it (engine/era.ts).
   eraNous: Num;
+  // The Arete banked by prestiges (issue #62; ADR-0039), and how many
+  // prestiges have ended an era. Prestige never resets either.
+  arete: Num;
+  prestiges: number;
   mode: Mode;
   session: SessionState | null;
   summary: SessionSummary | null;

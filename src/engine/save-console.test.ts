@@ -62,6 +62,10 @@ describe("the console in a v16 save", () => {
     // The era's ν (issue #61) is named too: the save's own ν.
     expect(reread.state.game.eraNous).toBe(fixture.state.game.nous);
     delete reread.state.game.eraNous;
+    // No Arete and no prestige yet (issue #62).
+    expect([reread.state.game.arete, reread.state.game.prestiges]).toEqual(["0", 0]);
+    delete reread.state.game.arete;
+    delete reread.state.game.prestiges;
     expect(reread).toEqual(fixture);
   });
 

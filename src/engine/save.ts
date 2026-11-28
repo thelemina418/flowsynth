@@ -376,6 +376,20 @@ function readEraNous(value: unknown, nous: Num): Num {
   return Number.isFinite(era.mag) && gte(era, 0) ? era : nous;
 }
 
+// The banked Arete and the prestige count (issue #62). A save from before
+// the first prestige has neither. An Arete that is unreadable, non-finite
+// or negative reads as 0, and so does a count that isn't a non-negative
+// whole number.
+function readArete(value: unknown): Num {
+  if (value === undefined || !readableNum(value)) return D(0);
+  const arete = readNum(value, D(0));
+  return Number.isFinite(arete.mag) && gte(arete, 0) ? arete : D(0);
+}
+
+function readPrestiges(value: unknown): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
 // Under recovery a lost figure starts at zero; otherwise it was refused
 // before this read.
 function readLostable(value: unknown): Num {
@@ -432,6 +446,8 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
     game: {
       nous,
       eraNous: readEraNous(game.eraNous, nous),
+      arete: readArete(game.arete),
+      prestiges: readPrestiges(game.prestiges),
       mode,
       session: flowing ? readSession(game.session as Partial<SessionState>) : null,
       summary: isRecord(game.summary) ? readSummary(game.summary as Partial<SessionSummary>) : null,

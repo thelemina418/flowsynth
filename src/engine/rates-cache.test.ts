@@ -254,6 +254,18 @@ describe("recomputing the board's rates", () => {
     expect(counted).not.toHaveBeenCalled();
   });
 
+  it("recomputes once for a prestige, and never for a refused one (issue #62)", () => {
+    const s = acceptanceLayout();
+    s.game.eraNous = D(999_999);
+    counted.mockClear();
+    applyIn(s, { type: "prestige" });
+    expect(counted).not.toHaveBeenCalled();
+    s.game.eraNous = D(1e6);
+    applyIn(s, { type: "prestige" });
+    expect(counted).toHaveBeenCalledTimes(1);
+    expect(s.game.prestiges).toBe(1);
+  });
+
   it("recomputes once on load, from the layout, and never writes the rates to the save", () => {
     const s = acceptanceLayout();
     const text = serialize(s, 0);

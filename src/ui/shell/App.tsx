@@ -17,6 +17,8 @@ import { RecoveryChoice } from "./RecoveryChoice";
 import { downloadSave } from "./download";
 import { Stage } from "../board/Stage";
 import { Console } from "../console/Console";
+import { prestigeGainOf } from "../../engine/era";
+import { PrestigeConfirm } from "./PrestigeConfirm";
 
 // The shell's one surface (issue #21): the question owed on first load,
 // and once nothing is owed, the board and its tray (issues #24, #25),
@@ -32,6 +34,10 @@ export function App({ shell }: { shell: Shell }) {
   const game = state.game;
   const grants = grantsOf(state);
   const shown = disclosureOf(state);
+  const goal = goalOf(state);
+  // The Prestige Goal opens its confirmation (issue #62).
+  const prestigeGoal = goal === "Prestige" && game.mode === "upgrade";
+  const arete = game.prestiges > 0 ? game.arete : null;
   return (
     <div class="shell">
       <h1 class="sr-only">FlowSynth</h1>
@@ -64,11 +70,16 @@ export function App({ shell }: { shell: Shell }) {
           arrivedCables={grants.arrivedCables}
           unplaced={unplacedOf(state)}
           chips={shown.chips}
-          goal={goalOf(state)}
+          goal={goal}
+          onGoal={prestigeGoal ? () => shell.openPrestige() : undefined}
+          arete={arete}
           placing={shell.placing}
           inspected={shell.inspected}
           console={<Console state={state} live={game.mode === "upgrade"} onBuy={(fader, max) => shell.buyFader(fader, max)} />}
         />
+      )}
+      {screen.kind === "ready" && prestigeGoal && shell.confirmingPrestige.value && (
+        <PrestigeConfirm gain={prestigeGainOf(state)} onCancel={() => shell.cancelPrestige()} onConfirm={() => shell.prestige()} />
       )}
       {screen.kind === "ready" && (
         <div class="shell-transport">
