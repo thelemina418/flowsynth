@@ -33,17 +33,39 @@ const read = (s: GameState, cell: Cell) => hexDetail(s.game.board, s.game.rates,
 const texts = (s: GameState, cell: Cell) => read(s, cell).map((line) => line.text);
 
 describe("the Hex detail readout", () => {
-  it("reads the acceptance layout's Triangle at ×1.75 resonance and 1.75 ν/s", () => {
+  it("reads the acceptance layout's Triangle at ×1.75 resonance, under the opening's 34% pressure", () => {
     expect(texts(laid(ACCEPTANCE), { q: 1, r: 0 })).toEqual([
       "Triangle · Oscillator",
       "Resonating ×1 · closes Sine–Triangle",
-      "1.0 ν/s base · ×1.75 resonance",
-      "1.75 ν/s",
+      "1.0 ν/s base · ×1.75 resonance · −34% pressure",
+      "1.15 ν/s",
     ]);
   });
 
-  it("reads a non-resonating Sine with what it needs and its base rate alone", () => {
-    expect(texts(laid(ACCEPTANCE), { q: 0, r: 0 })).toEqual(["Sine · Oscillator", "Not resonating · needs Triangles on opposite sides", "1.0 ν/s"]);
+  it("reads a non-resonating Sine with what it needs, its base and its pressure leg (issue #52)", () => {
+    expect(texts(laid(ACCEPTANCE), { q: 0, r: 0 })).toEqual([
+      "Sine · Oscillator",
+      "Not resonating · needs Triangles on opposite sides",
+      "1.0 ν/s base · −29% pressure",
+      "0.71 ν/s",
+    ]);
+  });
+
+  it("leaves the pressure leg out of an oscillator no wall presses on", () => {
+    // (0,1)'s bordering walls owned, as a conquest leaves them, all but none.
+    const s = createInitialState();
+    for (const [q, r] of [[1, 1], [0, 2], [-1, 2], [-1, 1]]) s.game.board.open.push({ q, r });
+    const placed = apply(s, { type: "placeModule", module: "sine", cell: { q: 0, r: 1 } }).state;
+    expect(texts(placed, { q: 0, r: 1 })).toEqual(["Sine · Oscillator", "Not resonating · needs Triangles on opposite sides", "1.0 ν/s"]);
+  });
+
+  it("reads a wall's pressure on the modules it reduces: Shale on 2, the doubled Basalt on 1 (issue #52)", () => {
+    const s = laid(ACCEPTANCE);
+    expect(texts(s, { q: -1, r: 1 })).toEqual(["Shale · Wall · ring 1", "600 / 600 HP · regen 0.1/s", "Pressure 5% on 2 modules"]);
+    expect(texts(s, { q: -1, r: 0 })).toEqual(["Basalt · Wall · ring 1", `6${T}000 / 6${T}000 HP · regen 1.0/s`, "Pressure ×2", "Pressure 16% on 1 module"]);
+    // A modulator beside a wall isn't reduced, so it isn't counted.
+    const flywheel = laid([["flywheel", 0, 0]]);
+    expect(texts(flywheel, { q: -1, r: 1 })).toContain("Pressure 5%");
   });
 
   it("reads an empty open cell and a dark cell in one terse line each, and a dark cell names no kind", () => {
@@ -84,10 +106,11 @@ describe("the Hex detail readout", () => {
   });
 
   it("reads a Release as making nothing in flow", () => {
-    expect(texts(laid([["release", 0, 0]]), { q: 0, r: 0 })).toEqual(["Release · Oscillator", "No resonance pattern", "0.0 ν/s"]);
+    // Its pressure still shows: breather rates take it (issue #52).
+    expect(texts(laid([["release", 0, 0]]), { q: 0, r: 0 })).toEqual(["Release · Oscillator", "No resonance pattern", "0.0 ν/s base · −29% pressure", "0.0 ν/s"]);
   });
 
-  it("keeps every cell kind to five lines with at most one effect line, and no charge leg or pressure leg on a module", () => {
+  it("keeps every cell kind to five lines with at most one effect line, and no charge leg or fader leg on a module", () => {
     const s = laid(ACCEPTANCE);
     const cells: Cell[] = [
       { q: 1, r: 0 },
@@ -103,7 +126,7 @@ describe("the Hex detail readout", () => {
       expect(lines.length).toBeGreaterThanOrEqual(1);
       expect(lines.length).toBeLessThanOrEqual(5);
       expect(lines.filter((l) => l.effect).length).toBeLessThanOrEqual(1);
-      if (s.game.board.open.some((o) => o.q === cell.q && o.r === cell.r)) expect(lines.map((l) => l.text).join("\n")).not.toMatch(/charge|fader|pressure/i);
+      if (s.game.board.open.some((o) => o.q === cell.q && o.r === cell.r)) expect(lines.map((l) => l.text).join("\n")).not.toMatch(/charge|fader/i);
     }
   });
 });

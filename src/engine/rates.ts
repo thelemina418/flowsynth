@@ -1,5 +1,5 @@
 import { cellKind } from "./board";
-import { addCell, cellKey, DIRECTIONS, type Cell } from "./hex";
+import { addCell, cellKey, DIRECTIONS, neighbours, type Cell } from "./hex";
 import { add, D, div, gt, ln, min, mul, pow, sub, type Num } from "./num";
 import { baseRate, breatherBaseRate, damagePerCharge, hasFacing, isArm, isModulator, isOscillator, outputOf, patternOf, reachOf, takesCharge } from "./modules";
 import { wallAt } from "./map";
@@ -45,6 +45,27 @@ function holdsAt(board: Board, cell: Cell): ReachHolds {
   const kind = cellKind(board, cell);
   if (kind !== "open") return kind;
   return moduleAt(board, cell)?.module ?? "empty";
+}
+
+// The pressure cap (mechanics-sketch.md, Rates): a crowded corner hurts
+// but never shuts an oscillator off.
+const PRESSURE_CAP = 0.6;
+
+// The pressure one wall exerts on each module bordering it, doubled for
+// `Pressure ×2` (issue #52). Shared with the Hex detail's wall line.
+export function wallPressure(cell: Cell): number {
+  const wall = wallAt(cell)!;
+  return wall.pressure * (wall.modifier === "pressureDouble" ? 2 : 1);
+}
+
+// The pressure on a cell: the sum over its bordering walls inside the
+// arc, capped. A pure derivation from the board's cell kinds, so a dark
+// cell presses on nothing and a conquered (open) cell stops pressing at
+// once (issue #52).
+function pressureOn(board: Board, cell: Cell): Num {
+  let sum = 0;
+  for (const n of neighbours(cell)) if (cellKind(board, n) === "wall") sum += wallPressure(n);
+  return D(Math.min(sum, PRESSURE_CAP));
 }
 
 // A board with no module placed.
@@ -120,9 +141,10 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
     const resonance = resonanceFactor(strength, instances.length);
     const chargeReceived = received.get(cellKey(placement.cell)) ?? D(0);
     const charge = chargeFactor(chargeReceived);
-    // Identity legs until chunks 06 (faders) and 05 (pressure).
+    // Faders are an identity leg until chunk 06. Pressure (issue #52)
+    // reduces ν only: modulator output and wall damage ignore it.
     const faders = D(1);
-    const pressure = D(0);
+    const pressure = pressureOn(board, placement.cell);
     const product = (b: Num): Num => mul(mul(mul(mul(b, resonance), charge), faders), sub(1, pressure));
     const rate = product(base);
     // The same product on the breather base (issue #41).

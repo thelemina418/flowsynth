@@ -120,11 +120,33 @@ describe("Encyclopedia reveals", () => {
     expect(ids(s)).toContain("square");
   });
 
-  it("Pressure and Prestige are not revealed in chunk 04", () => {
+  it("Pressure and Prestige are not revealed by a session on an empty board", () => {
     const s = fresh();
     session(s, 90);
     expect(ids(s)).not.toContain("pressure");
     expect(ids(s)).not.toContain("prestige");
+  });
+
+  it("Pressure: the first oscillator a wall presses on, and not before (issue #52)", () => {
+    const s = fresh();
+    // A modulator beside walls carries no pressure.
+    place(s, "flywheel", O);
+    expect(ids(s)).not.toContain("pressure");
+    expect(applyIn(s, { type: "removeModule", cell: O }).ok).toBe(true);
+    // (0,1)'s bordering walls owned, as conquests leave them: a Sine there is unpressed.
+    s.game.board.open.push({ q: 1, r: 1 }, { q: 0, r: 2 }, { q: -1, r: 2 }, { q: -1, r: 1 });
+    place(s, "sine", SE);
+    expect(ids(s)).not.toContain("pressure");
+    // (1,0) borders two Schists and a Flint.
+    place(s, "triangle", E);
+    expect(ids(s)).toContain("pressure");
+    expect(applyIn(s, { type: "removeModule", cell: E }).ok).toBe(true);
+    expect(ids(s)).toContain("pressure");
+  });
+
+  it("Walls names the modifiers by their names (issue #52)", () => {
+    const walls = entriesOf(fresh()).find((e) => e.id === "walls")!;
+    expect(walls.lines).toContain("Some walls carry a rule · Pressure ×2 · Only Arm damage");
   });
 
   it("an upgrade-mode advance stays deep-equal", () => {

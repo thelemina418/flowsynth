@@ -33,17 +33,18 @@ function build(layout: [ModuleType, Cell][], own = cellsWithin(2)): GameState {
 describe("the acceptance layout", () => {
   it("Sine (0,0), Triangle (1,0), Triangle (0,1): both Triangles resonate ×1.75, the Sine does not", () => {
     const s = build([["sine", { q: 0, r: 0 }], ["triangle", { q: 1, r: 0 }], ["triangle", { q: 0, r: 1 }]], []);
-    for (const cell of [{ q: 1, r: 0 }, { q: 0, r: 1 }]) {
+    // The opening's walls press 34% on (1,0), 39% on (0,1) and 29% on (0,0) (issue #52).
+    for (const [cell, kept] of [[{ q: 1, r: 0 }, 0.66], [{ q: 0, r: 1 }, 0.61]] as const) {
       const triangle = rateAt(s, cell);
       expect(triangle.instances).toHaveLength(1);
       expect(triangle.resonance.toNumber()).toBe(1.75);
-      expect(triangle.rate.toNumber()).toBe(1.75);
+      expect(triangle.rate.toNumber()).toBeCloseTo(1.75 * kept, 12);
     }
     const sine = rateAt(s, { q: 0, r: 0 });
     expect(sine.instances).toHaveLength(0);
     expect(sine.resonance.toNumber()).toBe(1);
-    expect(sine.rate.toNumber()).toBe(1);
-    expect(s.game.rates.total.toNumber()).toBe(4.5);
+    expect(sine.rate.toNumber()).toBeCloseTo(0.71, 12);
+    expect(s.game.rates.total.toNumber()).toBeCloseTo(2.9325, 12);
   });
 
   it("shares the Sine as a partner of both Triangles' resonances", () => {
@@ -161,7 +162,8 @@ describe("walls and empty cells are never partners", () => {
     // (0,0) and (1,-1) share (1,0), open and empty, and (0,-1), a wall.
     const s = build([["triangle", O], ["sine", { q: 1, r: -1 }]], []);
     expect(rateAt(s, O).instances).toHaveLength(0);
-    expect(s.game.rates.total.toNumber()).toBe(2);
+    // Base rates only, under 29% and 42% pressure (issue #52).
+    expect(s.game.rates.total.toNumber()).toBeCloseTo(0.71 + 0.58, 12);
   });
 
   it("a Square on the opening, with walls on most sides, does not resonate", () => {

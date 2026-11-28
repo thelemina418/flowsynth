@@ -1,10 +1,11 @@
 import { cellKind } from "../../engine/board";
-import { FACING_NAMES, ring, sameCell, type Cell } from "../../engine/hex";
+import { FACING_NAMES, neighbours, ring, sameCell, type Cell } from "../../engine/hex";
 import { className } from "../../engine/habits";
 import { modifierName, wallAt } from "../../engine/map";
 import { categoryName, categoryOf, moduleName, takesCharge } from "../../engine/modules";
 import { cableFrom, moduleAt } from "../../engine/placement";
-import { fmt, fmtRate, gt } from "../../engine/num";
+import { fmt, fmtPercent, fmtRate, gt } from "../../engine/num";
+import { wallPressure } from "../../engine/rates";
 import type { ArmRate, Board, BoardRates, ModulatorRate, ModuleType, OscillatorRate, OscillatorType, ReachHolds } from "../../engine/types";
 
 // The Hex detail's readout (issue #27; philosophy.md, Words rule 2): the
@@ -12,8 +13,8 @@ import type { ArmRate, Board, BoardRates, ModulatorRate, ModuleType, OscillatorR
 // reads the cached BoardRates, never recomputes them, so in flow the
 // numbers are the ones ν rises by. At most five lines, one of them the
 // effect line. A leg shows only while it isn't identity: resonance while
-// resonating, charge while charge is received (issue #32); faders and
-// pressure wait for their chunks.
+// resonating, charge while charge is received (issue #32), pressure while
+// a wall presses on it (issue #52); faders wait for chunk 06.
 
 export interface DetailLine {
   text: string;
@@ -48,9 +49,10 @@ export function hexDetail(board: Board, rates: BoardRates, cell: Cell): DetailLi
 
 // A wall's static lines (issue #48): its name, ring and the class it
 // opens; its HP and regen; its modifier by name; its pressure, doubled for
-// `Pressure ×2`. Once a Patch targets it, the damage it takes is its effect
-// line (issue #34). The HP is the board's, live in flow (issue #49): full
-// unless the wall has an entry below full.
+// `Pressure ×2`, and the bordering oscillators it reduces (issue #52). Once
+// a Patch targets it, the damage it takes is its effect line (issue #34).
+// The HP is the board's, live in flow (issue #49): full unless the wall
+// has an entry below full.
 function wallLines(board: Board, rates: BoardRates, cell: Cell): DetailLine[] {
   const wall = wallAt(cell)!;
   const hp = board.walls.find((w) => sameCell(w.cell, cell))?.hp ?? wall.hp;
@@ -60,11 +62,19 @@ function wallLines(board: Board, rates: BoardRates, cell: Cell): DetailLine[] {
     { text: `${fmt(hp)} / ${fmt(wall.hp)} HP · regen ${fmtRate(wall.regen)}/s` },
   ];
   if (wall.modifier !== null) lines.push({ text: modifierName(wall.modifier) });
-  const pressure = wall.pressure * (wall.modifier === "pressureDouble" ? 2 : 1);
-  lines.push({ text: `Pressure ${Math.round(pressure * 100)}%` });
+  const pressed = pressedModules(rates, cell);
+  const on = pressed === 0 ? "" : ` on ${pressed} ${pressed === 1 ? "module" : "modules"}`;
+  lines.push({ text: `Pressure ${fmtPercent(wallPressure(cell))}%${on}` });
   const patched = rates.walls.find((w) => sameCell(w.cell, cell));
   if (patched) lines.push({ text: `Taking ${fmtRate(patched.damage)}/s`, effect: true });
   return lines;
+}
+
+// The oscillators bordering a wall that pressure reduces: a modulator
+// beside it isn't, and nor is an oscillator whose pressure is cancelled.
+function pressedModules(rates: BoardRates, wall: Cell): number {
+  const around = neighbours(wall);
+  return rates.oscillators.filter((o) => gt(o.pressure, 0) && around.some((n) => sameCell(n, o.cell))).length;
 }
 
 // A modulator names its facing in compass words (issue #31), then its
@@ -122,10 +132,12 @@ function oscillatorLines(o: OscillatorRate): DetailLine[] {
     lines.push({ text: `Resonating ×${count} · ${words.verb} ${shapes.join(", ")}`, effect: true });
   }
   // The legs line: base, then each leg that isn't identity. The charge leg
-  // appears only when charge is received (issue #32).
+  // appears only when charge is received (issue #32), the pressure leg only
+  // while a wall presses on it (issue #52).
   const legs = [`${fmtRate(o.base)} ν/s base`];
   if (count > 0) legs.push(`×${fmtRate(o.resonance)} resonance`);
   if (gt(o.chargeReceived, 0)) legs.push(`×${fmtRate(o.charge)} charge`);
+  if (gt(o.pressure, 0)) legs.push(`−${fmtPercent(o.pressure)}% pressure`);
   if (legs.length > 1) lines.push({ text: legs.join(" · ") });
   lines.push({ text: `${fmtRate(o.rate)} ν/s` });
   return lines;
