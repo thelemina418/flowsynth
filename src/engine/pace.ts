@@ -226,7 +226,7 @@ export interface PaceReport {
   cables: Cable[];
   rate: Num;
   // The modulators' summed output in charge/s, and each wall a Patch
-  // damages, by its authored name ("Wall" for a placeholder).
+  // damages, by its authored name.
   charge: Num;
   walls: { name: string; cell: Cell; damage: Num }[];
   // The era's nous at the end of the run.
@@ -349,7 +349,7 @@ export function runPace(script: PaceScript): PaceReport {
     cables: state.game.board.cables.map((c) => ({ type: c.type, source: { ...c.source }, target: { ...c.target } })),
     rate: state.game.rates.total,
     charge: state.game.rates.modulators.reduce((sum, m) => add(sum, m.output), D(0)),
-    walls: state.game.rates.walls.map((w) => ({ name: wallAt(w.cell).name ?? "Wall", cell: { ...w.cell }, damage: w.damage })),
+    walls: state.game.rates.walls.map((w) => ({ name: wallAt(w.cell)!.name, cell: { ...w.cell }, damage: w.damage })),
     nous: state.game.nous,
     classLevels: CLASSES.filter((c) => state.game.openClasses.includes(c)).map((habitClass) => ({ habitClass, level: classLevel(state, habitClass).level })),
     breathersTaken,

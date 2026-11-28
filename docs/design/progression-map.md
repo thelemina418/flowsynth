@@ -43,7 +43,7 @@ The opening board has 4 open cells. Every other cell starts as a wall. Rings bey
 |---|---|---|
 | Engineer | Oscillators | At the start |
 | Producer | Modulators and Cables | At the start |
-| Roadie | Arms | First contact with Flint (ring 1) |
+| Roadie | Arms | First contact with the marked Flint (ring 2) |
 | Mixer | Effects | Conquering the marked Schist (ring 2) |
 
 - Class level thresholds grow roughly quadratically: 0.5, 1.5, 3, 5, 8, 12, 17, 23, 30h on that class, and onward.

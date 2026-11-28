@@ -50,6 +50,8 @@
   letter-spacing: 0.05em;
 }
 
+/* A modifier's glyph is engraved in the stone's own tone (issue #48). */
+.modifier-glyph,
 .class-mark path,
 .class-mark circle {
   fill: none;

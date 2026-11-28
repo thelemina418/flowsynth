@@ -1,5 +1,6 @@
 import { cellKind } from "./board";
 import { crosses, distance, sameCell, type Cell } from "./hex";
+import { modifierName, wallAt } from "./map";
 import { categoryOf } from "./modules";
 import { cableFrom, locked, moduleAt } from "./placement";
 import { grantsOf } from "./levels";
@@ -46,9 +47,12 @@ export function jackRefusal(board: Board, source: Cell): string | null {
 }
 
 // Why the cable can't run from its source to its target, crossings aside.
-// An open cell or a wall inside the current arc is a target (issue #34).
+// An open cell or a wall inside the current arc is a target (issue #34),
+// except an `Only Arm damage` wall (issue #48).
 function routeRefusal(board: Board, cable: Cable): string | null {
-  if (cellKind(board, cable.target) === "dark") return "That cell is dark.";
+  const kind = cellKind(board, cable.target);
+  if (kind === "dark") return "That cell is dark.";
+  if (kind === "wall" && wallAt(cable.target)?.modifier === "armOnly") return `${modifierName("armOnly")}.`;
   if (sameCell(cable.source, cable.target)) return "A cable can't end where it starts.";
   if (distance(cable.source, cable.target) > CABLE_LENGTH) return `That cable is longer than ${CABLE_LENGTH}.`;
   return null;

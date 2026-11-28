@@ -309,12 +309,12 @@ export interface ModulatorRate {
 }
 
 // One wall a Patch targets (issue #34): the patched charge into it as
-// damage at 1:1, its regen from the authored map (null for a placeholder)
+// damage at 1:1, its regen from the authored map
 // and net = damage − regen. A rate only: nothing applies it until chunk 05.
 export interface WallRate {
   cell: Cell;
   damage: Num;
-  regen: Num | null;
+  regen: Num;
   net: Num;
 }
 
