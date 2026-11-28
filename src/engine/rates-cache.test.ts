@@ -238,6 +238,22 @@ describe("recomputing the board's rates", () => {
     expect(counted).not.toHaveBeenCalled();
   });
 
+  it("recomputes once for a bus purchase or a max purchase, and never for a refused one (issue #60)", () => {
+    const s = acceptanceLayout();
+    s.game.nous = D(5000 + 8000 + 12800);
+    counted.mockClear();
+    applyIn(s, { type: "buyFader", fader: { kind: "bus", category: "oscillator" } });
+    expect(counted).toHaveBeenCalledTimes(1);
+    counted.mockClear();
+    applyIn(s, { type: "buyFader", fader: { kind: "bus", category: "oscillator" }, max: true });
+    expect(counted).toHaveBeenCalledTimes(1);
+    expect(s.game.console.buses.oscillator).toBe(3);
+    counted.mockClear();
+    applyIn(s, { type: "buyFader", fader: { kind: "bus", category: "modulator" } });
+    applyIn(s, { type: "buyFader", fader: { kind: "bus", category: "arm" }, max: true });
+    expect(counted).not.toHaveBeenCalled();
+  });
+
   it("recomputes once on load, from the layout, and never writes the rates to the save", () => {
     const s = acceptanceLayout();
     const text = serialize(s, 0);

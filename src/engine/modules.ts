@@ -212,3 +212,7 @@ const CATEGORY_NAMES: Record<ModuleCategory, string> = { oscillator: "Oscillator
 export function categoryName(category: ModuleCategory): string {
   return CATEGORY_NAMES[category];
 }
+
+export function isModuleCategory(value: unknown): value is ModuleCategory {
+  return typeof value === "string" && Object.prototype.hasOwnProperty.call(CATEGORY_NAMES, value);
+}

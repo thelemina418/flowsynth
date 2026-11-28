@@ -2,7 +2,7 @@ import { cellKind } from "./board";
 import { addCell, cellKey, DIRECTIONS, neighbours, sameCell, type Cell } from "./hex";
 import { add, D, div, gt, ln, max, min, mul, pow, sub, type Num } from "./num";
 import { armRole, baseRate, breatherBaseRate, damagePerCharge, hasFacing, isArm, isModulator, isOscillator, outputOf, patternOf, reachOf, takesCharge } from "./modules";
-import { channelMultiplier, emptyConsole } from "./console";
+import { emptyConsole, faderMultiplier } from "./console";
 import { wallOf } from "./map";
 import { cableFrom, moduleAt } from "./placement";
 import { instancesOf } from "./resonance";
@@ -28,12 +28,12 @@ function chargeFactor(received: Num): Num {
 
 // A modulator's output in charge/s, from the lifetime Producer class
 // credit (live credited seconds; manual log entries never add to it),
-// times its channel fader (issue #58): the cap bounds the class growth,
+// times its channel fader (issue #58) and the Modulators bus (#60): the cap bounds the class growth,
 // never the fader.
 function modulatorOutput(module: ModulatorType, producerSeconds: number, console: ConsoleState): Num {
   const output = outputOf(module);
   const grown = add(output.base, mul(output.perProducerHour ?? 0, div(producerSeconds, 3600)));
-  return mul(output.max === undefined ? grown : min(grown, output.max), channelMultiplier(console, module));
+  return mul(output.max === undefined ? grown : min(grown, output.max), faderMultiplier(console, module));
 }
 
 // The cells a placed modulator's reach covers, in reach order: each path
@@ -151,8 +151,9 @@ export function computeBoardRates(board: Board, producerSeconds: number, console
   // bordering a wall guards its neighbours from pressure (issue #54).
   const arms: ArmRate[] = [];
   const guarded = new Set<string>();
-  // The Guard Plate's channel fader on each oscillator it shields (issue
-  // #59): the strongest guarding neighbour's multiplier, never a product.
+  // The Guard Plate's channel fader (issue #59) times the Arms bus (#60) —
+  // a bus multiplies its whole category — on each oscillator it shields:
+  // the strongest guarding neighbour's multiplier, never a product.
   const shielding = new Map<string, Num>();
   for (const placement of board.placements) {
     const module = placement.module;
@@ -163,7 +164,7 @@ export function computeBoardRates(board: Board, producerSeconds: number, console
       if (active) for (const n of neighbours(cell)) guarded.add(cellKey(n));
       // It shields the oscillators beside it that a wall would press on.
       const shielded = active ? neighbours(cell).filter((n) => isPressed(board, n)) : [];
-      const multiplier = channelMultiplier(console, module);
+      const multiplier = faderMultiplier(console, module);
       for (const n of shielded) shielding.set(cellKey(n), max(shielding.get(cellKey(n)) ?? 1, multiplier));
       const shields = shielded.length;
       arms.push({ cell, role: "guard", module, active, shields });
@@ -173,8 +174,8 @@ export function computeBoardRates(board: Board, producerSeconds: number, console
     const faces = addCell(placement.cell, DIRECTIONS[facing]!);
     const facesWall = cellKind(board, faces) === "wall";
     const chargeReceived = received.get(cellKey(placement.cell)) ?? D(0);
-    // Its channel fader multiplies the damage (issue #59).
-    const dealt = facesWall ? mul(mul(damagePerCharge(module), chargeReceived), channelMultiplier(console, module)) : D(0);
+    // Its channel fader (issue #59) times the Arms bus (issue #60).
+    const dealt = facesWall ? mul(mul(damagePerCharge(module), chargeReceived), faderMultiplier(console, module)) : D(0);
     if (facesWall && gt(dealt, 0)) {
       const key = cellKey(faces);
       const wall = damage.get(key) ?? { cell: faces, damage: D(0) };
@@ -194,10 +195,10 @@ export function computeBoardRates(board: Board, producerSeconds: number, console
     const resonance = resonanceFactor(strength, instances.length);
     const chargeReceived = received.get(cellKey(placement.cell)) ?? D(0);
     const charge = chargeFactor(chargeReceived);
-    // The type's channel fader (issue #58), times a shielding Guard
-    // Plate's (issue #59). Pressure (issue #52) reduces ν only: modulator
-    // output and wall damage ignore it.
-    const faders = mul(channelMultiplier(console, module), shielding.get(cellKey(placement.cell)) ?? 1);
+    // The type's channel fader (issue #58) times its category bus (#60),
+    // times a shielding Guard Plate's (issue #59). Pressure (issue #52)
+    // reduces ν only: modulator output and wall damage ignore it.
+    const faders = mul(faderMultiplier(console, module), shielding.get(cellKey(placement.cell)) ?? 1);
     const pressure = pressureOn(board, placement.cell, guarded);
     const product = (b: Num): Num => mul(mul(mul(mul(b, resonance), charge), faders), sub(1, pressure));
     const rate = product(base);

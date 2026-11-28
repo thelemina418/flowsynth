@@ -1,4 +1,4 @@
-import { affordable, channelFaders, consoleShown, costOf, faderName, levelOf, type FaderId } from "../../engine/console";
+import { affordable, busesShown, busFaders, channelFaders, consoleShown, costOf, faderName, levelOf, type FaderId } from "../../engine/console";
 import { categoryOf } from "../../engine/modules";
 import { fmtCost } from "../../engine/num";
 import type { GameState } from "../../engine/types";
@@ -28,17 +28,42 @@ interface ConsoleProps {
 
 export function Console({ state, live, onBuy }: ConsoleProps) {
   if (!consoleShown(state)) return null;
-  const faders = channelFaders(state);
-  const highest = Math.max(0, ...faders.map((fader) => levelOf(state, fader)));
   return (
     <section class="console" data-console="" data-live={live ? "" : undefined} aria-label="Console">
-      <div class="console-section" data-section="channels">
-        {faders.map((fader) => (
-          <Fader key={fader.type} state={state} fader={fader} highest={highest} live={live} onBuy={onBuy} />
-        ))}
-      </div>
+      <Section name="channels" state={state} faders={channelFaders(state)} live={live} onBuy={onBuy} />
+      {/* The bus section (issue #60), apart from the channels behind a rule,
+          from the first time a bus fader is affordable. */}
+      {busesShown(state) && <Section name="buses" state={state} faders={busFaders(state)} live={live} onBuy={onBuy} />}
     </section>
   );
+}
+
+interface SectionProps {
+  name: "channels" | "buses";
+  state: GameState;
+  faders: FaderId[];
+  live: boolean;
+  onBuy: (fader: FaderId, max: boolean) => void;
+}
+
+// One section of faders. A throw's fill is its level against the highest
+// level in its own section, so the slow-growing buses read on their own
+// scale.
+function Section({ name, state, faders, live, onBuy }: SectionProps) {
+  const highest = Math.max(0, ...faders.map((fader) => levelOf(state, fader)));
+  return (
+    <div class={name === "buses" ? "console-section console-section-ruled" : "console-section"} data-section={name}>
+      {faders.map((fader) => (
+        <Fader key={faderKey(fader)} state={state} fader={fader} highest={highest} live={live} onBuy={onBuy} />
+      ))}
+    </div>
+  );
+}
+
+// A fader's handle in the DOM: the type for a channel, `bus-<category>`
+// for a bus.
+function faderKey(fader: FaderId): string {
+  return fader.kind === "channel" ? fader.type : `bus-${fader.category}`;
 }
 
 interface FaderProps {
@@ -58,8 +83,8 @@ function Fader({ state, fader, highest, live, onBuy }: FaderProps) {
     <button
       type="button"
       class="fader"
-      data-fader={fader.type}
-      data-category={categoryOf(fader.type)}
+      data-fader={faderKey(fader)}
+      data-category={fader.kind === "channel" ? categoryOf(fader.type) : fader.category}
       data-muted={open ? undefined : ""}
       disabled={!open}
       onClick={(event) => onBuy(fader, event.shiftKey)}

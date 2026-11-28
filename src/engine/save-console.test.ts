@@ -56,7 +56,8 @@ describe("the console in a v16 save", () => {
     expect(state.game.console.shown.console).toBe(true);
     const fixture = JSON.parse(V16_CHUNK05);
     const reread = JSON.parse(serialize(state, fixture.savedAt));
-    expect(reread.state.game.console).toEqual({ channels: {}, shown: { console: true } });
+    // 9 338 ν reaches a bus fader's 5 000 too (issue #60).
+    expect(reread.state.game.console).toEqual({ channels: {}, buses: {}, shown: { console: true, buses: true } });
     delete reread.state.game.console;
     expect(reread).toEqual(fixture);
   });
@@ -64,13 +65,13 @@ describe("the console in a v16 save", () => {
   it("recomputes an absent disclosure flag from the loaded state", () => {
     const poor = JSON.parse(serialize(fresh(), 0));
     delete poor.state.game.console;
-    expect(deserialize(JSON.stringify(poor)).state!.game.console).toEqual({ channels: {}, shown: { console: false } });
+    expect(deserialize(JSON.stringify(poor)).state!.game.console).toEqual({ channels: {}, buses: {}, shown: { console: false, buses: false } });
   });
 
   it("keeps a saved disclosure flag once set, and never trusts a non-boolean", () => {
     expect(deserialize(savedWith({}, { console: true })).state!.game.console.shown.console).toBe(true);
     const poor = JSON.parse(serialize(fresh(), 0));
-    poor.state.game.console = { channels: {}, shown: { console: "yes" } };
+    poor.state.game.console = { channels: {}, buses: {}, shown: { console: "yes", buses: false } };
     expect(deserialize(JSON.stringify(poor)).state!.game.console.shown.console).toBe(false);
   });
 

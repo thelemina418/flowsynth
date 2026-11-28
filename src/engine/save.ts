@@ -6,7 +6,7 @@ import { D, fromSave, gte, isNum, lte, NumFault, toSave, type Num } from "./num"
 import { ARCS, cellKind, openingBoard } from "./board";
 import { wallAt } from "./map";
 import { cellKey, isFacing, LIFETIME_RADIUS, ring, type Cell } from "./hex";
-import { channelBaseOf, hasFacing, isModuleType } from "./modules";
+import { channelBaseOf, hasFacing, isModuleCategory, isModuleType } from "./modules";
 import { isCableType, newCableRefusal, type CableRoom } from "./cables";
 import { grantsOf } from "./levels";
 import { emptyEncyclopedia, isEntryId, revealEntries } from "./encyclopedia";
@@ -447,15 +447,25 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
 function readConsole(raw: unknown): ConsoleState {
   const console = emptyConsole();
   if (!isRecord(raw)) return console;
-  if (isRecord(raw.channels) && !Array.isArray(raw.channels)) {
-    for (const [type, level] of Object.entries(raw.channels)) {
-      if (!isModuleType(type) || channelBaseOf(type) === null) continue;
-      if (typeof level !== "number" || !Number.isInteger(level) || level < 0) continue;
-      if (level > 0) console.channels[type] = level;
-    }
+  for (const [type, level] of levelEntries(raw.channels)) {
+    if (isModuleType(type) && channelBaseOf(type) !== null) console.channels[type] = level;
+  }
+  // The bus levels and their own flag (issue #60), read the same way.
+  for (const [category, level] of levelEntries(raw.buses)) {
+    if (isModuleCategory(category)) console.buses[category] = level;
   }
   if (isRecord(raw.shown) && raw.shown.console === true) console.shown.console = true;
+  if (isRecord(raw.shown) && raw.shown.buses === true) console.shown.buses = true;
   return console;
+}
+
+// A saved level map's positive integer entries; anything else reads 0.
+function levelEntries(raw: unknown): [string, number][] {
+  if (!isRecord(raw) || Array.isArray(raw)) return [];
+  return Object.entries(raw).filter((entry): entry is [string, number] => {
+    const level = entry[1];
+    return typeof level === "number" && Number.isInteger(level) && level > 0;
+  });
 }
 
 function readCell(value: unknown): Cell | null {

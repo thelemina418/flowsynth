@@ -89,7 +89,7 @@ describe("the console", () => {
 
   it("shows the throw's fill relative to the highest level on the strip", () => {
     const s = withNous(0);
-    s.game.console = { channels: { sine: 4, triangle: 2 }, shown: { console: true } };
+    s.game.console = { channels: { sine: 4, triangle: 2 }, buses: {}, shown: { console: true, buses: false } };
     mount(s);
     const fill = (type: string) => fader(type).querySelector<HTMLElement>(".fader-fill")!.style.height;
     expect([fill("sine"), fill("triangle"), fill("flywheel")]).toEqual(["100%", "50%", "0%"]);
@@ -104,7 +104,7 @@ describe("the console", () => {
     render(null, host);
     host.remove();
     const high = withNous(0);
-    high.game.console = { channels: { sine: 40 }, shown: { console: true } };
+    high.game.console = { channels: { sine: 40 }, buses: {}, shown: { console: true, buses: false } };
     mount(high);
     expect(readouts()[0]).toBe("Sine · 40 · 1.46e9");
     expect(width()).toBe(before);

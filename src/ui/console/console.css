@@ -22,6 +22,16 @@
   width: max-content;
 }
 
+/* The bus section (issue #60) stands apart from the channels behind a
+   hairline rule on the strip: its own row beneath them, so it is never
+   scrolled out of sight behind a long channel row. */
+.console-section-ruled {
+  min-width: 100%;
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
 .fader {
   display: flex;
   flex-direction: column;

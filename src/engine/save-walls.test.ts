@@ -101,7 +101,9 @@ describe("wall HP in a v16 save", () => {
     expect(loaded.state!.game.board.walls).toEqual([]);
     const file = JSON.parse(serialize(loaded.state!, JSON.parse(saved).savedAt));
     const game = file.state.game;
-    expect(game.console).toEqual({ channels: {}, shown: { console: consoleShown } });
+    // The bus section (issue #60) shows with the console here: a save whose
+    // ν affords a fader at all reaches a bus fader's 5 000 too.
+    expect(game.console).toEqual({ channels: {}, buses: {}, shown: { console: consoleShown, buses: consoleShown } });
     delete game.console;
     for (const holder of [game.board, game.session, game.summary, game.breather.result].filter((h) => h !== null)) {
       expect(holder.walls).toEqual([]);
