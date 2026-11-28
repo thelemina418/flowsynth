@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyIn, giveOscillators } from "./fixtures";
-import { creditedHoursOf, formatPaceReport, placeAllowanceGreedily, runPace, type MilestoneProbe, type PaceTurn } from "./pace";
+import { creditedHoursOf, DEFAULT_TENDING, formatPaceReport, placeAllowanceGreedily, runPace, type MilestoneProbe, type PaceTurn } from "./pace";
 import { createInitialState } from "./state";
 
 // The pace runner (spec chunk 01, issue #20): a scripted reasonable player
@@ -51,7 +51,7 @@ describe("dry stretches", () => {
 });
 
 describe("the tending seams", () => {
-  it("places the allowance once before the first session, then calls each named hook once per session, in order", () => {
+  it("places the allowance once before the first session, then per session places, patches, buys faders and takes the breather (ADR-0095)", () => {
     const calls: string[] = [];
     const hook = (name: string) => () => { calls.push(name); };
     runPace({
@@ -64,13 +64,72 @@ describe("the tending seams", () => {
         patchChargeToNearestWall: hook("patch"),
       },
     });
-    expect(calls).toEqual(["allowance", "breathers", "fader", "allowance", "patch"]);
+    expect(calls).toEqual(["allowance", "allowance", "patch", "fader", "breathers"]);
+  });
+});
+
+describe("the breather step", () => {
+  it("takes each banked breather in full: take, run it to its length, dismiss the result", () => {
+    // Three 50-minute sessions each bank a 10-minute breather. The player
+    // takes it, runs breather time for its whole 600 s, and lands back in
+    // upgrade mode with the result dismissed.
+    const seen: { mode: string; seconds: number; after: string; result: boolean }[] = [];
+    const report = runPace({
+      creditedHours: 2.5,
+      milestones: [],
+      tending: {
+        takeBankedBreathers: (turn) =>
+          DEFAULT_TENDING.takeBankedBreathers({
+            get state() { return turn.state; },
+            get now() { return turn.now; },
+            apply: (action) => turn.apply(action),
+            advance: (seconds, mode) => {
+              const r = turn.advance(seconds, mode);
+              seen.push({ mode, seconds, after: turn.state.game.mode, result: turn.state.game.breather.result !== null });
+              return r;
+            },
+          }),
+      },
+    });
+    expect(report.sessions).toBe(3);
+    expect(seen).toEqual(Array.from({ length: 3 }, () => ({ mode: "breather", seconds: 600, after: "upgrade", result: true })));
+    expect(report.breathersTaken).toBe(3);
+  });
+
+  it("pays the breather's ν into the era", () => {
+    const without = runPace({ creditedHours: 2.5, milestones: [], tending: { takeBankedBreathers: () => {} } });
+    const taken = runPace({ creditedHours: 2.5, milestones: [] });
+    expect(without.breathersTaken).toBe(0);
+    expect(taken.nous.toNumber()).toBeGreaterThan(without.nous.toNumber());
+  });
+
+  it("prints the breathers taken and each open class's level", () => {
+    // Four 50-minute sessions alternate Engineer and Producer: 100 minutes
+    // each, past 0.5 h and 1.5 h, so both classes read Lv 2.
+    const text = formatPaceReport(runPace({ creditedHours: 3, milestones: [] }));
+    expect(text).toContain("Breathers taken: 4\n");
+    expect(text).toContain("Classes: Engineer Lv 2, Producer Lv 2\n");
+  });
+});
+
+describe("the class-level probes", () => {
+  it("report Engineer and Producer level 5 with the credited hours they were reached at", () => {
+    // Lv 5 is 8 h on the class. Sessions alternate, Engineer first, so
+    // Engineer passes 8 h on its 10th session, the run's 19th (8h20m on
+    // it, 15h50m credited), and Producer on the 20th (16h40m credited).
+    const report = runPace({ creditedHours: 20 });
+    const at = (id: string) => report.milestones.find((m) => m.id === id)!;
+    expect(at("class-level-5:engineer").tracked).toBe(true);
+    expect(at("class-level-5:engineer").reachedAtHours).toBeCloseTo(95 / 6);
+    expect(at("class-level-5:producer").reachedAtHours).toBeCloseTo(50 / 3);
+    expect(at("class-level-5:roadie").reachedAtHours).toBeNull();
   });
 });
 
 // The greedy placement before the first session only: the board the
-// opening allowance makes, before any class level grants more.
-function openingOnly(): { tending: { placeAllowance: (turn: PaceTurn) => void } } {
+// opening allowance makes, before any class level grants more. No breather
+// is taken, so the era's ν is flow ν alone.
+function openingOnly(): { tending: { placeAllowance: (turn: PaceTurn) => void; takeBankedBreathers: () => void } } {
   let first = true;
   return {
     tending: {
@@ -78,6 +137,7 @@ function openingOnly(): { tending: { placeAllowance: (turn: PaceTurn) => void } 
         if (first) placeAllowanceGreedily(turn);
         first = false;
       },
+      takeBankedBreathers: () => {},
     },
   };
 }
@@ -181,6 +241,7 @@ describe("placing the allowance", () => {
         placeAllowance: (turn) =>
           placeAllowanceGreedily({
             get state() { return turn.state; },
+            get now() { return turn.now; },
             apply: (action) => { const r = turn.apply(action); results.push(r.ok); return r; },
             advance: (s, m) => turn.advance(s, m),
           }),

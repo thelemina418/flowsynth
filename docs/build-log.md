@@ -212,6 +212,8 @@ Issues #38–#45 (parent #37), on `integration/spec-04-cadence`.
 
 - **The breather (#41).** `endSession` banks `{ seconds: clamp(credited ÷ 5, 300, 900) }` from 600 credited seconds, replacing any bank, and the summary carries `breather` (seconds or null) as its second line, `Breather banked · 10 min`. `Mode` gains `breather`; `game.breather` holds `banked`, `running` and `result`. `takeBreather`, `endBreatherEarly` and `dismissBreatherResult` live in `engine/breather.ts`. `advance(…, 'breather')` moves `running.elapsed` by the wall gap and, at the length, pays `rates.breatherTotal × seconds` once and lands in upgrade mode; in any other mode it changes nothing. Each `OscillatorRate` gains `breatherRate` (Release's breather base 6 in `modules.ts`), and `BoardRates` gains `breatherTotal`, in the same `computeBoardRates` call. The Shell's boundary runs breather time; upgrade mode shows `Take breather · N min` beside `Begin flow`, the calm screen shows only its line and `End early`, and `Breather complete · +… ν` shows with `Continue` until dismissed. The spec's full loop is `src/ui/shell/breather.test.ts`.
 
+- **The pace runner's cadence (#45).** Each session starts through `startSession` with the round-robin habit. Tending after it follows ADR-0095, upgrade mode first: place the allowance (which grows with levels, the arrived types as candidates), the patch pass, buy faders (still empty), then `takeBreatherInFull`: `takeBreather`, `advance(length, 'breather')`, `dismissBreatherResult`. The `class-level-5` probes read `classLevel`. The report adds `Classes: Engineer Lv n, Producer Lv n` (open classes) and `Breathers taken: n`.
+
 ### Improvised
 
 - **Arrival order (#38).** Credit history isn't kept, so a derived type arrives in the order of the threshold (in hours on its class) that brought it, ties by class order (Engineer, Producer, Mixer, Roadie). Start types come first.
@@ -239,3 +241,51 @@ Issues #38–#45 (parent #37), on `integration/spec-04-cadence`.
 - **Intention line figures (#43).** Progress minutes truncate and hold at the target once met, so an over-target week reads `40 / 40 min this week`, engraved. A migrated `once` Intention reads with no period (`Habit C · 45 / 45 min`); the form offers only today and this week, plus `once` when editing one that already is. Carried-over migration rows keep the old `Keep` choice.
 - **Strip scale (#43).** Each strip's bars scale to its own busiest day; an empty day is a hairline. No figures, no colours, no tooltips: the habit line carries the hours.
 - **Almanac surfaces (#43).** Habits awaiting a class and archived habits aren't listed (the class screen asks first; archived habits keep their history). The Notes surface reuses the flow screen's `Notes` panel, flat and without its own Close. History drops the old `Earned`, `Breather` and `Unlocked` rows (no data on main; `Unlocked` is banned) and renames `Goals advanced` to `Intentions advanced`. The legacy line heads the history list.
+- **The pace runner's wall clock (#45).** `PaceTurn` gains `now`, and every `advance` through the turn moves it by its seconds (flow, the upgrade visit and the breather alike), so `takeBreather` gets a real `now`. The player takes the breather after its upgrade-mode visit, then rests before the next session. Breathers are counted as `takeBreather` actions the engine accepted.
+- **The pace tests' opening board (#45).** The hand-worked opening figures (`Era ν: 32 562`) take no breather, so they stay flow ν alone; the breather step has its own tests.
+
+### Flagged readings
+
+Decided where the spec is silent or self-contradictory, by philosophy.md (#37's Further Notes):
+
+- **The Producer ladder.** Agreed with the maintainer: the non-milestone levels alternate +1 Modulator and +1 cable, starting with a Modulator, and skip the milestone. Lv 1 +1 Modulator, Lv 2 +1 cable, Lv 3 Pulsewell, Lv 4 +1 Modulator, Lv 5 +1 cable, then alternating. This matches "Patch +1 at Lv 2 and 5"; mechanics-sketch.md's "odd / even levels" line is corrected to it.
+- **Levels start at Lv 0**, following Roadie's "Lv 0 Blade". The flow screen sketch's `Lv 2 · 1.1h / 1.5h` reads as Lv 1 under these thresholds, and the class line shows the current level.
+- **"No other controls"** on the flow screen means besides `Pause`, `End` and the ported focus apps (the clock and Notes), which the spec keeps.
+- **The honesty report shows only at End**, never on return mid-session, so flow never prompts.
+- **An early-ended breather** pays nothing and returns to the bank (ADR-0073 allows early exit; the glossary says it pays only if completed).
+- **The summary marks a crossed level** (` → Lv 2`).
+- **Habit colours stay in the records but aren't drawn.** Hue means category only.
+- **The `Place a third oscillator` Goal** is state-derived, so it comes back if a player drops below three placed oscillators with allowance for three.
+- **The Pulsewell's patched output is 0.5 charge/s per target**: patched, all of it goes to its one target, as chunk 03's per-target outputs do; unpatched, 0.5 to each of its six neighbours.
+
+### Pace runner
+
+At the end of the chunk, `npm run pace` (250 credited hours):
+
+```
+Pace run: 300 sessions, 250.0h credited
+Board: 3 oscillators, 1 modulator, 6.17 ν/s, 3.0 charge/s — Sine (0,0), Sine (1,0), Flywheel (0,1) facing NE, Triangle (1,-1), Patch (0,1) → (1,-1)
+Era ν: 7.66e6
+Classes: Engineer Lv 17, Producer Lv 17
+Breathers taken: 300
+
+Milestone                         Reached       Target
+--------------------------------  ------------  -------------------------------------------
+Engineer opens                    0.0h          at the start (0h)
+Producer opens                    0.0h          at the start (0h)
+...
+Engineer level 5                  15.8h         8h on the class
+Producer level 5                  16.7h         8h on the class
+Roadie level 5                    not reached   8h on the class
+Mixer level 5                     not reached   8h on the class
+...
+
+DRY 0.0h–15.8h: 15.8h with no new milestone
+DRY 16.7h–250.0h: 233.3h with no new milestone
+```
+
+- **The first resonance.** The first session is Engineer's: 50 minutes pass 0.5 h, so Engineer Lv 1 grants the third oscillator at 0.8 credited hours, and the greedy player resonates in that same tending visit, laying a Triangle at (1,-1) beside both Sines.
+- **Levels.** Sessions alternate Engineer and Producer, so each class gets half the credit: Lv 5 (8 h on the class) at 15.8 h (Engineer's 10th session, the run's 19th) and 16.7 h (Producer's), both about twice the progression map's 8 h, which counts hours on the class. Both end at Lv 17 (125 h each). The Pulsewell arrives at Producer Lv 3, 6.7 credited hours in.
+- **The board is cell-bound.** The opening's four owned cells fill with the two Sines, the Flywheel and the Triangle at 0.8 h, so every later grant (more oscillators and modulators, the Pulsewell, Square, Saw, Release) stays unplaced until the board owns more cells. The player patches the Flywheel into the Triangle, since that raises ν/s more than its reach into the Sine did. The Flywheel caps at 3 charge/s, and the board holds 6.17 ν/s.
+- **Breathers.** Every 50-minute session banks a 10-minute breather, and the player takes all 300, in full. They raise the era's ν from 5.47e6 (none taken) to 7.66e6, about 40%: the board runs ×2 for a fifth of the flow time.
+- Still no wall falls and nothing spends nous, so outside the two Lv 5 probes the run stays dry; chunk 05 is the next milestone.
