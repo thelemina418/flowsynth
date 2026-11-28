@@ -48,6 +48,6 @@ export function walkFlow(state: GameState, seconds: number, sink: Sink): Advance
       accrueLivePractice(state, span);
       result.intentionsCompleted += accrueIntentionProgress(state, state.records.activeHabitId, span);
     }
-  });
+  }, session.walls);
   return result;
 }

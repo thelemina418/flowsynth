@@ -137,10 +137,25 @@
 }
 
 .flow-class,
-.flow-ready {
+.flow-ready,
+.flow-hp {
   font-size: 14px;
   white-space: nowrap;
 }
+
+/* The fought wall's HP row sits left of Ready · N (issue #50). The name
+   and the figures reserve their widest text, so the row holds its size as
+   the HP falls (ADR-0031). */
+.flow-fight {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 4px 24px;
+}
+
+.hp-name { display: inline-block; min-width: 8ch; }
+.hp-figures { display: inline-block; text-align: right; }
 
 .flow-ready { color: var(--muted); }
 
@@ -200,8 +215,10 @@
 .note-entry p { overflow-wrap: anywhere; }
 
 @media (max-width: 420px) {
-  .flow-class { font-size: 12px; }
+  .flow-class,
+  .flow-hp { font-size: 12px; }
   .flow-right { justify-items: start; margin-left: 0; }
+  .flow-fight { justify-content: flex-start; }
 }
 
 .notes-head .mono { white-space: nowrap; }

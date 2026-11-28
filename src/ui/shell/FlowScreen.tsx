@@ -1,19 +1,22 @@
 import { useState } from "preact/hooks";
 import { activeHabit } from "../../engine/habits";
+import { foughtWall } from "../../engine/fought";
 import { grantsOf } from "../../engine/levels";
 import { Stage } from "../board/Stage";
 import { NousReadout } from "../board/NousReadout";
 import { Notes } from "./Notes";
-import { clockCaption, clockFigure, classLine, readyCount } from "./readouts";
+import { clockCaption, clockFigure, classLine, hpRow, readyCount } from "./readouts";
 import type { Shell } from "./shell";
 
 // The flow screen (issue #39), flow and paused:
 //
 //                      ⬡ board (resonance outlines pulse, beads run along cables)
 //   ν 48 210            Engineer · Lv 1 ▕██████░░░▏ 1.1h / 1.5h
-//                                                    Ready · 3
+//   Shale  ▕███████░░░▏ 412 / 600 HP                 Ready · 3
 //                          31:04   [Pause] [End]
 //
+// The HP row is the fought wall's (issue #50), absent while none is
+// fought; it moves to the next wall when one falls, and adds no control.
 // No tray, Goal or doors, and nothing prompts the player. Board clicks
 // inspect read-only. The clock and the Notes door are the old console's.
 export function FlowScreen({ shell, error }: { shell: Shell; error: string | null }) {
@@ -24,6 +27,8 @@ export function FlowScreen({ shell, error }: { shell: Shell; error: string | nul
   const paused = game.mode === "paused";
   const line = classLine(state, activeHabit(state));
   const grants = grantsOf(state);
+  const fought = foughtWall(game.board, game.rates);
+  const hp = fought && hpRow(fought);
   return (
     <div class="flow-screen">
       <Stage
@@ -47,7 +52,17 @@ export function FlowScreen({ shell, error }: { shell: Shell; error: string | nul
                   {line}
                 </p>
               )}
-              <p class="flow-ready mono" data-ready="">{`Ready · ${readyCount(state)}`}</p>
+              <div class="flow-fight">
+                {fought && hp && (
+                  <p class="flow-hp mono" data-hp-row="" data-cell={`${fought.cell.q},${fought.cell.r}`}>
+                    <span class="hp-name">{hp.name}</span> <span class="hp-bar">{hp.bar}</span>{" "}
+                    <span class="hp-figures" style={{ minWidth: `${hp.width}ch` }}>
+                      {hp.figures}
+                    </span>
+                  </p>
+                )}
+                <p class="flow-ready mono" data-ready="">{`Ready · ${readyCount(state)}`}</p>
+              </div>
             </div>
           </div>
         }
