@@ -186,15 +186,16 @@ describe("placing the allowance", () => {
   });
 
   it("prints each patched wall's damage/s and the cable on the board line", () => {
-    // A Flywheel patched into Shale before the run delivers its 1 charge/s
-    // there as damage, through one Engineer session. The Sines make 0.71
-    // and 0.66 ν/s under the opening's pressure (issue #52).
+    // A Flywheel patched into Basalt before the run delivers its 1 charge/s
+    // there as damage, through one Engineer session. Basalt's regen matches
+    // it, so the wall still stands at the end (Shale would fall, issue #49).
+    // The Sines make 0.71 and 0.66 ν/s under the opening's pressure (issue #52).
     const start = createInitialState();
     applyIn(start, { type: "placeModule", module: "flywheel", cell: { q: 0, r: 1 } });
-    applyIn(start, { type: "patchCable", cable: "patch", source: { q: 0, r: 1 }, target: { q: -1, r: 1 } });
+    applyIn(start, { type: "patchCable", cable: "patch", source: { q: 0, r: 1 }, target: { q: 0, r: -1 } });
     const text = formatPaceReport(runPace({ creditedHours: 0.1, start, ...openingOnly() }));
     expect(text).toContain(
-      "Board: 2 oscillators, 1 modulator, 1.37 ν/s, 1.0 charge/s, Shale 1.0 damage/s — Flywheel (0,1) facing NE, Sine (0,0), Sine (1,0), Patch (0,1) → (-1,1)\n",
+      "Board: 2 oscillators, 1 modulator, 1.37 ν/s, 1.0 charge/s, Basalt 1.0 damage/s — Flywheel (0,1) facing NE, Sine (0,0), Sine (1,0), Patch (0,1) → (0,-1)\n",
     );
   });
 

@@ -243,6 +243,15 @@ export interface Board {
   // The placed cables (issue #33), in placement order. A cable occupies no
   // cell.
   cables: Cable[];
+  // Every wall below its full HP (issue #49). A wall missing from the list
+  // is at full HP; a conquered wall is in `open` and never here.
+  walls: WallHp[];
+}
+
+// One wall's HP below full (issue #49): above 0 and below its kind's full HP.
+export interface WallHp {
+  cell: Cell;
+  hp: Num;
 }
 
 // The cable types (GLOSSARY: Cable). Patch arrives at the start; Mult,

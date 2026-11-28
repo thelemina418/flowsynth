@@ -28,12 +28,20 @@ describe("the Goal", () => {
     expect(goalOf(s)).toBe("Place a third oscillator");
   });
 
-  it("an opened Shale cell moves past Conquer Shale, to no inert entry", () => {
+  it("an opened Shale cell moves on to Conquer Basalt (issue #49)", () => {
     const s = fresh();
     ownCells(s, [SHALE]);
-    // Conquer Basalt, Reach Flint … Prestige are declared but shown false
-    // until chunks 05 and 06, so nothing is left to name.
-    expect(goalOf(s)).toBeNull();
+    expect(goalOf(s)).toBe("Conquer Basalt");
+  });
+
+  it("either Basalt's open cell finishes Conquer Basalt, leaving no inert entry (issue #49)", () => {
+    for (const basalt of [{ q: -1, r: 0 }, { q: 0, r: -1 }]) {
+      const s = fresh();
+      ownCells(s, [SHALE, basalt]);
+      // Reach Flint and Prestige are declared but shown false until Roadie
+      // (chunk 05) and prestige (chunk 06) land.
+      expect(goalOf(s)).toBeNull();
+    }
   });
 });
 

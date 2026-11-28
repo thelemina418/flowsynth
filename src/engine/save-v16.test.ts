@@ -79,7 +79,7 @@ describe("the board in a v16 save", () => {
     const loaded = deserialize(serialize(s, 1_000));
     expect(loaded.error).toBeUndefined();
     expect(loaded.state).toEqual(s);
-    expect(loaded.state!.game.board).toEqual({ open: [...fresh().game.board.open, { q: -1, r: 1 }, { q: 0, r: 3 }], arc: "demo", placements: [], cables: [] });
+    expect(loaded.state!.game.board).toEqual({ open: [...fresh().game.board.open, { q: -1, r: 1 }, { q: 0, r: 3 }], arc: "demo", placements: [], cables: [], walls: [] });
   });
 
   it("a v16 save written before the board loads the opening board", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyIn, fresh, giveOscillators, ownCells } from "./fixtures";
+import { advanceIn, applyIn, begin, fresh, giveHabit, giveOscillators, ownCells } from "./fixtures";
 import type { Cell } from "./hex";
 import type { GameState, ModuleType } from "./types";
 
@@ -113,5 +113,23 @@ describe("an opened cell", () => {
     place(s, "sine", { q: 1, r: 0 });
     expect(oscillatorAt(s, SOUTH).pressure.toNumber()).toBe(0);
     expect(oscillatorAt(s, SOUTH).rate.toNumber()).toBe(1);
+  });
+});
+
+describe("a conquest", () => {
+  it("removes the conquered wall's pressure in the same recompute: Shale falls and the Sine beside it goes from 39% to 34%", () => {
+    const s = fresh();
+    // A Flywheel at 1 charge/s patched into Shale (net 0.9/s), a Sine at (0,1).
+    place(s, "flywheel", O);
+    place(s, "sine", SOUTH);
+    expect(applyIn(s, { type: "patchCable", cable: "patch", source: O, target: SHALE }).ok).toBe(true);
+    giveHabit(s, "Piano", "engineer");
+    begin(s, null, 0);
+    expect(oscillatorAt(s, SOUTH).pressure.toNumber()).toBeCloseTo(0.39, 12);
+    advanceIn(s, 600 / 0.9 - 1, "flow");
+    expect(oscillatorAt(s, SOUTH).pressure.toNumber()).toBeCloseTo(0.39, 12);
+    advanceIn(s, 1, "flow");
+    expect(oscillatorAt(s, SOUTH).pressure.toNumber()).toBeCloseTo(0.34, 12);
+    expect(s.game.rates.total.toNumber()).toBeCloseTo(0.66, 12);
   });
 });

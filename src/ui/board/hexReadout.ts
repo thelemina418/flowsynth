@@ -35,7 +35,7 @@ const RESONANCE_WORDS: Record<OscillatorType, { verb: string; needs: string } | 
 export function hexDetail(board: Board, rates: BoardRates, cell: Cell): DetailLine[] {
   const kind = cellKind(board, cell);
   if (kind === "dark") return [{ text: "Dark cell · beyond this arc" }];
-  if (kind === "wall") return wallLines(rates, cell);
+  if (kind === "wall") return wallLines(board, rates, cell);
   const oscillator = rates.oscillators.find((o) => sameCell(o.cell, cell));
   if (oscillator) return oscillatorLines(oscillator);
   const modulator = rates.modulators.find((m) => sameCell(m.cell, cell));
@@ -49,13 +49,15 @@ export function hexDetail(board: Board, rates: BoardRates, cell: Cell): DetailLi
 // opens; its HP and regen; its modifier by name; its pressure, doubled for
 // `Pressure ×2`, and the bordering oscillators it reduces (issue #52). Once
 // a Patch targets it, the damage it takes is its effect line (issue #34).
-// HP stays full until walls take damage over time.
-function wallLines(rates: BoardRates, cell: Cell): DetailLine[] {
+// The HP is the board's, live in flow (issue #49): full unless the wall
+// has an entry below full.
+function wallLines(board: Board, rates: BoardRates, cell: Cell): DetailLine[] {
   const wall = wallAt(cell)!;
+  const hp = board.walls.find((w) => sameCell(w.cell, cell))?.hp ?? wall.hp;
   const opens = wall.opens === null ? "" : ` · opens ${className(wall.opens)}`;
   const lines: DetailLine[] = [
     { text: `${wall.name} · Wall · ring ${ring(cell)}${opens}` },
-    { text: `${fmt(wall.hp)} / ${fmt(wall.hp)} HP · regen ${fmtRate(wall.regen)}/s` },
+    { text: `${fmt(hp)} / ${fmt(wall.hp)} HP · regen ${fmtRate(wall.regen)}/s` },
   ];
   if (wall.modifier !== null) lines.push({ text: modifierName(wall.modifier) });
   const pressed = pressedModules(rates, cell);
