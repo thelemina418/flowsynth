@@ -305,7 +305,8 @@ export interface ResonanceInstance {
 
 // One placed oscillator's rate (mechanics-sketch.md, Rates):
 // rate = base × resonance × charge × faders × (1 − pressure). Faders are
-// the type's channel multiplier (issue #58); pressure is the bordering
+// the type's channel multiplier (issue #58) times the Oscillators bus
+// (#60); pressure is the bordering
 // walls' sum, capped at 60% (issue #52).
 export interface OscillatorRate {
   cell: Cell;
@@ -414,10 +415,13 @@ export interface BoardRates {
 // The console (spec chunk 06, issue #58; GLOSSARY: Console, Fader): each
 // type's channel fader level (absent = 0), and the console's monotonic
 // disclosure: `shown.console` flips the first time any fader is
-// affordable and never flips back (engine/console.ts).
+// affordable and never flips back (engine/console.ts). Each category's bus
+// level (absent = 0, issue #60) has its own flag: `shown.buses` flips the
+// first time a bus fader is affordable.
 export interface ConsoleState {
   channels: Partial<Record<ModuleType, number>>;
-  shown: { console: boolean };
+  buses: Partial<Record<ModuleCategory, number>>;
+  shown: { console: boolean; buses: boolean };
 }
 
 // The game state.

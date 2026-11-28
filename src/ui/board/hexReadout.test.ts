@@ -69,6 +69,19 @@ describe("the Hex detail readout", () => {
     expect(texts(s, { q: 1, r: 0 }).some((t) => t.startsWith("Faders"))).toBe(false);
   });
 
+  it("folds the Oscillators bus into the Faders line: channel 2 and bus 1 read ×1.25² × 1.1 (issue #60)", () => {
+    let s = laid(ACCEPTANCE);
+    s.game.nous = D(5026);
+    for (const fader of [{ kind: "channel", type: "sine" }, { kind: "channel", type: "sine" }, { kind: "bus", category: "oscillator" }] as const) {
+      s = apply(s, { type: "buyFader", fader }).state;
+    }
+    expect(s.game.console.buses.oscillator).toBe(1);
+    // 1.25² × 1.1 = 1.71875, shown to 3 figures rounded down.
+    expect(texts(s, { q: 0, r: 0 }).slice(3)).toEqual(["Faders ×1.71", "1.22 ν/s"]);
+    // The Triangle has the bus alone.
+    expect(texts(s, { q: 1, r: 0 })).toContain("Faders ×1.1");
+  });
+
   it("leaves the pressure leg out of an oscillator no wall presses on", () => {
     // (0,1)'s bordering walls owned, as a conquest leaves them, all but none.
     const s = createInitialState();

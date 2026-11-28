@@ -2,7 +2,7 @@ import { cellKind } from "./board";
 import { addCell, cellKey, DIRECTIONS, neighbours, sameCell, type Cell } from "./hex";
 import { add, D, div, gt, ln, min, mul, pow, sub, type Num } from "./num";
 import { armRole, baseRate, breatherBaseRate, damagePerCharge, hasFacing, isArm, isModulator, isOscillator, outputOf, patternOf, reachOf, takesCharge } from "./modules";
-import { channelMultiplier, emptyConsole } from "./console";
+import { busMultiplier, emptyConsole, faderMultiplier } from "./console";
 import { wallOf } from "./map";
 import { cableFrom, moduleAt } from "./placement";
 import { instancesOf } from "./resonance";
@@ -28,12 +28,12 @@ function chargeFactor(received: Num): Num {
 
 // A modulator's output in charge/s, from the lifetime Producer class
 // credit (live credited seconds; manual log entries never add to it),
-// times its channel fader (issue #58): the cap bounds the class growth,
+// times its channel fader (issue #58) and the Modulators bus (#60): the cap bounds the class growth,
 // never the fader.
 function modulatorOutput(module: ModulatorType, producerSeconds: number, console: ConsoleState): Num {
   const output = outputOf(module);
   const grown = add(output.base, mul(output.perProducerHour ?? 0, div(producerSeconds, 3600)));
-  return mul(output.max === undefined ? grown : min(grown, output.max), channelMultiplier(console, module));
+  return mul(output.max === undefined ? grown : min(grown, output.max), faderMultiplier(console, module));
 }
 
 // The cells a placed modulator's reach covers, in reach order: each path
@@ -167,7 +167,8 @@ export function computeBoardRates(board: Board, producerSeconds: number, console
     const faces = addCell(placement.cell, DIRECTIONS[facing]!);
     const facesWall = cellKind(board, faces) === "wall";
     const chargeReceived = received.get(cellKey(placement.cell)) ?? D(0);
-    const dealt = facesWall ? mul(damagePerCharge(module), chargeReceived) : D(0);
+    // The Arms bus multiplies every Blade's damage (issue #60).
+    const dealt = facesWall ? mul(mul(damagePerCharge(module), chargeReceived), busMultiplier(console, "arm")) : D(0);
     if (facesWall && gt(dealt, 0)) {
       const key = cellKey(faces);
       const wall = damage.get(key) ?? { cell: faces, damage: D(0) };
@@ -187,9 +188,10 @@ export function computeBoardRates(board: Board, producerSeconds: number, console
     const resonance = resonanceFactor(strength, instances.length);
     const chargeReceived = received.get(cellKey(placement.cell)) ?? D(0);
     const charge = chargeFactor(chargeReceived);
-    // The type's channel fader (issue #58). Pressure (issue #52) reduces
+    // The type's channel fader (issue #58) times the Oscillators bus
+    // (#60). Pressure (issue #52) reduces
     // ν only: modulator output and wall damage ignore it.
-    const faders = channelMultiplier(console, module);
+    const faders = faderMultiplier(console, module);
     const pressure = pressureOn(board, placement.cell, guarded);
     const product = (b: Num): Num => mul(mul(mul(mul(b, resonance), charge), faders), sub(1, pressure));
     const rate = product(base);
