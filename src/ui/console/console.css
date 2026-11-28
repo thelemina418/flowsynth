@@ -62,7 +62,7 @@
 .fader[data-category="arm"] .fader-fill { background: var(--hue-arm); }
 
 .fader-readout {
-  font-size: 0.8125rem;
+  font-size: 13px;
   font-weight: 400;
   white-space: nowrap;
   text-align: center;
@@ -78,7 +78,7 @@
 .fader[data-master]:not([data-muted]) { border-color: var(--arete-line); }
 
 .fader-effect {
-  font-size: 0.75rem;
+  font-size: 12px;
   font-weight: 400;
   color: var(--muted);
   white-space: nowrap;

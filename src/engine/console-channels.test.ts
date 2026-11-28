@@ -184,9 +184,10 @@ describe("the Pulsewell's channel fader", () => {
 });
 
 // Channel faders (#59) and bus faders (#60) together: a bus multiplies its
-// whole category, so the Arms bus multiplies both a Blade's damage and a
-// Guard Plate's shielding boost, and the Oscillators bus a Release's
-// breather ν — each on top of the type's own channel.
+// whole category's output: the Arms bus multiplies a Blade's damage (not
+// a Guard Plate's shielding, which is its channel alone), and the
+// Oscillators bus a Release's breather ν — each on top of the type's own
+// channel.
 describe("channel and bus faders together", () => {
   it("a Blade at channel 1 under Arms bus 1 deals 10 × 1.1 × 1.05 per charge", () => {
     const s = roadieWith({ blade: 1 });
@@ -194,22 +195,22 @@ describe("channel and bus faders together", () => {
     expect(bladeAt(s, 4).damage.toNumber()).toBeCloseTo(11.55, 12);
   });
 
-  it("a shielded oscillator takes the Guard Plate's channel × Arms bus", () => {
+  it("a shielded oscillator takes the Guard Plate's channel only, not the Arms bus", () => {
     const s = platedWith({ guardPlate: 1 });
     s.game.console.buses = { arm: 1 };
     place(s, "guardPlate", SHALE);
     place(s, "sine", SE);
     place(s, "sine", NE);
-    expect(oscillatorAt(s, SE).faders.toNumber()).toBeCloseTo(1.1 * 1.05, 12);
+    expect(oscillatorAt(s, SE).faders.toNumber()).toBeCloseTo(1.1, 12);
     expect(oscillatorAt(s, NE).faders.toNumber()).toBe(1);
   });
 
-  it("the Arms bus alone lifts an active Plate's shielded oscillator by ×1.05", () => {
+  it("the Arms bus alone leaves an active Plate's shielded oscillator at ×1", () => {
     const s = platedWith({});
     s.game.console.buses = { arm: 1 };
     place(s, "guardPlate", SHALE);
     place(s, "sine", SE);
-    expect(oscillatorAt(s, SE).faders.toNumber()).toBeCloseTo(1.05, 12);
+    expect(oscillatorAt(s, SE).faders.toNumber()).toBe(1);
   });
 
   it("a Release at channel 1 under Oscillators bus 1 earns 6 × 1.1 × 1.05 in a breather, 0 in flow", () => {

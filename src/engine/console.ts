@@ -1,3 +1,4 @@
+import { hasPrestiged } from "./era";
 import { grantsOf } from "./levels";
 import { categoryOf, channelBaseOf, moduleName } from "./modules";
 import { add, D, div, floor, gt, log10, lte, max, mul, pow, sub, type Num } from "./num";
@@ -76,51 +77,143 @@ export function masterFaders(state: GameState): FaderId[] {
 
 // Whether the master section is on the console: after the first prestige.
 export function masterShown(state: GameState): boolean {
-  return state.game.prestiges > 0;
+  return hasPrestiged(state);
+}
+
+// Each kind of fader, described once: how it is named, where its level
+// lives, what its cost curve is and what it spends. Every reader below and
+// the console's UI go through this table, never a switch on the kind.
+interface FaderKind<F extends FaderId> {
+  // Its handle in the DOM: the type, `bus-<category>`, `master-<id>`.
+  key(fader: F): string;
+  // The hue its fill wears: its category, or none (the Arete register).
+  category(fader: F): ModuleCategory | undefined;
+  name(fader: F): string;
+  // Its one effect line, or null: only master faders carry one.
+  effect(fader: F): string | null;
+  level(console: ConsoleState, fader: F): number;
+  setLevel(console: ConsoleState, fader: F, level: number): void;
+  // Its highest level, or null when it has none.
+  cap(fader: F): number | null;
+  // The growth its costs climb by over the whole curve, or null for an
+  // arithmetic curve whose next level costs base + level.
+  growth(console: ConsoleState): number | null;
+  base(fader: F): number;
+  // The balance it spends, and that balance's name in copy.
+  balance: "nous" | "arete";
+  unit: "ν" | "Arete";
+  // Whether the player has it (its type or category arrived), and whether
+  // its section is on the console.
+  has(state: GameState, fader: F): boolean;
+  sectionShown(state: GameState): boolean;
+}
+
+// The growth a section's costs climb by: 1.6, less 0.03 a level of its
+// taper. Read in hundredths so the cap lands on 1.30 exactly.
+function taperedGrowth(console: ConsoleState, taper: MasterId): number {
+  return (GROWTH_HUNDREDTHS - TAPER_STEP_HUNDREDTHS * Math.min(TAPER_CAP, console.master[taper] ?? 0)) / 100;
+}
+
+type KindOf<K extends FaderId["kind"]> = Extract<FaderId, { kind: K }>;
+
+const KINDS: { [K in FaderId["kind"]]: FaderKind<KindOf<K>> } = {
+  channel: {
+    key: (f) => f.type,
+    category: (f) => categoryOf(f.type),
+    name: (f) => moduleName(f.type),
+    effect: () => null,
+    level: (console, f) => console.channels[f.type] ?? 0,
+    setLevel: (console, f, level) => void (console.channels[f.type] = level),
+    cap: () => null,
+    growth: (console) => taperedGrowth(console, "channelTaper"),
+    base: (f) => channelBaseOf(f.type) ?? 0,
+    balance: "nous",
+    unit: "ν",
+    has: (state, f) => channelFaders(state).some((c) => c.kind === "channel" && c.type === f.type),
+    sectionShown: (state) => consoleShown(state),
+  },
+  bus: {
+    key: (f) => `bus-${f.category}`,
+    category: (f) => f.category,
+    name: (f) => BUS_NAMES[f.category],
+    effect: () => null,
+    level: (console, f) => console.buses[f.category] ?? 0,
+    setLevel: (console, f, level) => void (console.buses[f.category] = level),
+    cap: () => null,
+    growth: (console) => taperedGrowth(console, "busTaper"),
+    base: () => BUS_BASE,
+    balance: "nous",
+    unit: "ν",
+    has: (state, f) => busFaders(state).some((b) => b.kind === "bus" && b.category === f.category),
+    sectionShown: (state) => busesShown(state),
+  },
+  master: {
+    key: (f) => `master-${f.id}`,
+    category: () => undefined,
+    name: (f) => MASTER[f.id].name,
+    effect: (f) => MASTER[f.id].effect,
+    level: (console, f) => console.master[f.id] ?? 0,
+    setLevel: (console, f, level) => void (console.master[f.id] = level),
+    cap: (f) => MASTER[f.id].cap,
+    growth: () => null,
+    base: () => 1,
+    balance: "arete",
+    unit: "Arete",
+    has: () => true,
+    sectionShown: (state) => masterShown(state),
+  },
+};
+
+function kindOf<F extends FaderId>(fader: F): FaderKind<F> {
+  return KINDS[fader.kind] as unknown as FaderKind<F>;
 }
 
 export function faderName(fader: FaderId): string {
-  if (fader.kind === "master") return MASTER[fader.id].name;
-  return fader.kind === "channel" ? moduleName(fader.type) : BUS_NAMES[fader.category];
+  return kindOf(fader).name(fader);
 }
 
 // A master fader's one effect line; channels and buses have none.
 export function faderEffect(fader: FaderId): string | null {
-  return fader.kind === "master" ? MASTER[fader.id].effect : null;
+  return kindOf(fader).effect(fader);
+}
+
+// A fader's handle in the DOM: the type for a channel, `bus-<category>`
+// for a bus, `master-<id>` for a master fader.
+export function faderKey(fader: FaderId): string {
+  return kindOf(fader).key(fader);
+}
+
+// The hue a fader's fill wears: its category, or none for a master fader
+// (the Arete register).
+export function faderCategory(fader: FaderId): ModuleCategory | undefined {
+  return kindOf(fader).category(fader);
+}
+
+// The unit written after a fader's cost: Arete for the master section,
+// none for ν, which the console's costs are unless they say otherwise.
+export function costUnit(fader: FaderId): "Arete" | null {
+  const unit = kindOf(fader).unit;
+  return unit === "Arete" ? unit : null;
 }
 
 export function levelOf(state: GameState, fader: FaderId): number {
-  const console = state.game.console;
-  if (fader.kind === "master") return console.master[fader.id] ?? 0;
-  return (fader.kind === "channel" ? console.channels[fader.type] : console.buses[fader.category]) ?? 0;
+  return kindOf(fader).level(state.game.console, fader);
 }
 
 // Whether a fader has reached its cap and takes no more levels.
 export function atCap(state: GameState, fader: FaderId): boolean {
-  if (fader.kind !== "master") return false;
-  const cap = MASTER[fader.id].cap;
+  const cap = kindOf(fader).cap(fader);
   return cap !== null && levelOf(state, fader) >= cap;
-}
-
-// The growth a section's costs climb by over the whole curve: 1.6, less
-// 0.03 a level of its taper. Read in hundredths so the cap lands on 1.30
-// exactly.
-function growthOf(console: ConsoleState, fader: FaderId): number {
-  if (fader.kind === "master") return 1;
-  const taper = Math.min(TAPER_CAP, console.master[fader.kind === "channel" ? "channelTaper" : "busTaper"] ?? 0);
-  return (GROWTH_HUNDREDTHS - TAPER_STEP_HUNDREDTHS * taper) / 100;
-}
-
-function baseOf(fader: FaderId): number {
-  if (fader.kind === "master") return 1;
-  return fader.kind === "channel" ? (channelBaseOf(fader.type) ?? 0) : BUS_BASE;
 }
 
 // The next level's cost: base × g^level, g its section's growth; a master
 // fader's is level + 1 Arete.
 export function costOf(state: GameState, fader: FaderId): Num {
-  if (fader.kind === "master") return D(levelOf(state, fader) + 1);
-  return mul(baseOf(fader), pow(growthOf(state.game.console, fader), levelOf(state, fader)));
+  const kind = kindOf(fader);
+  const level = levelOf(state, fader);
+  const growth = kind.growth(state.game.console);
+  if (growth === null) return D(kind.base(fader) + level);
+  return mul(kind.base(fader), pow(growth, level));
 }
 
 // What `count` levels from the current one cost together: the geometric
@@ -131,14 +224,14 @@ function costOfLevels(state: GameState, fader: FaderId, count: number): Num {
   if (count === 0) return D(0);
   const next = costOf(state, fader);
   if (count === 1) return next;
-  if (fader.kind === "master") return add(mul(next, count), (count * (count - 1)) / 2);
-  const growth = growthOf(state.game.console, fader);
+  const growth = kindOf(fader).growth(state.game.console);
+  if (growth === null) return add(mul(next, count), (count * (count - 1)) / 2);
   return div(mul(next, sub(pow(growth, count), 1)), growth - 1);
 }
 
 // The balance a fader spends: Arete for the master section, ν otherwise.
 function balanceFor(state: GameState, fader: FaderId): Num {
-  return fader.kind === "master" ? state.game.arete : state.game.nous;
+  return state.game[kindOf(fader).balance];
 }
 
 export function affordable(state: GameState, fader: FaderId): boolean {
@@ -150,11 +243,12 @@ export function affordable(state: GameState, fader: FaderId): boolean {
 export function maxAffordable(state: GameState, fader: FaderId): number {
   const balance = balanceFor(state, fader);
   if (!affordable(state, fader)) return 0;
-  const cap = fader.kind === "master" ? MASTER[fader.id].cap : null;
+  const kind = kindOf(fader);
+  const cap = kind.cap(fader);
   const room = cap === null ? Infinity : cap - levelOf(state, fader);
   let count = 1;
-  if (fader.kind !== "master") {
-    const growth = growthOf(state.game.console, fader);
+  const growth = kind.growth(state.game.console);
+  if (growth !== null) {
     const ratio = add(div(mul(balance, growth - 1), costOf(state, fader)), 1);
     count = Math.max(1, floor(div(log10(ratio), Math.log10(growth))).toNumber());
   }
@@ -180,9 +274,8 @@ export function consoleShown(state: GameState): boolean {
 // Whether a fader is on the console now: its section shows, and the
 // player has its type or category.
 function faderOn(state: GameState, fader: FaderId): boolean {
-  if (fader.kind === "channel") return consoleShown(state) && channelFaders(state).some((f) => f.kind === "channel" && f.type === fader.type);
-  if (fader.kind === "master") return masterShown(state);
-  return busesShown(state) && busFaders(state).some((f) => f.kind === "bus" && f.category === fader.category);
+  const kind = kindOf(fader);
+  return kind.sectionShown(state) && kind.has(state, fader);
 }
 
 // Sets the disclosure flags once each section first shows. `apply` and
@@ -228,19 +321,13 @@ export function buyFader(state: GameState, fader: FaderId, buyMax = false): Fade
   if (!faderOn(state, fader)) return { ok: false, reason: "That fader isn't on the console." };
   if (atCap(state, fader)) return { ok: false, reason: "That fader is at max." };
   const count = buyMax ? maxAffordable(state, fader) : affordable(state, fader) ? 1 : 0;
-  if (count === 0) return { ok: false, reason: fader.kind === "master" ? "Not enough Arete for that fader." : "Not enough ν for that fader." };
+  const kind = kindOf(fader);
+  if (count === 0) return { ok: false, reason: `Not enough ${kind.unit} for that fader.` };
   const cost = costOfLevels(state, fader, count);
   const level = levelOf(state, fader) + count;
   // What the balance showed before the spend stays shown after it.
   discloseConsole(state);
-  const console = state.game.console;
-  if (fader.kind === "master") {
-    state.game.arete = max(0, sub(state.game.arete, cost));
-    console.master[fader.id] = level;
-    return { ok: true };
-  }
-  state.game.nous = max(0, sub(state.game.nous, cost));
-  if (fader.kind === "channel") console.channels[fader.type] = level;
-  else console.buses[fader.category] = level;
+  state.game[kind.balance] = max(0, sub(state.game[kind.balance], cost));
+  kind.setLevel(state.game.console, fader, level);
   return { ok: true };
 }

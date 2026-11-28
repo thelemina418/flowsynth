@@ -74,8 +74,18 @@ describe("the confirmation", () => {
   it("lists Resets and Keeps in the spec's words, the Arete to gain, Cancel and Prestige", () => {
     mount(readyToPrestige());
     click(goal()!);
-    const lines = [...dialog()!.querySelectorAll("[data-line]")].map((l) => l.textContent);
-    expect(lines).toEqual(["Resets · ν · fader levels", "Keeps · board · cables · classes · allowance · Arete · walls conquered", "Arete +3"]);
+    // A visible title, as the spec's block has it.
+    const title = dialog()!.querySelector("h2")!;
+    expect(title.textContent).toBe("Prestige");
+    expect(title.classList.contains("sr-only")).toBe(false);
+    expect(dialog()!.getAttribute("aria-labelledby")).toBe(title.id);
+    // Each list is its label, then the list itself, with no `·` between.
+    const lists = [...dialog()!.querySelectorAll("[data-list]")].map((l) => [...l.children].map((c) => c.textContent));
+    expect(lists).toEqual([
+      ["Resets", "ν · fader levels"],
+      ["Keeps", "board · cables · classes · allowance · Arete · walls conquered"],
+    ]);
+    expect(dialog()!.querySelector("[data-gain]")!.textContent).toBe("Arete +3");
     expect([...dialog()!.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Cancel", "Prestige"]);
   });
 

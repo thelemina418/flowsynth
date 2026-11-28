@@ -18,6 +18,18 @@ export function prestigeAvailable(state: GameState): boolean {
   return gte(state.game.eraNous, PRESTIGE_AT);
 }
 
+// Whether any prestige has ended an era: from then on the master section
+// is on the console and the Arete readout sits beside ν (ADR-0029).
+export function hasPrestiged(state: GameState): boolean {
+  return state.game.prestiges > 0;
+}
+
+// The Arete the board shows beside ν: the balance from the first prestige
+// on, null before it.
+export function shownArete(state: GameState): Num | null {
+  return hasPrestiged(state) ? state.game.arete : null;
+}
+
 // The Arete a prestige would bank now: floor(sqrt(era ν / 1e6)). The
 // confirmation, the Goal and the pace runner share this one reader.
 export function prestigeGainOf(state: GameState): Num {

@@ -52,7 +52,7 @@ describe("the Hex detail readout", () => {
     ]);
   });
 
-  it("shows a Faders line while the channel isn't ×1 (issue #58)", () => {
+  it("shows a faders leg on the legs line while the channel isn't ×1 (issue #58)", () => {
     let s = laid(ACCEPTANCE);
     s.game.nous = D(26);
     for (const max of [false, false]) s = apply(s, { type: "buyFader", fader: { kind: "channel", type: "sine" }, max }).state;
@@ -61,15 +61,14 @@ describe("the Hex detail readout", () => {
     expect(texts(s, { q: 0, r: 0 })).toEqual([
       "Sine · Oscillator",
       "Not resonating · needs Triangles on opposite sides",
-      "1.0 ν/s base · −29% pressure",
-      "Faders ×1.21",
+      "1.0 ν/s base · ×1.21 faders · −29% pressure",
       "0.85 ν/s",
     ]);
     // A Triangle with no channel level shows none.
-    expect(texts(s, { q: 1, r: 0 }).some((t) => t.startsWith("Faders"))).toBe(false);
+    expect(texts(s, { q: 1, r: 0 }).some((t) => t.includes("faders"))).toBe(false);
   });
 
-  it("folds the Oscillators bus into the Faders line: channel 2 and bus 1 read ×1.1² × 1.05 (issue #60)", () => {
+  it("folds the Oscillators bus into the faders leg: channel 2 and bus 1 read ×1.1² × 1.05 (issue #60)", () => {
     let s = laid(ACCEPTANCE);
     s.game.nous = D(5026);
     for (const fader of [{ kind: "channel", type: "sine" }, { kind: "channel", type: "sine" }, { kind: "bus", category: "oscillator" }] as const) {
@@ -78,9 +77,9 @@ describe("the Hex detail readout", () => {
     expect(s.game.console.buses.oscillator).toBe(1);
     // 1.1² × 1.05 = 1.2705, shown to 3 figures rounded down; 0.71 × that
     // is 0.902….
-    expect(texts(s, { q: 0, r: 0 }).slice(3)).toEqual(["Faders ×1.27", "0.9 ν/s"]);
+    expect(texts(s, { q: 0, r: 0 }).slice(2)).toEqual(["1.0 ν/s base · ×1.27 faders · −29% pressure", "0.9 ν/s"]);
     // The Triangle has the bus alone.
-    expect(texts(s, { q: 1, r: 0 })).toContain("Faders ×1.05");
+    expect(texts(s, { q: 1, r: 0 })).toContain("1.0 ν/s base · ×1.75 resonance · ×1.05 faders · −34% pressure");
   });
 
   it("leaves the pressure leg out of an oscillator no wall presses on", () => {

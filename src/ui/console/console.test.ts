@@ -109,6 +109,16 @@ describe("the console", () => {
     expect(readouts()[0]).toBe("Sine · 40 · 1.46e9");
     expect(width()).toBe(before);
     expect(parseFloat(before)).toBeGreaterThanOrEqual("Sine · 40 · 1.46e9".length);
+    // An uncapped channel far past two digits holds it too.
+    render(null, host);
+    host.remove();
+    const higher = withNous(0);
+    higher.game.console = { channels: { sine: 1_500 }, buses: {}, master: {}, shown: { console: true, buses: false } };
+    mount(higher);
+    const text = readouts()[0]!.replace(/\s/g, " ");
+    expect(text).toMatch(/^Sine · 1 500 · \d\.\d+e30\d$/);
+    expect(width()).toBe(before);
+    expect(parseFloat(before)).toBeGreaterThanOrEqual(text.length);
   });
 
   it("is drawn muted in flow and buys nothing there", () => {

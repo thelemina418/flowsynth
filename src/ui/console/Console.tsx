@@ -1,6 +1,22 @@
-import { affordable, atCap, busesShown, busFaders, channelFaders, consoleShown, costOf, faderEffect, faderName, levelOf, masterFaders, masterShown, type FaderId } from "../../engine/console";
-import { categoryOf } from "../../engine/modules";
-import { fmtCost } from "../../engine/num";
+import {
+  affordable,
+  atCap,
+  busesShown,
+  busFaders,
+  channelFaders,
+  consoleShown,
+  costOf,
+  costUnit,
+  faderCategory,
+  faderEffect,
+  faderKey,
+  faderName,
+  levelOf,
+  masterFaders,
+  masterShown,
+  type FaderId,
+} from "../../engine/console";
+import { D, fmt, fmtHp } from "../../engine/num";
 import type { GameState } from "../../engine/types";
 
 // The console (spec chunk 06, issue #58; philosophy.md, Look: "Upgrades
@@ -13,13 +29,12 @@ import type { GameState } from "../../engine/types";
 // everything else (muted). Outside upgrade mode it is read-only and every
 // fader is muted. On a phone the strip scrolls inside itself.
 
-// The widest figures a readout reserves: a two-digit level and an
-// eight-character cost (`999 999`, `9.99e99`, `e1.2e308`'s neighbours).
-const LEVEL_CH = 2;
-const COST_CH = 8;
-// A master cost is up to three digits of Arete with its unit (`999 Arete`),
-// or `max`.
-const MASTER_COST_CH = 9;
+// The widest figure a readout reserves for its level and for its cost:
+// both are written in the ν number format, whose widest text is eight
+// characters (`999 999`, `9.99e99`, `9.99e307`, `e1.2e308`), so an
+// uncapped level grows into the same lane as its cost. A cost with a unit
+// (` Arete`) reserves the unit too.
+const FIGURE_CH = 8;
 const SEPARATORS_CH = 6;
 
 interface ConsoleProps {
@@ -66,26 +81,22 @@ function Section({ name, state, faders, live, onBuy }: SectionProps) {
   );
 }
 
-// A fader's handle in the DOM: the type for a channel, `bus-<category>`
-// for a bus, `master-<id>` for a master fader.
-function faderKey(fader: FaderId): string {
-  if (fader.kind === "master") return `master-${fader.id}`;
-  return fader.kind === "channel" ? fader.type : `bus-${fader.category}`;
-}
-
-// The hue a fader's fill wears: its category, or none for a master fader
-// (the Arete register).
-function faderCategory(fader: FaderId): string | undefined {
-  if (fader.kind === "master") return undefined;
-  return fader.kind === "channel" ? categoryOf(fader.type) : fader.category;
-}
-
 // The readout's cost: ν for channels and buses, Arete for the master
 // section, and `max` once a fader is capped.
+// A cost rounds up, like a wall's HP, so a balance that reads at least the
+// cost always affords it.
 function costText(state: GameState, fader: FaderId): string {
   if (atCap(state, fader)) return "max";
-  const cost = fmtCost(costOf(state, fader));
-  return fader.kind === "master" ? `${cost} Arete` : cost;
+  const cost = fmtHp(costOf(state, fader));
+  const unit = costUnit(fader);
+  return unit === null ? cost : `${cost} ${unit}`;
+}
+
+// The readout's reserved width: the name, the separators, the level's and
+// the cost's figures, and the cost's unit.
+function readoutCh(fader: FaderId): number {
+  const unit = costUnit(fader);
+  return faderName(fader).length + SEPARATORS_CH + 2 * FIGURE_CH + (unit === null ? 0 : unit.length + 1);
 }
 
 interface FaderProps {
@@ -116,8 +127,8 @@ function Fader({ state, fader, highest, live, onBuy }: FaderProps) {
       <span class="fader-throw" aria-hidden="true">
         <span class="fader-fill" style={{ height: `${fill}%` }} />
       </span>
-      <span class="fader-readout mono" style={{ minWidth: `${name.length + SEPARATORS_CH + LEVEL_CH + (fader.kind === "master" ? MASTER_COST_CH : COST_CH)}ch` }}>
-        {`${name} · ${level} · ${costText(state, fader)}`}
+      <span class="fader-readout mono" style={{ minWidth: `${readoutCh(fader)}ch` }}>
+        {`${name} · ${fmt(D(level))} · ${costText(state, fader)}`}
       </span>
       {effect !== null && <span class="fader-effect mono">{effect}</span>}
     </button>

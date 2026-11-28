@@ -305,9 +305,9 @@ export interface ResonanceInstance {
 
 // One placed oscillator's rate (mechanics-sketch.md, Rates):
 // rate = base × resonance × charge × faders × (1 − pressure). Faders are
-// the type's channel multiplier (issue #58) times the Oscillators bus
-// (#60); pressure is the bordering
-// walls' sum, capped at 60% (issue #52).
+// the type's channel multiplier (issue #58) × the Oscillators bus (#60) ×
+// a shielding Guard Plate's channel (#59) × Drive (#63); pressure is the
+// bordering walls' sum, capped at 60% (issue #52).
 export interface OscillatorRate {
   cell: Cell;
   module: OscillatorType;
@@ -412,15 +412,15 @@ export interface BoardRates {
   breatherTotal: Num;
 }
 
-// The console (spec chunk 06, issue #58; GLOSSARY: Console, Fader): each
-// type's channel fader level (absent = 0), and the console's monotonic
-// disclosure: `shown.console` flips the first time any fader is
-// affordable and never flips back (engine/console.ts). Each category's bus
-// level (absent = 0, issue #60) has its own flag: `shown.buses` flips the
-// first time a bus fader is affordable.
 // The master section's faders (issue #63), bought with Arete.
 export type MasterId = "channelTaper" | "busTaper" | "drive";
 
+// The console (spec chunk 06, issue #58; GLOSSARY: Console, Fader): each
+// type's channel fader level and each category's bus level (issue #60),
+// both absent = 0 and reset by prestige; the master levels (issue #63);
+// and the console's monotonic disclosure: `shown.console` flips the first
+// time any fader is affordable, `shown.buses` the first time a bus fader
+// is, and neither flips back (engine/console.ts).
 export interface ConsoleState {
   channels: Partial<Record<ModuleType, number>>;
   buses: Partial<Record<ModuleCategory, number>>;

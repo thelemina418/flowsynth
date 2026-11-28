@@ -1,5 +1,5 @@
 import type { ActionResult } from "./actions";
-import { goalOf } from "./goal";
+import { prestigeIsGoal } from "./goal";
 import { grantsOf } from "./levels";
 import { modifierName } from "./map";
 import { gt } from "./num";
@@ -136,7 +136,7 @@ export const ENTRIES: readonly Entry[] = [
     title: "Prestige",
     lines: ["Ends an era", "Resets ν and faders", "Board, cables, class levels and allowance stay"],
     // The first time Prestige is the Goal (issue #61).
-    revealed: (s) => goalOf(s) === "Prestige",
+    revealed: prestigeIsGoal,
   },
 ];
 

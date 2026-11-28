@@ -16,8 +16,10 @@
   gap: 4px 16px;
 }
 
+/* ADR-0031: the Arete lane reserves the same figure width as the ν lane
+   (16ch less `ν `), after its longer `Arete ` label. */
 .arete-readout {
-  min-width: 10ch;
+  min-width: 20ch;
   font-size: 17px;
   line-height: 1.2;
   color: var(--arete);

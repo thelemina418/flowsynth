@@ -1,4 +1,4 @@
-import { disclosureOf, goalOf } from "../../engine/goal";
+import { disclosureOf, goalOf, prestigeIsGoal } from "../../engine/goal";
 import { hasUnseen } from "../../engine/encyclopedia";
 import { grantsOf } from "../../engine/levels";
 import { unplacedOf } from "../../engine/placement";
@@ -17,7 +17,7 @@ import { RecoveryChoice } from "./RecoveryChoice";
 import { downloadSave } from "./download";
 import { Stage } from "../board/Stage";
 import { Console } from "../console/Console";
-import { prestigeGainOf } from "../../engine/era";
+import { prestigeGainOf, shownArete } from "../../engine/era";
 import { PrestigeConfirm } from "./PrestigeConfirm";
 
 // The shell's one surface (issue #21): the question owed on first load,
@@ -36,8 +36,8 @@ export function App({ shell }: { shell: Shell }) {
   const shown = disclosureOf(state);
   const goal = goalOf(state);
   // The Prestige Goal opens its confirmation (issue #62).
-  const prestigeGoal = goal === "Prestige" && game.mode === "upgrade";
-  const arete = game.prestiges > 0 ? game.arete : null;
+  const prestigeGoal = prestigeIsGoal(state) && game.mode === "upgrade";
+  const arete = shownArete(state);
   return (
     <div class="shell">
       <h1 class="sr-only">FlowSynth</h1>
@@ -120,7 +120,7 @@ export function App({ shell }: { shell: Shell }) {
       {screen.kind === "flow" && <FlowScreen shell={shell} error={screen.error} />}
       {screen.kind === "honesty" && <HonestyReport session={screen.session} error={screen.error} onAnswer={(outcome) => shell.answerHonesty(outcome)} />}
       {screen.kind === "summary" && <Summary summary={screen.summary} onDismiss={() => shell.dismissSummary()} />}
-      {screen.kind === "breather" && <Breather running={screen.running} onEndEarly={() => shell.endBreatherEarly()} />}
+      {screen.kind === "breather" && <Breather state={state} running={screen.running} onEndEarly={() => shell.endBreatherEarly()} />}
       {screen.kind === "breather-result" && <BreatherResult result={screen.result} onDismiss={() => shell.dismissBreatherResult()} />}
     </div>
   );

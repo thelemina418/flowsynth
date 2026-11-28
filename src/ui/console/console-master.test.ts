@@ -80,4 +80,14 @@ describe("the console's master section", () => {
     click(fader("busTaper"));
     expect(shell.state.value.game.arete.toNumber()).toBe(50);
   });
+
+  it("reserves room for an uncapped Drive far past two digits (ADR-0031)", () => {
+    const s = prestiged(0);
+    s.game.console.master = { drive: 12_345 };
+    mount(s);
+    const readout = fader("drive").querySelector<HTMLElement>(".fader-readout")!;
+    // `Drive · 12 345 · 12 346 Arete`: the level and cost in fmt's figures.
+    expect(readout.textContent!.replace(/\s/g, " ")).toBe("Drive · 12 345 · 12 346 Arete");
+    expect(parseFloat(readout.style.minWidth)).toBeGreaterThanOrEqual(readout.textContent!.length);
+  });
 });

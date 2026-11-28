@@ -367,25 +367,19 @@ function lostNestedFigures(game: Record<string, unknown>): string[] {
   return lost;
 }
 
-// The era's nous (issue #61). A save from before chunk 06 has none: nothing
-// was spendable then, so its balance is the era's nous. One that is
-// unreadable, non-finite or negative reads the same way.
-function readEraNous(value: unknown, nous: Num): Num {
-  if (value === undefined || !readableNum(value)) return nous;
-  const era = readNum(value, nous);
-  return Number.isFinite(era.mag) && gte(era, 0) ? era : nous;
+// A figure that is never negative: absent, unreadable, non-finite or
+// negative, it reads as the fallback. The era's nous (issue #61) falls back
+// to the loaded balance: a save from before chunk 06 has none, and nothing
+// was spendable then, so its balance is the era's nous. The banked Arete
+// (issue #62) falls back to 0: a save from before the first prestige has
+// none.
+function readNonNegativeNum(value: unknown, fallback: Num): Num {
+  if (value === undefined || !readableNum(value)) return fallback;
+  const read = readNum(value, fallback);
+  return Number.isFinite(read.mag) && gte(read, 0) ? read : fallback;
 }
 
-// The banked Arete and the prestige count (issue #62). A save from before
-// the first prestige has neither. An Arete that is unreadable, non-finite
-// or negative reads as 0, and so does a count that isn't a non-negative
-// whole number.
-function readArete(value: unknown): Num {
-  if (value === undefined || !readableNum(value)) return D(0);
-  const arete = readNum(value, D(0));
-  return Number.isFinite(arete.mag) && gte(arete, 0) ? arete : D(0);
-}
-
+// The prestige count (issue #62): a non-negative whole number, else 0.
 function readPrestiges(value: unknown): number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
 }
@@ -445,8 +439,8 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
     },
     game: {
       nous,
-      eraNous: readEraNous(game.eraNous, nous),
-      arete: readArete(game.arete),
+      eraNous: readNonNegativeNum(game.eraNous, nous),
+      arete: readNonNegativeNum(game.arete, D(0)),
       prestiges: readPrestiges(game.prestiges),
       mode,
       session: flowing ? readSession(game.session as Partial<SessionState>) : null,

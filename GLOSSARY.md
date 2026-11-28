@@ -136,6 +136,10 @@ _Avoid_: Global multiplier
 The span between prestiges. Prestige resets only nous and fader levels; the board, cables, class levels and allowance stay.
 _Avoid_: Run, loop, cycle
 
+**Prestige**:
+Ending an era by choice, once the era's nous reaches 1e6. It banks the era's Arete and resets nous and fader levels; everything else stays. In copy it is the Goal that offers it, the button that confirms it and the title of the confirmation.
+_Avoid_: Reset (as the act's name), rebirth, ascend, prestige points
+
 **Arc**:
 One of the four macro stages of the game, Sketch, Demo, Record and Master, followed by Encore. Each arc adds new play and automates old play.
 _Avoid_: Act, chapter, tier, era

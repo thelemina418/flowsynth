@@ -17,6 +17,10 @@ interface GoalEntry {
   done: (state: GameState) => boolean;
 }
 
+// The Goal that offers a prestige. The shell and the Encyclopedia ask for
+// it through `prestigeIsGoal`, never by its label's text.
+export const PRESTIGE_GOAL = "Prestige";
+
 const always = () => true;
 const never = () => false;
 
@@ -33,7 +37,7 @@ const SKETCH: readonly GoalEntry[] = [
   { label: "Conquer Schist", shown: always, done: (s) => isOpen(s.game.board, SCHIST_CELL) },
   // Shown once the era's ν reaches 1e6 (issue #61); never done, since a
   // prestige sets the era's ν to 0, which hides it.
-  { label: "Prestige", shown: prestigeAvailable, done: never },
+  { label: PRESTIGE_GOAL, shown: prestigeAvailable, done: never },
 ];
 
 const PRIORITIES: Record<Arc, readonly GoalEntry[]> = {
@@ -48,6 +52,11 @@ const PRIORITIES: Record<Arc, readonly GoalEntry[]> = {
 export function goalOf(state: GameState): string | null {
   const entry = PRIORITIES[state.game.board.arc].find((e) => e.shown(state) && !e.done(state));
   return entry?.label ?? null;
+}
+
+// Whether the Goal is the one that offers a prestige (issue #61).
+export function prestigeIsGoal(state: GameState): boolean {
+  return goalOf(state) === PRESTIGE_GOAL;
 }
 
 // First-session disclosure (philosophy.md, Disclosure): before the first

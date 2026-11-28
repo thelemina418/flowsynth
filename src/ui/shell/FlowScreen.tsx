@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { shownArete } from "../../engine/era";
 import { activeHabit } from "../../engine/habits";
 import { foughtWall } from "../../engine/fought";
 import { grantsOf } from "../../engine/levels";
@@ -47,7 +48,7 @@ export function FlowScreen({ shell, error }: { shell: Shell; error: string | nul
         console={<Console state={state} live={false} onBuy={() => undefined} />}
         readouts={
           <div class="flow-readouts">
-            <NousReadout nous={game.nous} arete={game.prestiges > 0 ? game.arete : null} />
+            <NousReadout nous={game.nous} arete={shownArete(state)} />
             <div class="flow-right">
               {line !== null && (
                 <p class="flow-class mono" data-class-line="">
