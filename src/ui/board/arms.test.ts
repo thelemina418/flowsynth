@@ -3,7 +3,7 @@ import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
 import { apply } from "../../engine/apply";
-import { openRoadie } from "../../engine/fixtures";
+import { openRoadie, ownCells } from "../../engine/fixtures";
 import { createInitialState } from "../../engine/state";
 import type { GameState } from "../../engine/types";
 import { memorySaveStorage } from "../shared-save";
@@ -117,5 +117,45 @@ describe("the Blade's Hex detail", () => {
     mount(fedBlade(0));
     click(cell("0,0"));
     expect(lines()).toEqual(["Blade · Arm · facing NE", "1.4 charge/s received", "No wall in reach"]);
+  });
+});
+
+// Roadie at Lv 2 (1.5 credited hours) brings the Guard Plate (issue #54).
+function plated(): GameState {
+  const s = roadie();
+  s.records.classCredit.roadie = 1.5 * 3600;
+  return s;
+}
+
+describe("the Guard Plate", () => {
+  it("joins the Arms group, and on the board wears the Arm category and its glyph with no facing pointer", () => {
+    mount(plated());
+    expect(chip("arm")!.textContent).toBe("Arms 2");
+    click(entry("Guard Plate"));
+    click(cell("0,0"));
+    const face = cell("0,0").querySelector('[data-module="guardPlate"]')!;
+    expect(face.getAttribute("data-category")).toBe("arm");
+    expect(face.querySelector('[data-glyph="guardPlate"]')).not.toBeNull();
+    expect(face.textContent).toBe("Guard Plate");
+    expect(facing("0,0")).toBeUndefined();
+  });
+
+  it("bordering a wall, its Hex detail counts the modules it shields", () => {
+    let s = plated();
+    s = apply(s, { type: "placeModule", module: "guardPlate", cell: { q: 0, r: 0 } }).state;
+    s = apply(s, { type: "placeModule", module: "sine", cell: { q: 0, r: 1 } }).state;
+    s = apply(s, { type: "placeModule", module: "triangle", cell: { q: 1, r: -1 } }).state;
+    mount(s);
+    click(cell("0,0"));
+    expect(lines()).toEqual(["Guard Plate · Arm", "Cancels pressure on 2 modules"]);
+  });
+
+  it("bordering no wall, reads No wall in reach", () => {
+    const s = plated();
+    // (1,0)'s three ring-2 walls owned, as if conquered.
+    ownCells(s, [{ q: 2, r: 0 }, { q: 2, r: -1 }, { q: 1, r: 1 }]);
+    mount(apply(s, { type: "placeModule", module: "guardPlate", cell: { q: 1, r: 0 } }).state);
+    click(cell("1,0"));
+    expect(lines()).toEqual(["Guard Plate · Arm", "No wall in reach"]);
   });
 });

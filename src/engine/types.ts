@@ -247,9 +247,9 @@ export type OscillatorType = "sine" | "triangle" | "square" | "saw" | "release";
 // declared as data (issue #32) and chunk 04 makes it arrive.
 export type ModulatorType = "flywheel" | "pulsewell";
 
-// The Arm types (mechanics-sketch.md, Arms): Roadie's Blade (issue #53).
-// The Guard Plate is chunk 05's next ticket (#54).
-export type ArmType = "blade";
+// The Arm types (mechanics-sketch.md, Arms): Roadie's Blade (issue #53)
+// and Guard Plate (issue #54).
+export type ArmType = "blade" | "guardPlate";
 
 // Every module type.
 export type ModuleType = OscillatorType | ModulatorType | ArmType;
@@ -358,18 +358,31 @@ export interface WallRate {
   net: Num;
 }
 
-// One placed Arm (issue #53): the charge/s it receives and, for a Blade,
+// One placed Arm (issue #53). A Blade carries the charge/s it receives,
 // the cell its facing points at, whether that cell is a wall, and the
 // damage it deals there (10 × charge received, or 0).
-export interface ArmRate {
+export interface BladeRate {
   cell: Cell;
-  module: ArmType;
+  module: "blade";
   facing: Facing;
   chargeReceived: Num;
   faces: Cell;
   facesWall: boolean;
   damage: Num;
 }
+
+// A Guard Plate (issue #54) carries whether it's active (it borders at
+// least one wall) and how many modules it shields: the oscillators beside
+// it that a wall would otherwise press on, 0 while it's inactive. Charge
+// delivered to it is wasted, so it carries none.
+export interface GuardPlateRate {
+  cell: Cell;
+  module: "guardPlate";
+  active: boolean;
+  shields: number;
+}
+
+export type ArmRate = BladeRate | GuardPlateRate;
 
 // The board's rates (issue #26): one pure computation of the layout and
 // the credited Producer time, cached on the game state. Recomputed after

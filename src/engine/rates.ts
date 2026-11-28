@@ -1,7 +1,7 @@
 import { cellKind } from "./board";
 import { addCell, cellKey, DIRECTIONS, neighbours, type Cell } from "./hex";
 import { add, D, div, gt, ln, min, mul, pow, sub, type Num } from "./num";
-import { baseRate, breatherBaseRate, damagePerCharge, hasFacing, isArm, isModulator, isOscillator, outputOf, patternOf, reachOf, takesCharge } from "./modules";
+import { baseRate, breatherBaseRate, damagePerCharge, guardsPressure, hasFacing, isArm, isModulator, isOscillator, outputOf, patternOf, reachOf, takesCharge } from "./modules";
 import { wallAt } from "./map";
 import { cableFrom, moduleAt } from "./placement";
 import { instancesOf } from "./resonance";
@@ -58,11 +58,23 @@ export function wallPressure(cell: Cell): number {
   return wall.pressure * (wall.modifier === "pressureDouble" ? 2 : 1);
 }
 
+// Whether a cell holds an oscillator that a bordering wall presses on.
+function isPressed(board: Board, cell: Cell): boolean {
+  const module = moduleAt(board, cell)?.module;
+  return module !== undefined && isOscillator(module) && bordersWall(board, cell);
+}
+
+function bordersWall(board: Board, cell: Cell): boolean {
+  return neighbours(cell).some((n) => cellKind(board, n) === "wall");
+}
+
 // The pressure on a cell: the sum over its bordering walls inside the
 // arc, capped. A pure derivation from the board's cell kinds, so a dark
 // cell presses on nothing and a conquered (open) cell stops pressing at
-// once (issue #52).
-function pressureOn(board: Board, cell: Cell): Num {
+// once (issue #52). A cell beside an active Guard Plate takes none (issue
+// #54).
+function pressureOn(board: Board, cell: Cell, guarded: ReadonlySet<string>): Num {
+  if (guarded.has(cellKey(cell))) return D(0);
   let sum = 0;
   for (const n of neighbours(cell)) if (cellKind(board, n) === "wall") sum += wallPressure(n);
   return D(Math.min(sum, PRESSURE_CAP));
@@ -112,11 +124,23 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
     });
   }
   // Arms (issue #53): a Blade deals 10 × the charge it receives to the
-  // cell it faces, when that cell is a wall; otherwise it does nothing.
+  // cell it faces, when that cell is a wall; otherwise it does nothing. A
+  // Guard Plate bordering a wall guards its neighbours from pressure
+  // (issue #54).
   const arms: ArmRate[] = [];
+  const guarded = new Set<string>();
   for (const placement of board.placements) {
     const module = placement.module;
     if (!isArm(module)) continue;
+    const cell = { q: placement.cell.q, r: placement.cell.r };
+    if (guardsPressure(module)) {
+      const active = bordersWall(board, cell);
+      if (active) for (const n of neighbours(cell)) guarded.add(cellKey(n));
+      // It shields the oscillators beside it that a wall would press on.
+      const shields = active ? neighbours(cell).filter((n) => isPressed(board, n)).length : 0;
+      arms.push({ cell, module: "guardPlate", active, shields });
+      continue;
+    }
     const facing = placement.facing ?? 0;
     const faces = addCell(placement.cell, DIRECTIONS[facing]!);
     const facesWall = cellKind(board, faces) === "wall";
@@ -127,7 +151,7 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
       const wall = damage.get(key) ?? { cell: faces, damage: D(0) };
       damage.set(key, { ...wall, damage: add(wall.damage, dealt) });
     }
-    arms.push({ cell: { q: placement.cell.q, r: placement.cell.r }, module, facing, chargeReceived, faces, facesWall, damage: dealt });
+    arms.push({ cell, module: "blade", facing, chargeReceived, faces, facesWall, damage: dealt });
   }
   const oscillators: OscillatorRate[] = [];
   let total = D(0);
@@ -144,7 +168,7 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
     // Faders are an identity leg until chunk 06. Pressure (issue #52)
     // reduces ν only: modulator output and wall damage ignore it.
     const faders = D(1);
-    const pressure = pressureOn(board, placement.cell);
+    const pressure = pressureOn(board, placement.cell, guarded);
     const product = (b: Num): Num => mul(mul(mul(mul(b, resonance), charge), faders), sub(1, pressure));
     const rate = product(base);
     // The same product on the breather base (issue #41).
