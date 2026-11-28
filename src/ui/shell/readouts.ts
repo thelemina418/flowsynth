@@ -39,7 +39,7 @@ export function classLine(state: GameState, habit: Habit | undefined): string | 
 // at once (chunk 06 adds the affordable faders).
 export function readyCount(state: GameState): number {
   const unplaced = unplacedOf(state);
-  return unplaced.oscillator + unplaced.modulator + Math.max(0, grantsOf(state).cableAllowance - state.game.board.cables.length);
+  return unplaced.oscillator + unplaced.modulator + unplaced.arm + Math.max(0, grantsOf(state).cableAllowance - state.game.board.cables.length);
 }
 
 const HP_CELLS = 10;

@@ -203,7 +203,7 @@ export interface BreatherState {
 }
 
 // The Encyclopedia's entries (spec chunk 04, issue #44).
-export type EntryId = "resonance" | OscillatorType | "charge" | "cables" | "walls" | "pressure" | "classes" | "breather" | "prestige";
+export type EntryId = "resonance" | OscillatorType | "charge" | "cables" | "walls" | "pressure" | "arms" | "classes" | "breather" | "prestige";
 
 // Revealed and seen entries: unions that only grow (engine/encyclopedia.ts).
 export interface EncyclopediaState {
@@ -234,8 +234,9 @@ export interface Records {
 export type Arc = "sketch" | "demo" | "record" | "master" | "encore";
 
 // The module categories (GLOSSARY: Category). Oscillators and Modulators
-// exist from chunk 03; Effects and Arms arrive later.
-export type ModuleCategory = "oscillator" | "modulator";
+// exist from chunk 03, Arms from chunk 05 (issue #53); Effects arrive
+// later.
+export type ModuleCategory = "oscillator" | "modulator" | "arm";
 
 // The oscillator types (mechanics-sketch.md). Square, Saw and Release are
 // declared now; chunk 04 makes them arrive.
@@ -246,8 +247,12 @@ export type OscillatorType = "sine" | "triangle" | "square" | "saw" | "release";
 // declared as data (issue #32) and chunk 04 makes it arrive.
 export type ModulatorType = "flywheel" | "pulsewell";
 
+// The Arm types (mechanics-sketch.md, Arms): Roadie's Blade (issue #53).
+// The Guard Plate is chunk 05's next ticket (#54).
+export type ArmType = "blade";
+
 // Every module type.
-export type ModuleType = OscillatorType | ModulatorType;
+export type ModuleType = OscillatorType | ModulatorType | ArmType;
 
 // One module on one owned open cell (issue #25). A module whose type has a
 // facing (issue #31) carries it: an index into hex.ts's DIRECTIONS; a type
@@ -353,6 +358,19 @@ export interface WallRate {
   net: Num;
 }
 
+// One placed Arm (issue #53): the charge/s it receives and, for a Blade,
+// the cell its facing points at, whether that cell is a wall, and the
+// damage it deals there (10 × charge received, or 0).
+export interface ArmRate {
+  cell: Cell;
+  module: ArmType;
+  facing: Facing;
+  chargeReceived: Num;
+  faces: Cell;
+  facesWall: boolean;
+  damage: Num;
+}
+
 // The board's rates (issue #26): one pure computation of the layout and
 // the credited Producer time, cached on the game state. Recomputed after
 // a layout or facing change, on load and when a flow session ends (issue
@@ -361,6 +379,8 @@ export interface WallRate {
 export interface BoardRates {
   oscillators: OscillatorRate[];
   modulators: ModulatorRate[];
+  // In placement order (issue #53).
+  arms: ArmRate[];
   // Walls in the order a Patch first targets them.
   walls: WallRate[];
   total: Num;

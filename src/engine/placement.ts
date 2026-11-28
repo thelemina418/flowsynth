@@ -46,6 +46,7 @@ export function unplacedOf(state: GameState): Record<ModuleCategory, number> {
   return {
     oscillator: Math.max(0, allowance.oscillator - placedCount(board, "oscillator")),
     modulator: Math.max(0, allowance.modulator - placedCount(board, "modulator")),
+    arm: Math.max(0, allowance.arm - placedCount(board, "arm")),
   };
 }
 

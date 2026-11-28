@@ -173,6 +173,12 @@ export const BASALT_CELLS: readonly Cell[] = [
   { q: 0, r: -1 },
 ];
 
+// The marked Flint, which opens Roadie the first time an open cell
+// borders it (issue #53), and the marked Schist, which carries the Mixer
+// mark (chunk 07 opens Mixer there).
+export const FLINT_CELL: Cell = { q: 0, r: -2 };
+export const SCHIST_CELL: Cell = { q: -2, r: 1 };
+
 // The wall authored at a cell, or null at an opening cell or beyond the
 // lifetime board. A conquered wall's cell still answers with its wall:
 // whether a cell is a wall now is the board's derived kind.

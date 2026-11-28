@@ -34,7 +34,7 @@ function expectRefused(s: GameState, action: Action) {
 describe("the Flywheel's allowance", () => {
   it("a fresh start has the Flywheel and one Modulator allowance beside the oscillators'", () => {
     const s = fresh();
-    expect(grantsOf(s).allowance).toEqual({ oscillator: 2, modulator: 1 });
+    expect(grantsOf(s).allowance).toEqual({ oscillator: 2, modulator: 1, arm: 0 });
     expect(grantsOf(s).arrived).toEqual(["sine", "triangle", "flywheel"]);
   });
 

@@ -15,7 +15,8 @@ import type { Placing } from "./placing";
 // back to unplaced. After the modules, one entry per arrived cable type
 // reads the unused cable allowance (issue #33), `1 Patch cable`: that
 // count is the cables' chip. With a placed cable's plug picked, any entry
-// unplugs it.
+// unplugs it. Once Roadie opens, an `Arms <n>` group follows the cables
+// (issue #53).
 interface TrayProps {
   arrived: ModuleType[];
   cables: CableType[];
@@ -32,36 +33,37 @@ export function Tray({ arrived, cables, unplaced, chips, placing, onDrop }: Tray
   const pick = placing.pick.value;
   const unused = placing.unusedCables();
   const returning = pick?.from === "cell" || pick?.from === "plug";
+  const group = (category: ModuleCategory) => (
+    <div key={category} class="tray-group" data-group={category}>
+      {chips && (
+        <p class="tray-chip mono" data-chip={category} data-muted={unplaced[category] === 0 ? "" : undefined}>
+          {`${categoryName(category)}s ${unplaced[category]}`}
+        </p>
+      )}
+      {arrived.filter((module) => categoryOf(module) === category).map((module) => {
+        const picked = pick?.from === "tray" && pick.module === module;
+        return (
+          <button
+            key={module}
+            type="button"
+            class="tray-entry"
+            data-module={module}
+            data-picked={picked ? "" : undefined}
+            aria-pressed={picked ? "true" : "false"}
+            disabled={!placing.canTake(module)}
+            onClick={() => placing.clickTray(module)}
+            onPointerDown={(event) => startDrag(event, { begin: () => placing.pickModule(module), drop: onDrop })}
+          >
+            <GlyphIcon module={module} />
+            {moduleName(module)}
+          </button>
+        );
+      })}
+    </div>
+  );
   return (
     <div class="tray" data-tray="" data-returning={returning ? "" : undefined} role="group" aria-label="Unplaced">
-      {CATEGORIES.map((category) => (
-        <div key={category} class="tray-group" data-group={category}>
-          {chips && (
-            <p class="tray-chip mono" data-chip={category} data-muted={unplaced[category] === 0 ? "" : undefined}>
-              {`${categoryName(category)}s ${unplaced[category]}`}
-            </p>
-          )}
-          {arrived.filter((module) => categoryOf(module) === category).map((module) => {
-            const picked = pick?.from === "tray" && pick.module === module;
-            return (
-              <button
-                key={module}
-                type="button"
-                class="tray-entry"
-                data-module={module}
-                data-picked={picked ? "" : undefined}
-                aria-pressed={picked ? "true" : "false"}
-                disabled={!placing.canTake(module)}
-                onClick={() => placing.clickTray(module)}
-                onPointerDown={(event) => startDrag(event, { begin: () => placing.pickModule(module), drop: onDrop })}
-              >
-                <GlyphIcon module={module} />
-                {moduleName(module)}
-              </button>
-            );
-          })}
-        </div>
-      ))}
+      {CATEGORIES.map((category) => group(category))}
       <div class="tray-group" data-group="cable">
         {cables.map((cable) => {
           const picked = (pick?.from === "cable" || pick?.from === "jack") && pick.cable === cable;
@@ -82,6 +84,8 @@ export function Tray({ arrived, cables, unplaced, chips, placing, onDrop }: Tray
           );
         })}
       </div>
+      {/* Arms follow the cables entry once Roadie brings them (issue #53). */}
+      {arrived.some((module) => categoryOf(module) === "arm") && group("arm")}
     </div>
   );
 }

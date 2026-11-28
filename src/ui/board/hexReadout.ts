@@ -6,7 +6,7 @@ import { categoryName, categoryOf, moduleName, takesCharge } from "../../engine/
 import { cableFrom, moduleAt } from "../../engine/placement";
 import { fmt, fmtPercent, fmtRate, gt } from "../../engine/num";
 import { wallPressure } from "../../engine/rates";
-import type { Board, BoardRates, ModulatorRate, ModuleType, OscillatorRate, OscillatorType, ReachHolds } from "../../engine/types";
+import type { ArmRate, Board, BoardRates, ModulatorRate, ModuleType, OscillatorRate, OscillatorType, ReachHolds } from "../../engine/types";
 
 // The Hex detail's readout (issue #27; philosophy.md, Words rule 2): the
 // full readout of one clicked cell, in `name · number · effect` lines. It
@@ -40,6 +40,8 @@ export function hexDetail(board: Board, rates: BoardRates, cell: Cell): DetailLi
   if (oscillator) return oscillatorLines(oscillator);
   const modulator = rates.modulators.find((m) => sameCell(m.cell, cell));
   if (modulator) return modulatorLines(board, modulator);
+  const arm = rates.arms.find((a) => sameCell(a.cell, cell));
+  if (arm) return armLines(arm);
   const placed = moduleAt(board, cell);
   if (!placed) return [{ text: "Open cell" }];
   return [{ text: nameLine(placed.module) }];
@@ -88,6 +90,18 @@ function modulatorLines(board: Board, m: ModulatorRate): DetailLine[] {
   const charged = m.deliveries.flatMap((d) => (takesCharge(d.holds) ? [moduleName(d.holds)] : []));
   const reach = charged.length === 0 ? "no module in reach" : `reach → ${charged.join(", ")}`;
   return [name, { text: `${fmtRate(m.output)} charge/s · ${reach}`, effect: true }];
+}
+
+// A Blade names its facing, the charge it receives, and as its effect the
+// damage it deals to the wall it faces (issue #53). Facing a cell that
+// isn't a wall, it does nothing.
+function armLines(a: ArmRate): DetailLine[] {
+  const effect = a.facesWall ? `${fmtRate(a.damage)}/s to ${wallAt(a.faces)!.name}` : "No wall in reach";
+  return [
+    { text: `${nameLine(a.module)} · facing ${FACING_NAMES[a.facing]}` },
+    { text: `${fmtRate(a.chargeReceived)} charge/s received` },
+    { text: effect, effect: true },
+  ];
 }
 
 // A Patch's target: an open cell, a module, or a wall by its name (issue

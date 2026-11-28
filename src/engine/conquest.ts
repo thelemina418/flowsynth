@@ -1,7 +1,7 @@
-import { cellKind } from "./board";
+import { cellKind, isOpen } from "./board";
 import { EPS } from "./constants";
-import { cellKey, type Cell } from "./hex";
-import { wallAt } from "./map";
+import { addCell, cellKey, DIRECTIONS, type Cell } from "./hex";
+import { FLINT_CELL, wallAt } from "./map";
 import { add, D, div, gt, gte, lte, min, mul, requireNotNaN, sub, type Num } from "./num";
 import { computeBoardRates } from "./rates";
 import type { BoardRates, GameState, WallTally } from "./types";
@@ -56,6 +56,15 @@ function fallsIn(wall: Moving): number | null {
 // rounding never splits a tie or delays a conquest.
 function sameInstant(a: number, b: number): boolean {
   return Math.abs(a - b) <= EPS * Math.max(1, Math.abs(a), Math.abs(b));
+}
+
+// Roadie opens the first time a conquest leaves an open cell bordering the
+// marked Flint (issue #53). Nothing else is written: its grants, the Goal,
+// the Encyclopedia's Arms entry and `Ready · N` are derived.
+function openRoadie(state: GameState): void {
+  const game = state.game;
+  if (game.openClasses.includes("roadie")) return;
+  if (DIRECTIONS.some((d) => isOpen(game.board, addCell(FLINT_CELL, d)))) game.openClasses.push("roadie");
 }
 
 // The session's tally (issue #50): a wall joins it the first span
@@ -127,6 +136,7 @@ export function stepWalls(
     remaining = conquers ? remaining - span : 0;
     if (fallen.length === 0) continue;
     for (const cell of fallen) board.open.push({ q: cell.q, r: cell.r });
+    openRoadie(state);
     state.game.rates = computeBoardRates(board, state.records.classCredit.producer);
   }
 }

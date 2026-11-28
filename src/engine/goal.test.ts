@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceIn, applyIn, begin, fresh, giveOscillators, ownCells } from "./fixtures";
+import { advanceIn, applyIn, begin, fresh, giveOscillators, ownCells, openRoadie } from "./fixtures";
 import { disclosureOf, goalOf } from "./goal";
 
 // The Goal (spec chunk 04, issue #42): one line, read off the state by a
@@ -34,14 +34,23 @@ describe("the Goal", () => {
     expect(goalOf(s)).toBe("Conquer Basalt");
   });
 
-  it("either Basalt's open cell finishes Conquer Basalt, leaving no inert entry (issue #49)", () => {
+  it("either Basalt's open cell finishes Conquer Basalt, and Reach Flint follows until Roadie opens (issues #49, #53)", () => {
     for (const basalt of [{ q: -1, r: 0 }, { q: 0, r: -1 }]) {
       const s = fresh();
       ownCells(s, [SHALE, basalt]);
-      // Reach Flint and Prestige are declared but shown false until Roadie
-      // (chunk 05) and prestige (chunk 06) land.
-      expect(goalOf(s)).toBeNull();
+      expect(goalOf(s)).toBe("Reach Flint");
     }
+  });
+
+  it("with Roadie open, the Goal walks Conquer Flint, then Conquer Schist, leaving no inert entry (issue #53)", () => {
+    const s = fresh();
+    openRoadie(s);
+    expect(goalOf(s)).toBe("Conquer Flint");
+    ownCells(s, [{ q: 0, r: -2 }]);
+    expect(goalOf(s)).toBe("Conquer Schist");
+    ownCells(s, [{ q: -2, r: 1 }]);
+    // Prestige is declared but shown false until chunk 06.
+    expect(goalOf(s)).toBeNull();
   });
 });
 

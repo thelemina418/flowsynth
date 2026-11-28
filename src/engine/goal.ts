@@ -1,6 +1,6 @@
 import { isOpen } from "./board";
 import { grantsOf } from "./levels";
-import { BASALT_CELLS, SHALE_CELL } from "./map";
+import { BASALT_CELLS, FLINT_CELL, SCHIST_CELL, SHALE_CELL } from "./map";
 import { placedCount } from "./placement";
 import type { Arc, GameState } from "./types";
 
@@ -17,8 +17,7 @@ interface GoalEntry {
 }
 
 const always = () => true;
-// Declared now; the rest of chunk 05 (Roadie) and 06 (prestige) fill in
-// the predicates.
+// Declared now; chunk 06 (prestige) fills in the predicates.
 const later = () => false;
 
 const SKETCH: readonly GoalEntry[] = [
@@ -29,7 +28,9 @@ const SKETCH: readonly GoalEntry[] = [
   },
   { label: "Conquer Shale", shown: always, done: (s) => isOpen(s.game.board, SHALE_CELL) },
   { label: "Conquer Basalt", shown: always, done: (s) => BASALT_CELLS.some((cell) => isOpen(s.game.board, cell)) },
-  { label: "Reach Flint", shown: later, done: later },
+  { label: "Reach Flint", shown: always, done: (s) => s.game.openClasses.includes("roadie") },
+  { label: "Conquer Flint", shown: always, done: (s) => isOpen(s.game.board, FLINT_CELL) },
+  { label: "Conquer Schist", shown: always, done: (s) => isOpen(s.game.board, SCHIST_CELL) },
   { label: "Prestige", shown: later, done: later },
 ];
 

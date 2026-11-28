@@ -28,6 +28,8 @@ describe("theme token table", () => {
     expect(tokens["hue-oscillator"]).toBe("#6360d4");
     expect(tokens["hue-booster"]).toBe("#1f95b5");
     expect(tokens["hue-forge"]).toBe("#bc9239");
+    // The Arm wears the retired forge amber (issue #53).
+    expect(tokens["hue-arm"]).toBe("#bc9239");
     expect(tokens.charge).toBe("#9affa8");
     expect(tokens.nous).toBe("#cbcaff");
     expect(tokens.switch).toBe("#cc603d");
