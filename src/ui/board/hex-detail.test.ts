@@ -57,7 +57,7 @@ describe("the Hex detail panel", () => {
   it("fills on a click, and moves to the next clicked cell", () => {
     mount();
     click(cell("-1,1"));
-    expect(lines()).toEqual(["Shale · Wall"]);
+    expect(lines()).toEqual(["Shale · Wall · ring 1", "600 / 600 HP · regen 0.1/s", "Pressure 5%"]);
     click(cell("3,0"));
     expect(lines()).toEqual(["Dark cell · beyond this arc"]);
     expect(cell("3,0").hasAttribute("data-inspected")).toBe(true);
@@ -66,8 +66,8 @@ describe("the Hex detail panel", () => {
 
   it("opens from the keyboard on a focused cell and closes on Escape", () => {
     mount();
-    press(cell("2,-1"), "Enter");
-    expect(lines()).toEqual(["Flint · Wall · opens Roadie"]);
+    press(cell("0,-2"), "Enter");
+    expect(lines()).toEqual(["Flint · Wall · ring 2 · opens Roadie", "60\u2009000 / 60\u2009000 HP · regen 10.0/s", "Only Arm damage", "Pressure 10%"]);
     press(document, "Escape");
     expect(panel().textContent).toBe("");
   });

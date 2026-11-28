@@ -1,10 +1,10 @@
 import { cellKind } from "../../engine/board";
-import { FACING_NAMES, sameCell, type Cell } from "../../engine/hex";
+import { FACING_NAMES, ring, sameCell, type Cell } from "../../engine/hex";
 import { className } from "../../engine/habits";
-import { wallAt } from "../../engine/map";
+import { modifierName, wallAt } from "../../engine/map";
 import { categoryName, categoryOf, moduleName, takesCharge } from "../../engine/modules";
 import { cableFrom, moduleAt } from "../../engine/placement";
-import { fmtRate, gt } from "../../engine/num";
+import { fmt, fmtRate, gt } from "../../engine/num";
 import type { Board, BoardRates, ModulatorRate, ModuleType, OscillatorRate, OscillatorType, ReachHolds } from "../../engine/types";
 
 // The Hex detail's readout (issue #27; philosophy.md, Words rule 2): the
@@ -44,17 +44,23 @@ export function hexDetail(board: Board, rates: BoardRates, cell: Cell): DetailLi
   return [{ text: nameLine(placed.module) }];
 }
 
-// A wall names itself, and what it opens. Once a Patch targets it, its
-// effect line is the damage it takes and its regen (issue #34); the opens
-// note then stays on the name line.
+// A wall's static lines (issue #48): its name, ring and the class it
+// opens; its HP and regen; its modifier by name; its pressure, doubled for
+// `Pressure ×2`. Once a Patch targets it, the damage it takes is its effect
+// line (issue #34). HP stays full until walls take damage over time.
 function wallLines(rates: BoardRates, cell: Cell): DetailLine[] {
-  const wall = wallAt(cell);
-  const name = wall.name === null ? "Wall" : `${wall.name} · Wall`;
+  const wall = wallAt(cell)!;
   const opens = wall.opens === null ? "" : ` · opens ${className(wall.opens)}`;
+  const lines: DetailLine[] = [
+    { text: `${wall.name} · Wall · ring ${ring(cell)}${opens}` },
+    { text: `${fmt(wall.hp)} / ${fmt(wall.hp)} HP · regen ${fmtRate(wall.regen)}/s` },
+  ];
+  if (wall.modifier !== null) lines.push({ text: modifierName(wall.modifier) });
+  const pressure = wall.pressure * (wall.modifier === "pressureDouble" ? 2 : 1);
+  lines.push({ text: `Pressure ${Math.round(pressure * 100)}%` });
   const patched = rates.walls.find((w) => sameCell(w.cell, cell));
-  if (!patched) return [opens ? { text: name + opens, effect: true } : { text: name }];
-  const regen = patched.regen === null ? "" : ` · regen ${fmtRate(patched.regen)}/s`;
-  return [{ text: name + opens }, { text: `Taking ${fmtRate(patched.damage)}/s${regen}`, effect: true }];
+  if (patched) lines.push({ text: `Taking ${fmtRate(patched.damage)}/s`, effect: true });
+  return lines;
 }
 
 // A modulator names its facing in compass words (issue #31), then its
@@ -72,12 +78,12 @@ function modulatorLines(board: Board, m: ModulatorRate): DetailLine[] {
   return [name, { text: `${fmtRate(m.output)} charge/s · ${reach}`, effect: true }];
 }
 
-// A Patch's target: an open cell, a module, or a wall by its name, a
-// placeholder as Wall (issue #34). A dark cell is refused as a target.
+// A Patch's target: an open cell, a module, or a wall by its name (issue
+// #34). A dark cell is refused as a target.
 function targetName(cell: Cell, holds: ReachHolds): string {
   switch (holds) {
     case "empty": return "Open cell";
-    case "wall": return wallAt(cell).name ?? "Wall";
+    case "wall": return wallAt(cell)!.name;
     case "dark": throw new Error("a cable never targets a dark cell");
     default: return moduleName(holds);
   }

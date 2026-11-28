@@ -6,7 +6,9 @@ Fully specified for the opening arc. All numbers can be tuned through the pace r
 
 - Axial hex coordinates. A cell's ring is its hex distance from (0,0).
 - **Opening**: open cells at (0,0), (1,0), (0,1) and (1,−1). Every other cell up to the current arc's radius is a wall. Cells beyond that radius are dark.
-- **Shale** sits at (−1,1), bordering (0,0) and (0,1). **Flint** (which opens Roadie) sits at (2,−1).
+- **Shale** sits at (−1,1), bordering (0,0) and (0,1). The two ring-1 **Basalts** sit at (−1,0), with `Pressure ×2`, and at (0,−1).
+- **Flint** (which opens Roadie) sits at (0,−2), with `Only Arm damage`. It borders Basalt (0,−1) and no opening cell. The **marked Schist** (which opens Mixer) sits at (−2,1). The other ten ring-2 cells alternate Flint and Schist going clockwise, starting with Flint at (2,−2).
+- Those are Sketch's two modifiers. At most 1 wall in 6 carries one (`src/engine/map.ts` holds the whole map).
 - Modules and cables can be freely rearranged in upgrade mode. During flow and breathers, placement is locked.
 
 ## Rates (analytic)

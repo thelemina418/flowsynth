@@ -14,7 +14,7 @@ import {
   type Point,
   type ScreenDirection,
 } from "../../engine/hex";
-import { wallAt } from "../../engine/map";
+import { wallAt, type Modifier } from "../../engine/map";
 import { moduleName } from "../../engine/modules";
 import { moduleAt } from "../../engine/placement";
 import type { Board as BoardState, BoardRates, HabitClass, Placement } from "../../engine/types";
@@ -28,7 +28,7 @@ import { round } from "./svg";
 // The board (spec chunk 02, issue #24): the lifetime board drawn as
 // flat-top hexes in The Rack's style. Open cells are machined plates (a
 // face with an engraved inner ring), walls are unlit stone slabs carrying
-// their name initial, dark cells are a broken outline with no detail. The
+// their name initial, class mark and modifier glyph (issue #48), dark cells are a broken outline with no detail. The
 // three differ in shape as well as tone (philosophy.md, State grammar).
 // Every cell carries data-cell, data-kind and data-ring, the seams later
 // tickets (resonance outlines, Hex detail) hang off. A placed module is a
@@ -82,8 +82,8 @@ function viewBox(): string {
 const VIEW_BOX = viewBox();
 
 // A class's mark on the wall that opens it (philosophy.md, Disclosure).
-// Roadie's craft is Arms: a jointed arm. Further marks arrive with the
-// walls that carry them (chunk 05).
+// Roadie's craft is Arms: a jointed arm. Mixer's is Effects: a fader cap
+// on its slot (issue #48).
 const CLASS_MARKS: Partial<Record<HabitClass, (x: number, y: number) => JSX.Element>> = {
   roadie: (x, y) => (
     <g data-mark="roadie" class="class-mark" transform={`translate(${round(x)} ${round(y)})`}>
@@ -91,6 +91,19 @@ const CLASS_MARKS: Partial<Record<HabitClass, (x: number, y: number) => JSX.Elem
       <circle cx="-1" cy="-2" r="1.6" />
     </g>
   ),
+  mixer: (x, y) => (
+    <g data-mark="mixer" class="class-mark" transform={`translate(${round(x)} ${round(y)})`}>
+      <path d="M -6 0 L 6 0 M -1 -3 L -1 3 M 1 -3 L 1 3" />
+    </g>
+  ),
+};
+
+// A modifier's engraved glyph (issue #48): small, in the stone's own tone,
+// never a hue, at the slab's upper right. `Pressure ×2`: two chevrons
+// pressing inward. `Only Arm damage`: a blade's wedge.
+const MODIFIER_GLYPHS: Record<Modifier, string> = {
+  pressureDouble: "M -3 -3 L 0 0 L -3 3 M 1 -3 L 4 0 L 1 3",
+  armOnly: "M -3 3 L 3 -3 L 3 0 L 0 3 Z",
 };
 
 interface BoardCellProps {
@@ -154,18 +167,24 @@ function BoardCell({ cell, kind, placement, picked, inspected, reached, target, 
       </g>
     );
   }
-  const wall = wallAt(cell);
+  const wall = wallAt(cell)!;
   const mark = wall.opens ? CLASS_MARKS[wall.opens] : undefined;
   const initialY = mark ? center.y - 2 : center.y + 5;
   return (
-    <g {...common(wall.name ?? "Wall")}>
+    <g {...common(wall.name)}>
       <polygon class="cell-face" points={points(center, FACE)} />
-      {wall.name !== null && (
-        <text class="wall-initial" x={round(center.x)} y={round(initialY)} text-anchor="middle">
-          {wall.name.charAt(0)}
-        </text>
-      )}
+      <text class="wall-initial" x={round(center.x)} y={round(initialY)} text-anchor="middle">
+        {wall.name.charAt(0)}
+      </text>
       {mark?.(center.x, center.y + 10)}
+      {wall.modifier && (
+        <path
+          class="modifier-glyph"
+          data-modifier={wall.modifier}
+          d={MODIFIER_GLYPHS[wall.modifier]}
+          transform={`translate(${round(center.x + 11)} ${round(center.y - 11)})`}
+        />
+      )}
     </g>
   );
 }

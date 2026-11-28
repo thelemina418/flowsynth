@@ -299,3 +299,29 @@ DRY 16.7h–250.0h: 233.3h with no new milestone
 - **The board is cell-bound.** The opening's four owned cells fill with the two Sines, the Flywheel and the Triangle at 0.8 h, so every later grant (more oscillators and modulators, the Pulsewell, Square, Saw, Release) stays unplaced until the board owns more cells. The player patches the Flywheel into the Triangle, since that raises ν/s more than its reach into the Sine did. The Flywheel caps at 3 charge/s, and the board holds 6.17 ν/s.
 - **Breathers.** Every 50-minute session banks a 10-minute breather, and the player takes all 300, in full. They raise the era's ν from 5.47e6 (none taken) to 7.66e6, about 40%: the board runs ×2 for a fifth of the flow time.
 - Still no wall falls and nothing spends nous, so outside the two Lv 5 probes the run stays dry; chunk 05 is the next milestone.
+
+## Chunk 05: Walls and Arms
+
+Issues #48–#55 (parent #47), on `integration/spec-05-walls`.
+
+### Built
+
+- **The authored map (#48).** `map.ts` is one table of the 87 walls, keyed by cell, each `[kind, modifier, mark]`, plus the nine kinds' HP, regen and pressure as data. `wallAt` returns the kind's name, full HP and regen (`Num`), pressure, modifier and mark, or null on an opening cell. The placeholder wall and its nullable name and regen are gone, so `WallRate.regen` is never null. A Patch or re-aim into an `Only Arm damage` wall is refused with `Only Arm damage.` in `cables.ts`'s route rule, so the board's target outline, the saved-cable reader and `apply` all agree. On the board every wall inside the arc shows its initial, Flint the Roadie mark, the marked Schist a new Mixer mark, and a modified wall an engraved glyph. The wall Hex detail shows its static lines.
+
+### Improvised
+
+- **Rings 3–5 (#48).** Each ring is walked clockwise from its upper-left cell (`ringCells` order, index 0 at (−n,0)).
+  - Ring 3 (18): the six corner cells (index 0, 3, 6…) are Obsidian, and the twelve edge cells are Gneiss.
+  - Ring 4 (24): the corners (index 0, 4, 8…) are Corundum, the middle of each side (index 2, 6, 10…) is Quartz, and the rest are Granite.
+  - Ring 5 (30): all Corundum.
+  - So every ring is tougher than the one inside it (ring 3 tops out at Obsidian, 1e9; ring 4 starts at Granite, 1e11), and every kind sits inside both `mechanics-sketch.md`'s band and `progression-map.md`'s.
+- **Modifiers outside Sketch (#48).** 11 more, so 13 of 87 walls (under 1 in 6, which allows 14):
+  - Ring 3: `Pressure ×2` on Gneiss (1,−3) and (−2,3), and `Only Arm damage` on Obsidian (3,0).
+  - Ring 4: `Only Arm damage` on Quartz (−2,−2) and (−2,4), and `Pressure ×2` on Granite (3,−4) and (3,1).
+  - Ring 5 (all Corundum): `Pressure ×2` on (−2,−3) and (2,3), and `Only Arm damage` on (5,−4) and (−5,4).
+  - They're spread around each ring. Gneiss (1,−3) borders the marked Flint, so once Flint falls, the next wall out presses twice as hard.
+- **Ring 2's plain Flints border opening cells (#48).** The agreed alternation puts plain Flints at (2,−2) and (2,0), next to the opening cells. Only the marked Flint at (0,−2) opens Roadie, so they don't open it early.
+- **Doubled pressure in the Hex detail (#48).** The doubled Basalt reads `Pressure ×2` and then `Pressure 16%`: the line shows the pressure the wall actually exerts, not its kind's 8%.
+- **The Hex detail before HP (#48).** The HP line reads `<full> / <full> HP`, through `fmt` (so Schist reads `1e6 / 1e6 HP`), until walls take damage over time later in the chunk. `Taking <d>/s` becomes the wall's one effect line, so the old `Taking … · regen …` line splits into the HP line and the effect line. A full-HP, unfought wall has no effect line.
+- **The glyphs (#48).** The Mixer mark is a fader cap across its slot, since Mixer's craft is Effects on the console. `Pressure ×2` is two chevrons pressing inward, and `Only Arm damage` is a blade's wedge. Both glyphs sit at the slab's upper right, stroked in the marks' muted stone tone, never a hue.
+- **`progression-map.md` (#48).** The Roadie row now says the marked Flint is in ring 2, to match the corrected sketch.

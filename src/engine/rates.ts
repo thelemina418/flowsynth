@@ -124,9 +124,8 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
     breatherSum = add(breatherSum, breatherRate);
   }
   const walls: WallRate[] = [...damage.values()].map(({ cell, damage }) => {
-    const authored = wallAt(cell).regen;
-    const regen = authored === null ? null : D(authored);
-    return { cell, damage, regen, net: regen === null ? damage : sub(damage, regen) };
+    const regen = wallAt(cell)!.regen;
+    return { cell, damage, regen, net: sub(damage, regen) };
   });
   // The board runs ×2 in a breather (issue #41).
   return { oscillators, modulators, walls, total, breatherTotal: mul(2, breatherSum) };

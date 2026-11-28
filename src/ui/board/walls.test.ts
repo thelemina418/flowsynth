@@ -11,7 +11,8 @@ import { Shell } from "../shell/shell";
 
 // Patching into walls on screen (spec chunk 03, issue #34): walls in range
 // carry the clear target outline during a patch, the cord runs to the
-// wall, and the Hex detail reads the wall's damage and regen.
+// wall, and the Hex detail reads the damage the wall takes. An `Only Arm
+// damage` wall refuses a Patch (issue #48).
 
 let host: HTMLElement;
 afterEach(() => {
@@ -60,30 +61,35 @@ describe("patching into a wall", () => {
     // Walls within 3 are targets; dark cells stay refused.
     expect(cell("-1,1").getAttribute("data-target")).toBe("valid");
     expect(cell("2,-1").getAttribute("data-target")).toBe("valid");
+    // An `Only Arm damage` wall refuses a Patch (issue #48).
+    expect(cell("0,-2").getAttribute("data-target")).toBe("invalid");
     expect(cell("0,-3").getAttribute("data-target")).toBe("invalid");
     expect(host.querySelector('.cell-target[data-for="-1,1"]')!.getAttribute("data-target")).toBe("valid");
     click(cell("-1,1"));
     expect(shell.state.value.game.board.cables).toEqual([{ type: "patch", source: { q: 0, r: 0 }, target: { q: -1, r: 1 } }]);
     expect(cords()).toHaveLength(1);
     click(cell("-1,1"));
-    expect(lines()).toEqual(["Shale · Wall", "Taking 1.0/s · regen 0.1/s"]);
+    expect(lines()).toEqual(["Shale · Wall · ring 1", "600 / 600 HP · regen 0.1/s", "Pressure 5%", "Taking 1.0/s"]);
     click(cell("0,0"));
     expect(lines()).toEqual(["Flywheel · Modulator · facing NE", "1.0 charge/s · patched → Shale"]);
   });
 
-  it("a patched placeholder wall reads its damage alone", () => {
+  it("a patched Basalt names itself as the Patch's target", () => {
     const shell = mount();
     show(shell, laid([FLYWHEEL, { type: "patchCable", cable: "patch", source: { q: 0, r: 0 }, target: { q: 0, r: -1 } }]));
     click(cell("0,-1"));
-    expect(lines()).toEqual(["Wall", "Taking 1.0/s"]);
+    expect(lines()).toEqual(["Basalt · Wall · ring 1", "6\u2009000 / 6\u2009000 HP · regen 1.0/s", "Pressure 8%", "Taking 1.0/s"]);
     click(cell("0,0"));
-    expect(lines()).toEqual(["Flywheel · Modulator · facing NE", "1.0 charge/s · patched → Wall"]);
+    expect(lines()).toEqual(["Flywheel · Modulator · facing NE", "1.0 charge/s · patched → Basalt"]);
   });
 
-  it("a patched Flint keeps its opens line, then reads its damage and regen", () => {
+  it("a Patch into Flint is refused on screen with `Only Arm damage.`", () => {
     const shell = mount();
-    show(shell, laid([FLYWHEEL, { type: "patchCable", cable: "patch", source: { q: 0, r: 0 }, target: { q: 2, r: -1 } }]));
-    click(cell("2,-1"));
-    expect(lines()).toEqual(["Flint · Wall · opens Roadie", "Taking 1.0/s · regen 10.0/s"]);
-  });
+    show(shell, laid([FLYWHEEL]));
+    click(cableEntry());
+    click(cell("0,0"));
+    click(cell("0,-2"));
+    expect(shell.state.value.game.board.cables).toEqual([]);
+    expect(host.textContent).toContain("Only Arm damage.");
+});
 });

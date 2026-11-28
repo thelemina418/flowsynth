@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { apply } from "../../engine/apply";
 import { giveOscillators } from "../../engine/fixtures";
-import type { Cell } from "../../engine/hex";
+import { lifetimeCells, type Cell } from "../../engine/hex";
 import { createInitialState } from "../../engine/state";
 import type { GameState, ModuleType } from "../../engine/types";
 import { hexDetail } from "./hexReadout";
@@ -28,6 +28,7 @@ const ACCEPTANCE: [ModuleType, number, number][] = [
   ["triangle", 0, 1],
 ];
 
+const T = "\u2009";
 const read = (s: GameState, cell: Cell) => hexDetail(s.game.board, s.game.rates, cell);
 const texts = (s: GameState, cell: Cell) => read(s, cell).map((line) => line.text);
 
@@ -45,26 +46,54 @@ describe("the Hex detail readout", () => {
     expect(texts(laid(ACCEPTANCE), { q: 0, r: 0 })).toEqual(["Sine · Oscillator", "Not resonating · needs Triangles on opposite sides", "1.0 ν/s"]);
   });
 
-  it("reads walls, an empty open cell and a dark cell in one terse line each", () => {
+  it("reads an empty open cell and a dark cell in one terse line each, and a dark cell names no kind", () => {
     const s = laid([]);
-    expect(texts(s, { q: -1, r: 1 })).toEqual(["Shale · Wall"]);
-    expect(texts(s, { q: 2, r: -1 })).toEqual(["Flint · Wall · opens Roadie"]);
-    expect(texts(s, { q: -1, r: 0 })).toEqual(["Wall"]);
     expect(texts(s, { q: 1, r: -1 })).toEqual(["Open cell"]);
     expect(texts(s, { q: 3, r: 0 })).toEqual(["Dark cell · beyond this arc"]);
+    expect(texts(s, { q: 0, r: -3 })).toEqual(["Dark cell · beyond this arc"]);
+  });
+
+  it("reads a full-HP Shale's static lines (issue #48)", () => {
+    expect(read(laid([]), { q: -1, r: 1 })).toEqual([
+      { text: "Shale · Wall · ring 1" },
+      { text: "600 / 600 HP · regen 0.1/s" },
+      { text: "Pressure 5%" },
+    ]);
+  });
+
+  it("names a wall's modifier, and counts a doubled pressure twice", () => {
+    expect(texts(laid([]), { q: -1, r: 0 })).toEqual(["Basalt · Wall · ring 1", `6${T}000 / 6${T}000 HP · regen 1.0/s`, "Pressure ×2", "Pressure 16%"]);
+    // The word itself is never copy, only the modifiers' names.
+    for (const cell of lifetimeCells()) expect(texts(laid([]), cell).join("\n")).not.toMatch(/modifier/i);
+  });
+
+  it("names the class a marked wall opens", () => {
+    expect(texts(laid([]), { q: 0, r: -2 })).toEqual(["Flint · Wall · ring 2 · opens Roadie", `60${T}000 / 60${T}000 HP · regen 10.0/s`, "Only Arm damage", "Pressure 10%"]);
+    expect(texts(laid([]), { q: -2, r: 1 })).toEqual(["Schist · Wall · ring 2 · opens Mixer", "1e6 / 1e6 HP · regen 100.0/s", "Pressure 12%"]);
+  });
+
+  it("adds the damage a patched wall takes as its effect line", () => {
+    const s = laid([["flywheel", 0, 0]]);
+    const done = apply(s, { type: "patchCable", cable: "patch", source: { q: 0, r: 0 }, target: { q: -1, r: 1 } });
+    expect(read(done.state, { q: -1, r: 1 })).toEqual([
+      { text: "Shale · Wall · ring 1" },
+      { text: "600 / 600 HP · regen 0.1/s" },
+      { text: "Pressure 5%" },
+      { text: "Taking 1.0/s", effect: true },
+    ]);
   });
 
   it("reads a Release as making nothing in flow", () => {
     expect(texts(laid([["release", 0, 0]]), { q: 0, r: 0 })).toEqual(["Release · Oscillator", "No resonance pattern", "0.0 ν/s"]);
   });
 
-  it("keeps every cell kind to five lines with at most one effect line, and no charge leg", () => {
+  it("keeps every cell kind to five lines with at most one effect line, and no charge leg or pressure leg on a module", () => {
     const s = laid(ACCEPTANCE);
     const cells: Cell[] = [
       { q: 1, r: 0 },
       { q: 0, r: 0 },
       { q: -1, r: 1 },
-      { q: 2, r: -1 },
+      { q: 0, r: -2 },
       { q: -1, r: 0 },
       { q: 1, r: -1 },
       { q: 3, r: 0 },
@@ -74,7 +103,7 @@ describe("the Hex detail readout", () => {
       expect(lines.length).toBeGreaterThanOrEqual(1);
       expect(lines.length).toBeLessThanOrEqual(5);
       expect(lines.filter((l) => l.effect).length).toBeLessThanOrEqual(1);
-      expect(lines.map((l) => l.text).join("\n")).not.toMatch(/charge|fader|pressure/i);
+      if (s.game.board.open.some((o) => o.q === cell.q && o.r === cell.r)) expect(lines.map((l) => l.text).join("\n")).not.toMatch(/charge|fader|pressure/i);
     }
   });
 });
