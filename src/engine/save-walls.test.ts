@@ -103,6 +103,9 @@ describe("wall HP in a v16 save", () => {
     const game = file.state.game;
     expect(game.console).toEqual({ channels: {}, shown: { console: consoleShown } });
     delete game.console;
+    // The era's ν (issue #61): the save's ν, since nothing was spendable before.
+    expect(game.eraNous).toBe(game.nous);
+    delete game.eraNous;
     for (const holder of [game.board, game.session, game.summary, game.breather.result].filter((h) => h !== null)) {
       expect(holder.walls).toEqual([]);
       delete holder.walls;

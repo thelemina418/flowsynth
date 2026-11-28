@@ -605,7 +605,7 @@ export function runPace(script: PaceScript): PaceReport {
     rate: state.game.rates.total,
     charge: state.game.rates.modulators.reduce((sum, m) => add(sum, m.output), D(0)),
     walls: state.game.rates.walls.map((w) => ({ name: wallOf(w.cell).name, cell: { ...w.cell }, damage: w.damage })),
-    nous: state.game.nous,
+    nous: state.game.eraNous,
     classLevels: CLASSES.filter((c) => state.game.openClasses.includes(c)).map((habitClass) => ({ habitClass, level: classLevel(state, habitClass).level })),
     breathersTaken,
     dryStretches: dryStretches([...reachedAt.values()], creditedHours),

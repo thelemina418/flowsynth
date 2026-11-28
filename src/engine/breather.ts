@@ -1,5 +1,6 @@
 import { EPS } from "./constants";
 import { scaledWalls, stepWalls } from "./conquest";
+import { earn } from "./era";
 import { foughtWall } from "./fought";
 import { add, D, mul, NumFault, requireNotNaN } from "./num";
 import type { ActionResult } from "./actions";
@@ -70,7 +71,7 @@ export function runBreather(state: GameState, seconds: number): void {
   stepWalls(state, running.seconds, (span) => {
     paid = requireNotNaN(add(paid, mul(game.rates.breatherTotal, span)), "the breather's nous");
   }, walls, BREATHER_DAMAGE);
-  game.nous = requireNotNaN(add(game.nous, paid), "nous");
+  earn(state, paid);
   // The wall still fought at the end, under the breather's damage.
   const fought = foughtWall(game.board, scaledWalls(game.rates, BREATHER_DAMAGE));
   game.breather.result = {

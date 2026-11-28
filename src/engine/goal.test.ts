@@ -49,7 +49,7 @@ describe("the Goal", () => {
     ownCells(s, [{ q: 0, r: -2 }]);
     expect(goalOf(s)).toBe("Conquer Schist");
     ownCells(s, [{ q: -2, r: 1 }]);
-    // Prestige is declared but shown false until chunk 06.
+    // Prestige shows only from 1e6 era ν (issue #61; engine/era.test.ts).
     expect(goalOf(s)).toBeNull();
   });
 });

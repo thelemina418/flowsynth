@@ -367,6 +367,15 @@ function lostNestedFigures(game: Record<string, unknown>): string[] {
   return lost;
 }
 
+// The era's nous (issue #61). A save from before chunk 06 has none: nothing
+// was spendable then, so its balance is the era's nous. One that is
+// unreadable, non-finite or negative reads the same way.
+function readEraNous(value: unknown, nous: Num): Num {
+  if (value === undefined || !readableNum(value)) return nous;
+  const era = readNum(value, nous);
+  return Number.isFinite(era.mag) && gte(era, 0) ? era : nous;
+}
+
 // Under recovery a lost figure starts at zero; otherwise it was refused
 // before this read.
 function readLostable(value: unknown): Num {
@@ -406,6 +415,7 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
   const { cableAllowance, arrivedCables } = grantsOf({ records: { ...fresh.records, classCredit }, game: { ...fresh.game, openClasses } });
   board.cables = readCables(isRecord(game.board) ? game.board.cables : undefined, { board, cableAllowance, arrivedCables });
   const console = readConsole(game.console);
+  const nous = readLostable(game.nous);
   const state: GameState = {
     records: {
       habits: (records.habits as Habit[]).map(readHabit),
@@ -420,7 +430,8 @@ function readNested(records: Record<string, unknown>, game: Record<string, unkno
       nextId: finiteOr(records.nextId, fresh.records.nextId),
     },
     game: {
-      nous: readLostable(game.nous),
+      nous,
+      eraNous: readEraNous(game.eraNous, nous),
       mode,
       session: flowing ? readSession(game.session as Partial<SessionState>) : null,
       summary: isRecord(game.summary) ? readSummary(game.summary as Partial<SessionSummary>) : null,

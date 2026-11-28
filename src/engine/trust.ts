@@ -1,6 +1,7 @@
 import { DRIFT_NOISE_SECONDS, EPS, RECONCILIATION_FLOOR_SECONDS } from "./constants";
 import { add, D, gt, requireFinite, requireNotNaN } from "./num";
 import { stepWalls } from "./conquest";
+import { earn } from "./era";
 import { accrueLivePractice } from "./habits";
 import { accrueIntentionProgress } from "./intentions";
 import { emptyAdvanceResult, sumResults, walkFlow } from "./walk";
@@ -127,7 +128,7 @@ export function settleHonestyReport(state: GameState, outcome: HonestyOutcome): 
   }
   const held = requireNotNaN(accounting.provisionalNous, "the provisional nous");
   if (outcome !== "missed" && gt(held, 0)) {
-    state.game.nous = requireNotNaN(add(state.game.nous, held), "nous");
+    earn(state, held);
     session.nousMade = requireNotNaN(add(session.nousMade, held), "the session's nous");
   }
   // The held wall seconds replay through the walls (issue #51). The held

@@ -58,6 +58,9 @@ describe("the console in a v16 save", () => {
     const reread = JSON.parse(serialize(state, fixture.savedAt));
     expect(reread.state.game.console).toEqual({ channels: {}, shown: { console: true } });
     delete reread.state.game.console;
+    // The era's ν (issue #61) is named too: the save's own ν.
+    expect(reread.state.game.eraNous).toBe(fixture.state.game.nous);
+    delete reread.state.game.eraNous;
     expect(reread).toEqual(fixture);
   });
 

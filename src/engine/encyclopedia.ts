@@ -1,4 +1,5 @@
 import type { ActionResult } from "./actions";
+import { goalOf } from "./goal";
 import { grantsOf } from "./levels";
 import { modifierName } from "./map";
 import { gt } from "./num";
@@ -21,8 +22,6 @@ export interface Entry {
 }
 
 const arrived = (module: OscillatorType) => (s: GameState) => grantsOf(s).arrived.includes(module);
-// Declared now; chunk 06 (prestige) wires the predicate.
-const later = () => false;
 
 export const ENTRIES: readonly Entry[] = [
   {
@@ -136,7 +135,8 @@ export const ENTRIES: readonly Entry[] = [
     id: "prestige",
     title: "Prestige",
     lines: ["Ends an era", "Resets ν and faders", "Board, cables, class levels and allowance stay"],
-    revealed: later,
+    // The first time Prestige is the Goal (issue #61).
+    revealed: (s) => goalOf(s) === "Prestige",
   },
 ];
 
