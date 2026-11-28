@@ -3,7 +3,7 @@ import { apply, type ApplyResult } from "./apply";
 import { isOpen } from "./board";
 import type { Cell } from "./hex";
 import { classLevel, grantsOf, type Grants } from "./levels";
-import { isNum } from "./num";
+import { D, isNum } from "./num";
 import { createInitialState } from "./state";
 import type { Presence } from "./trust";
 import { DEFAULT_HABIT_COLOR } from "./habits";
@@ -124,6 +124,20 @@ export function giveProducer(state: GameState, grant: { modulators?: number; cab
 // so the rates stay as they are.
 export function ownCells(state: GameState, cells: Cell[]): void {
   for (const cell of cells) if (!isOpen(state.game.board, cell)) state.game.board.open.push({ q: cell.q, r: cell.r });
+}
+
+// A wall already worn down to `hp`, as an earlier fight would leave it
+// (issue #49's `board.walls` entry): a stand-in for hours of flow, so a
+// test can make a wall fall in seconds. Not a layout change.
+export function woundWall(state: GameState, cell: Cell, hp: number): void {
+  state.game.board.walls = [...state.game.board.walls.filter((w) => w.cell.q !== cell.q || w.cell.r !== cell.r), { cell: { q: cell.q, r: cell.r }, hp: D(hp) }];
+}
+
+// Roadie open, as the conquest of Shale and then Basalt (0,−1) leaves it
+// (issue #53): both cells owned, and Roadie among the open classes.
+export function openRoadie(state: GameState): void {
+  ownCells(state, [{ q: -1, r: 1 }, { q: 0, r: -1 }]);
+  if (!state.game.openClasses.includes("roadie")) state.game.openClasses.push("roadie");
 }
 
 // A complete hand-built habit shape for tests that push habits directly.

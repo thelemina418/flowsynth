@@ -71,7 +71,7 @@ describe("UI copy (philosophy.md, Words rule 5)", () => {
   });
 
   it("no Encyclopedia entry's title or line carries a banned word or an exclamation mark", () => {
-    expect(ENTRIES.length).toBe(13);
+    expect(ENTRIES.length).toBe(14);
     const found = ENTRIES.flatMap((entry) =>
       [entry.title, ...entry.lines].flatMap((text) => BANNED.filter(({ pattern }) => pattern.test(text)).map(({ word }) => `${entry.id}: ${word} in ${JSON.stringify(text)}`)),
     );

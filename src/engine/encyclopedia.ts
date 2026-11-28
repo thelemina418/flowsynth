@@ -103,6 +103,12 @@ export const ENTRIES: readonly Entry[] = [
     revealed: (s) => s.game.rates.oscillators.some((o) => gt(o.pressure, 0)),
   },
   {
+    id: "arms",
+    title: "Arms",
+    lines: ["Roadie's craft · opened by reaching Flint", "Arms work only beside a wall", "Blade · 10 × charge received as damage", "Turn a Blade to choose its wall"],
+    revealed: (s) => s.game.openClasses.includes("roadie"),
+  },
+  {
     id: "classes",
     title: "Classes",
     lines: [
