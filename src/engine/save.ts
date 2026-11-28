@@ -11,7 +11,7 @@ import { isCableType, newCableRefusal, type CableRoom } from "./cables";
 import { grantsOf } from "./levels";
 import { emptyEncyclopedia, isEntryId, revealEntries } from "./encyclopedia";
 import { computeBoardRates } from "./rates";
-import type { Arc, Board, BreatherState, Cable, EncyclopediaState, EntryId, GameState, Habit, HabitClass, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary, WallHp } from "./types";
+import type { Arc, Board, BreatherState, Cable, EncyclopediaState, EntryId, GameState, Habit, HabitClass, Placement, SessionAccounting, SessionRecord, SessionState, SessionSummary, SummaryWall, WallHp } from "./types";
 
 // The save boundary. Save v16 (issue #18) writes the nested GameState
 // (`records`, `game`) with every Decimal as num's save string, and reads it
@@ -195,7 +195,27 @@ function readSession(raw: Partial<SessionState>): SessionState {
     startedAt: finiteOr(raw.startedAt, 0),
     goalSeconds: isRecord(raw.goalSeconds) ? raw.goalSeconds : {},
     nousMade: readLostable(raw.nousMade),
+    walls: readTally(raw.walls).map(({ fought: _fought, ...tally }) => tally),
   };
+}
+
+// The session's and the summary's walls (issue #50), additive v16 fields
+// that default to `[]`. An entry needs an authored wall's cell, its lost HP
+// as a save string and a boolean `conquered` (and, in the summary,
+// `fought`); otherwise, or for a second entry of one wall, it is dropped.
+// Lost HP is a readout, not money, so dropping it raises no recovery.
+function readTally(raw: unknown): SummaryWall[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const walls: SummaryWall[] = [];
+  for (const item of raw) {
+    if (!isRecord(item) || typeof item.lost !== "string" || !readableNum(item.lost) || typeof item.conquered !== "boolean") continue;
+    const cell = readCell(item.cell);
+    if (!cell || !wallAt(cell) || seen.has(cellKey(cell))) continue;
+    seen.add(cellKey(cell));
+    walls.push({ cell, lost: fromSave(item.lost), conquered: item.conquered, fought: item.fought === true && !item.conquered });
+  }
+  return walls;
 }
 
 function readSummary(raw: Partial<SessionSummary>): SessionSummary {
@@ -212,6 +232,7 @@ function readSummary(raw: Partial<SessionSummary>): SessionSummary {
     honestyEvents: Array.isArray(raw.honestyEvents) ? raw.honestyEvents : [],
     reflection: raw.reflection ?? null,
     seen: raw.seen === true,
+    walls: readTally(raw.walls),
   };
 }
 

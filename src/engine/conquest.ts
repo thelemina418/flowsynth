@@ -2,9 +2,9 @@ import { cellKind, isOpen } from "./board";
 import { EPS } from "./constants";
 import { addCell, cellKey, DIRECTIONS, type Cell } from "./hex";
 import { FLINT_CELL, wallAt } from "./map";
-import { div, gt, gte, lte, min, mul, requireNotNaN, sub, type Num } from "./num";
+import { add, D, div, gt, gte, lte, min, mul, requireNotNaN, sub, type Num } from "./num";
 import { computeBoardRates } from "./rates";
-import type { GameState } from "./types";
+import type { GameState, WallTally } from "./types";
 
 // Wall HP and conquest (spec chunk 05, issue #49). One pure wall step moves
 // every wall through a span of time at the cached rates, closed-form: over
@@ -22,6 +22,8 @@ interface Moving {
   full: Num;
   // damage − regen; regen alone for a wall nothing fights.
   net: Num;
+  // Whether anything damages it over the span.
+  attacked: boolean;
 }
 
 // Every wall the span can move: each wall below full, and each wall the
@@ -32,13 +34,13 @@ function movingWalls(state: GameState): Moving[] {
   for (const entry of board.walls) {
     const wall = wallAt(entry.cell);
     if (!wall || cellKind(board, entry.cell) !== "wall") continue;
-    byKey.set(cellKey(entry.cell), { cell: entry.cell, hp: entry.hp, full: wall.hp, net: sub(0, wall.regen) });
+    byKey.set(cellKey(entry.cell), { cell: entry.cell, hp: entry.hp, full: wall.hp, net: sub(0, wall.regen), attacked: false });
   }
   for (const rate of state.game.rates.walls) {
     const wall = wallAt(rate.cell);
     if (!wall || cellKind(board, rate.cell) !== "wall") continue;
     const key = cellKey(rate.cell);
-    byKey.set(key, { cell: rate.cell, hp: byKey.get(key)?.hp ?? wall.hp, full: wall.hp, net: rate.net });
+    byKey.set(key, { cell: rate.cell, hp: byKey.get(key)?.hp ?? wall.hp, full: wall.hp, net: rate.net, attacked: gt(rate.damage, 0) });
   }
   return [...byKey.values()];
 }
@@ -63,7 +65,26 @@ function openRoadie(state: GameState): void {
   if (DIRECTIONS.some((d) => isOpen(game.board, addCell(FLINT_CELL, d)))) game.openClasses.push("roadie");
 }
 
-export function stepWalls(state: GameState, seconds: number, segment: (seconds: number) => void): void {
+// The session's tally (issue #50): a wall joins it the first span
+// something damages it, and from then on every span adds its net HP
+// change, healing included. A fallen wall moves to the end, so the
+// conquered ones read in conquest order.
+function tallyWall(tally: WallTally[], wall: Moving, before: Num, after: Num, fell: boolean): void {
+  let entry = tally.find((t) => t.cell.q === wall.cell.q && t.cell.r === wall.cell.r);
+  if (!entry) {
+    if (!wall.attacked) return;
+    entry = { cell: { q: wall.cell.q, r: wall.cell.r }, lost: D(0), conquered: false };
+    tally.push(entry);
+  }
+  entry.lost = requireNotNaN(add(entry.lost, sub(before, after)), "a wall's lost HP");
+  if (fell) {
+    entry.conquered = true;
+    tally.splice(tally.indexOf(entry), 1);
+    tally.push(entry);
+  }
+}
+
+export function stepWalls(state: GameState, seconds: number, segment: (seconds: number) => void, tally: WallTally[] | null = null): void {
   let remaining = seconds;
   for (let guard = 0; remaining > 0; guard++) {
     if (guard > 1000) throw new Error("the wall step did not settle");
@@ -80,9 +101,11 @@ export function stepWalls(state: GameState, seconds: number, segment: (seconds: 
       const t = instants[i];
       if (conquers && t !== null && t !== undefined && sameInstant(t, earliest)) {
         fallen.push(wall.cell);
+        if (tally) tallyWall(tally, wall, wall.hp, D(0), true);
         return;
       }
       const hp = requireNotNaN(min(wall.full, sub(wall.hp, mul(wall.net, span))), "a wall's HP");
+      if (tally) tallyWall(tally, wall, wall.hp, lte(hp, 0) ? D(0) : hp, lte(hp, 0));
       if (lte(hp, 0)) fallen.push(wall.cell);
       else if (!gte(hp, wall.full)) kept.push({ cell: { q: wall.cell.q, r: wall.cell.r }, hp });
     });
