@@ -84,12 +84,15 @@ const MODULES: Record<ModuleType, ModuleSpec> = {
     name: "Square",
     base: 1.5,
     pattern: { paths: [[0], [1], [2], [3], [4], [5]], partner: { kind: "any" }, atLeast: 4, strength: 1.5 },
+    channelBase: 200,
   },
   // The next two cells in one direction hold oscillators: the Saw ends a
   // straight line of three.
-  saw: { category: "oscillator", name: "Saw", base: 2, pattern: { paths: [[0], [0, 0]], partner: OSCILLATOR, strength: 2 } },
-  // No pattern, and nothing in flow; 6 ν/s in a breather (issue #41).
-  release: { category: "oscillator", name: "Release", base: 0, breatherBase: 6, pattern: null },
+  saw: { category: "oscillator", name: "Saw", base: 2, pattern: { paths: [[0], [0, 0]], partner: OSCILLATOR, strength: 2 }, channelBase: 1500 },
+  // No pattern, and nothing in flow; 6 ν/s in a breather (issue #41). Its
+  // channel base is improvised (issue #59): its fader raises the breather
+  // rate only, since its flow base is 0.
+  release: { category: "oscillator", name: "Release", base: 0, breatherBase: 6, pattern: null, channelBase: 10000 },
   // Modulators make charge, not ν: no base and no pattern.
   // 1 charge/s, +0.1 per credited Producer hour up to 3, to the 2 cells in
   // a straight line in its facing.
@@ -112,13 +115,14 @@ const MODULES: Record<ModuleType, ModuleSpec> = {
     pattern: null,
     output: { base: 0.5 },
     reach: { paths: [[0], [1], [2], [3], [4], [5]], faced: false },
+    channelBase: 2000,
   },
   // Arms (issue #53) make neither ν nor charge. The Blade turns the charge
   // it receives into 10× damage on the wall it faces.
-  blade: { category: "arm", name: "Blade", base: 0, pattern: null, faces: true, damagePerCharge: 10 },
+  blade: { category: "arm", name: "Blade", base: 0, pattern: null, faces: true, damagePerCharge: 10, channelBase: 500 },
   // The Guard Plate (issue #54) has no facing. Bordering a wall, it
   // cancels pressure on its neighbours; charge delivered to it is wasted.
-  guardPlate: { category: "arm", name: "Guard Plate", base: 0, pattern: null, guards: true },
+  guardPlate: { category: "arm", name: "Guard Plate", base: 0, pattern: null, guards: true, channelBase: 3000 },
 };
 
 export const MODULE_TYPES = Object.keys(MODULES) as readonly ModuleType[];

@@ -79,7 +79,6 @@ describe("the console in a v16 save", () => {
       sine: -1,
       triangle: 1.5,
       flywheel: "2",
-      square: 2, // a type with no channel fader yet
       bogus: 3,
     };
     const loaded = deserialize(savedWith(bad));

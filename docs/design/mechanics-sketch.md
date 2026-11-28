@@ -78,7 +78,9 @@ An Arm must sit on a cell that borders a wall. If it doesn't, it does nothing an
 
 - **Channel faders**: one per type the player has. Each level multiplies that type's output (ν for oscillators, charge for modulators, damage for Arms) by ×1.25.
 - **Bus faders**: one per category. Each level multiplies the whole category by ×1.1.
-- Cost is `base × 1.6^level`. Channel bases: Sine 10, Triangle 15, Flywheel 25, Square 200, Saw 1 500, Pulsewell 2 000, Blade 500, Guard Plate 3 000. Bus bases: 5 000 for each category.
+- Cost is `base × 1.6^level`. Channel bases: Sine 10, Triangle 15, Flywheel 25, Square 200, Saw 1 500, Release 10 000, Pulsewell 2 000, Blade 500, Guard Plate 3 000. Bus bases: 5 000 for each category.
+- The Release's fader raises its breather ν only; its flow ν stays 0.
+- The Guard Plate's fader: each level multiplies the ν of the oscillators an active Plate shields (beside it, and pressed by a wall but for the Plate) by ×1.25. A shielded oscillator takes the strongest guarding neighbour's multiplier, never a product.
 - The console appears the first time any fader is affordable. Click buys +1; shift-click buys the most affordable.
 
 ## Prestige
