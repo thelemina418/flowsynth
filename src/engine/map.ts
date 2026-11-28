@@ -190,6 +190,15 @@ export function wallAt(cell: Cell): AuthoredWall | null {
   return { kind, name: stats.name, hp: D(stats.hp), regen: D(stats.regen), pressure: stats.pressure, modifier, opens };
 }
 
+// The wall authored at a cell already known to be a wall's: a fought,
+// patched, faced or tallied wall, or one the board shows as a wall. Throws
+// on any other cell, which is a bug, not a state.
+export function wallOf(cell: Cell): AuthoredWall {
+  const wall = wallAt(cell);
+  if (!wall) throw new Error(`no wall is authored at ${cell.q},${cell.r}`);
+  return wall;
+}
+
 const AUTHORED_ORDER = new Map(Object.keys(MAP).map((key, i) => [key, i]));
 
 // A wall's place in authored order (ring by ring, each ring clockwise from

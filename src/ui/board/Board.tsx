@@ -14,7 +14,7 @@ import {
   type Point,
   type ScreenDirection,
 } from "../../engine/hex";
-import { wallAt, type Modifier } from "../../engine/map";
+import { wallOf, type Modifier } from "../../engine/map";
 import { moduleName } from "../../engine/modules";
 import { moduleAt } from "../../engine/placement";
 import type { Board as BoardState, BoardRates, HabitClass, Placement } from "../../engine/types";
@@ -167,7 +167,7 @@ function BoardCell({ cell, kind, placement, picked, inspected, reached, target, 
       </g>
     );
   }
-  const wall = wallAt(cell)!;
+  const wall = wallOf(cell);
   const mark = wall.opens ? CLASS_MARKS[wall.opens] : undefined;
   const initialY = mark ? center.y - 2 : center.y + 5;
   return (

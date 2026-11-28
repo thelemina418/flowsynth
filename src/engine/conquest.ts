@@ -39,10 +39,9 @@ function movingWalls(state: GameState, damage: number): Moving[] {
     byKey.set(cellKey(entry.cell), { cell: entry.cell, hp: entry.hp, full: wall.hp, net: sub(0, wall.regen), attacked: false });
   }
   for (const rate of scaledWalls(state.game.rates, damage).walls) {
-    const wall = wallAt(rate.cell);
-    if (!wall || cellKind(board, rate.cell) !== "wall") continue;
+    if (cellKind(board, rate.cell) !== "wall") continue;
     const key = cellKey(rate.cell);
-    byKey.set(key, { cell: rate.cell, hp: byKey.get(key)?.hp ?? wall.hp, full: wall.hp, net: rate.net, attacked: gt(rate.damage, 0) });
+    byKey.set(key, { cell: rate.cell, hp: byKey.get(key)?.hp ?? rate.full, full: rate.full, net: rate.net, attacked: gt(rate.damage, 0) });
   }
   return [...byKey.values()];
 }

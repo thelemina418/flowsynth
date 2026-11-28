@@ -348,22 +348,31 @@ export interface ModulatorRate {
   deliveries: ChargeDelivery[];
 }
 
-// One wall a Patch targets (issue #34): the patched charge into it as
-// damage at 1:1, its regen from the authored map
-// and net = damage − regen. A rate only: nothing applies it until chunk 05.
+// One wall taking damage (issues #34, #53): the damage from Patches and
+// Blades, its regen from the authored map and net = damage − regen; its
+// full HP; the pressure it exerts on each module bordering it (doubled for
+// `Pressure ×2`, issue #52); and how many bordering oscillators that
+// pressure reduces, so not one a Guard Plate shields (spec chunk 05).
 export interface WallRate {
   cell: Cell;
   damage: Num;
   regen: Num;
   net: Num;
+  full: Num;
+  pressure: number;
+  pressed: number;
 }
 
-// One placed Arm (issue #53). A Blade carries the charge/s it receives,
-// the cell its facing points at, whether that cell is a wall, and the
-// damage it deals there (10 × charge received, or 0).
-export interface BladeRate {
+// One placed Arm, by the role its type's capabilities give it
+// (modules.ts): a striking Arm (the Blade, issue #53) or a guarding one
+// (the Guard Plate, issue #54). A striking Arm carries the charge/s it
+// receives, the cell its facing points at, whether that cell is a wall,
+// and the damage it deals there (its damage per charge × charge received,
+// or 0).
+export interface StrikeRate {
   cell: Cell;
-  module: "blade";
+  role: "strike";
+  module: ArmType;
   facing: Facing;
   chargeReceived: Num;
   faces: Cell;
@@ -371,18 +380,19 @@ export interface BladeRate {
   damage: Num;
 }
 
-// A Guard Plate (issue #54) carries whether it's active (it borders at
-// least one wall) and how many modules it shields: the oscillators beside
-// it that a wall would otherwise press on, 0 while it's inactive. Charge
-// delivered to it is wasted, so it carries none.
-export interface GuardPlateRate {
+// A guarding Arm carries whether it's active (it borders at least one
+// wall) and how many modules it shields: the oscillators beside it that a
+// wall would otherwise press on, 0 while it's inactive. Charge delivered
+// to it is wasted, so it carries none.
+export interface GuardRate {
   cell: Cell;
-  module: "guardPlate";
+  role: "guard";
+  module: ArmType;
   active: boolean;
   shields: number;
 }
 
-export type ArmRate = BladeRate | GuardPlateRate;
+export type ArmRate = StrikeRate | GuardRate;
 
 // The board's rates (issue #26): one pure computation of the layout and
 // the credited Producer time, cached on the game state. Recomputed after

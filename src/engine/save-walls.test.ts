@@ -15,7 +15,10 @@ import type { GameState } from "./types";
 const O = { q: 0, r: 0 };
 const SHALE = { q: -1, r: 1 };
 const BASALT = { q: 0, r: -1 };
-const V15 = readFileSync(new URL("./fixtures/saves/v15-migration.json", import.meta.url), "utf8");
+const fixture = (name: string) => readFileSync(new URL(`./fixtures/saves/${name}`, import.meta.url), "utf8");
+const V15 = fixture("v15-migration.json");
+const V15_CHUNK04_LOAD = fixture("v15-migration.chunk04-load.json");
+const V16_CHUNK04 = fixture("v16-chunk04.json");
 
 // Shale fought for 100 s (510 HP), then the session ended.
 function fought(): GameState {
@@ -85,15 +88,35 @@ describe("wall HP in a v16 save", () => {
     expect(loaded.game.board.walls.map((w) => w.hp.toNumber())).toEqual([100]);
   });
 
-  it("a chunk-04 v16 save, written before wall HP, loads with every wall at full HP", () => {
-    const file = JSON.parse(serialize(fought(), 1_000));
-    delete file.state.game.board.walls;
-    const loaded = deserialize(JSON.stringify(file));
+  // Each frozen file is chunk 04's own reading of the save (commit
+  // be8557e), re-serialized at the save's instant (fixtures/saves/README.md).
+  // Chunk 05 reads the same state with every wall at full HP. What chunk 05
+  // itself adds is named, not ignored: its wall fields, each at its empty
+  // default, and the Encyclopedia entries its rules reveal from the board.
+  function readsAsChunk04(saved: string, chunk04: string, revealedByChunk05: string[]): void {
+    const loaded = deserialize(saved);
     expect(loaded.error).toBeUndefined();
     expect(loaded.state!.game.board.walls).toEqual([]);
+    const file = JSON.parse(serialize(loaded.state!, JSON.parse(saved).savedAt));
+    const game = file.state.game;
+    for (const holder of [game.board, game.session, game.summary, game.breather.result].filter((h) => h !== null)) {
+      expect(holder.walls).toEqual([]);
+      delete holder.walls;
+    }
+    const before = JSON.parse(chunk04);
+    before.state.game.encyclopedia.revealed.push(...revealedByChunk05);
+    expect(file).toEqual(before);
+  }
+
+  it("a genuine chunk-04 v16 save, written before wall HP, loads with every wall at full HP and nothing else changed", () => {
+    // Its Flywheel is patched into Shale, which chunk 04 never damaged.
+    expect(JSON.parse(V16_CHUNK04).state.game.board.cables).toEqual([{ type: "patch", source: { q: 0, r: 1 }, target: SHALE }]);
+    // Chunk 04 read it back byte for byte, so the save is its own reading.
+    // Its Sine at the centre borders walls, so pressure reveals its entry.
+    readsAsChunk04(V16_CHUNK04, V16_CHUNK04, ["pressure"]);
   });
 
-  it("the v15 fixture loads with every wall at full HP", () => {
-    expect(deserialize(V15).state!.game.board.walls).toEqual([]);
+  it("the v15 fixture loads with every wall at full HP and nothing else changed", () => {
+    readsAsChunk04(V15, V15_CHUNK04_LOAD, []);
   });
 });

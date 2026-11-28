@@ -121,7 +121,8 @@ describe("a wall's HP on screen (issue #49)", () => {
     s.game.board.walls = [{ cell: { q: -1, r: 1 }, hp: D(412.7) }];
     show(shell, s);
     click(cell("-1,1"));
-    expect(lines()).toEqual(["Shale · Wall · ring 1", "412 / 600 HP · regen 0.1/s", "Pressure 5%"]);
+    // HP rounds up, as the HP bar does: 412.7 reads 413.
+    expect(lines()).toEqual(["Shale · Wall · ring 1", "413 / 600 HP · regen 0.1/s", "Pressure 5%"]);
   });
 });
 

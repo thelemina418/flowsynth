@@ -118,6 +118,22 @@ export function fmtRate(value: Num): string {
   return (hundredths / 100).toFixed(2).replace(/(\.\d)0$/, "$1");
 }
 
+// A wall's HP: the one figure that rounds up rather than truncating, so it
+// agrees with the HP bar, whose last cell stays lit while any HP is left.
+// It reads 0 only at the conquest (issue #50).
+export function fmtHp(value: Num): string {
+  return fmt(Decimal.max(0, value.sub(NUDGE).ceil()));
+}
+
+// The widest text fmtHp gives for any HP from `full` down to 0: grouped
+// digits up to 999 999, then the two-decimal mantissa (9.99) at the full
+// HP's own exponent. The flow screen's HP row reserves it (ADR-0031).
+export function widestHp(full: Num): number {
+  const grouped = fmtHp(Decimal.min(full, 999_999)).length;
+  if (full.lt(1e6)) return grouped;
+  return Math.max(grouped, `9.99e${Math.floor(full.log10().toNumber() + NUDGE)}`.length);
+}
+
 // A fraction as a whole percent (0.29 → "29"), truncated like every shown
 // figure, with fmtRate's nudge past float noise (0.29 × 100 = 28.999…).
 // Pressure reads through this (issue #52).

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { apply } from "../../engine/apply";
 import { giveOscillators } from "../../engine/fixtures";
 import { lifetimeCells, type Cell } from "../../engine/hex";
+import { D } from "../../engine/num";
 import { createInitialState } from "../../engine/state";
 import type { GameState, ModuleType } from "../../engine/types";
 import { hexDetail } from "./hexReadout";
@@ -103,6 +104,32 @@ describe("the Hex detail readout", () => {
       { text: "Pressure 5%" },
       { text: "Taking 1.0/s", effect: true },
     ]);
+  });
+
+  it("reads the spec's wall detail: Shale at 412 / 600 HP, pressing on 2 oscillators, taking 1.4/s (spec chunk 05)", () => {
+    // Two Sines beside Shale, and a Flywheel at 4 h of Producer credit
+    // (1.0 + 0.1 × 4 charge/s) patched into it from across the opening.
+    const s = laid([["sine", 0, 0], ["sine", 0, 1]]);
+    s.game.board.walls.push({ cell: { q: -1, r: 1 }, hp: D(412) });
+    s.records.classCredit.producer = 4 * 3600;
+    const placed = apply(s, { type: "placeModule", module: "flywheel", cell: { q: 1, r: 0 } });
+    expect(placed.ok, placed.reason).toBe(true);
+    const done = apply(placed.state, { type: "patchCable", cable: "patch", source: { q: 1, r: 0 }, target: { q: -1, r: 1 } });
+    expect(done.ok, done.reason).toBe(true);
+    expect(read(done.state, { q: -1, r: 1 })).toEqual([
+      { text: "Shale · Wall · ring 1" },
+      { text: "412 / 600 HP · regen 0.1/s" },
+      { text: "Pressure 5% on 2 modules" },
+      { text: "Taking 1.4/s", effect: true },
+    ]);
+  });
+
+  it("rounds a wall's HP up, so it reads 0 only at the conquest", () => {
+    const s = laid([]);
+    s.game.board.walls.push({ cell: { q: -1, r: 1 }, hp: D(0.4) });
+    expect(texts(s, { q: -1, r: 1 })[1]).toBe("1 / 600 HP · regen 0.1/s");
+    s.game.board.walls[0]!.hp = D(411.2);
+    expect(texts(s, { q: -1, r: 1 })[1]).toBe("412 / 600 HP · regen 0.1/s");
   });
 
   it("reads a Release as making nothing in flow", () => {

@@ -370,6 +370,16 @@ Issues #48–#55 (parent #47), on `integration/spec-05-walls`.
 - **Milestones read each minute (#55).** Flow now advances a minute at a time, and the probes are read after each minute, so a conquest is timed within a minute, not at the session's end. The two worked timings in `pace.test.ts` moved with it. Engineer Lv 5 now reads 15.5 h: it is reached 30 minutes into Engineer's 10th session, not at that session's end.
 - **Prior pace tests (#55).** The class-level and resonance tests are about the ν/s greedy, so they now pin `placeAllowance: placeAllowanceGreedily`. The Goal player opens Roadie, which would change the rotation, and it patches the Flywheel into walls.
 
+### Code-review fixes
+
+- **HP figures round up.** `fmtHp` (`num.ts`) is the one HP figure: rounded up to a whole HP, so it agrees with the HP bar and reads 0 only at the conquest (a wall at 0.4 HP reads `1 / 600 HP`). The Hex detail and the flow screen's HP row both read through it. A test that read 412.7 HP as `412` now reads `413`.
+- **The HP row holds its size at every wall size (ADR-0031).** It reserves `widestHp(full)` (`num.ts`): the widest of the grouped digits up to `999 999` and `9.99e<n>` at the full HP's exponent, so a Gneiss reserves `999 999 / 3e7 HP` and a Corundum `9.99e15 / 1e16 HP`. In the browser the row kept its width, 319 px on desktop and 274 px at 360 px, for `3e7`, `2.99e7` and `478 582` against `3e7`.
+- **`WallRate` carries its full HP, its pressure and how many oscillators it presses**, as the spec asks. `rates.ts` builds every `WallRate` in one place, and `wallRateAt` reads any wall from the cached rates (a wall taking no damage reads as one at 0 damage), so the Hex detail no longer derives pressed modules or pressure itself. `wallHp` (`board.ts`) is the one reader of a wall's current HP, used by the fought wall, the Hex detail and the pace runner. `rates.walls` still lists only walls taking damage.
+- **`wallOf` (`map.ts`) throws** for a cell already known to be a wall. It replaces every `wallAt(...)!` and the summary's silent empty-name fallback. `wallAt` stays for cells that may not be walls.
+- **Arms branch on their role.** `ArmRate` is `StrikeRate | GuardRate`, discriminated by `role`, and `armRole` (`modules.ts`) reads it from the type's capabilities. The rates, the Hex detail and the pace runner branch on the role, so a third Arm with an existing role touches only `MODULES`.
+- **The Guard Plate's nameplate fits its hex.** A two-word module name breaks onto two lines under a raised glyph.
+- **Acceptance tests added.** These cover the spec's Shale Hex detail at 412 / 600 HP, no upgrade-mode `apply` changing a damaged `board.walls`, and two save checks. In the first, a genuine chunk-04 v16 save (`v16-chunk04.json`, written at `be8557e`) loads with every wall full. In the second, the v15 fixture loads as chunk 04 read it (`v15-migration.chunk04-load.json`), apart from what chunk 05 adds, each named: the empty wall fields, and the Pressure entry the chunk-04 save's pressed Sine now reveals.
+
 ### Pace runner
 
 At the end of the chunk, `npm run pace` (250 credited hours):

@@ -137,6 +137,8 @@ describe("the Guard Plate", () => {
     expect(face.getAttribute("data-category")).toBe("arm");
     expect(face.querySelector('[data-glyph="guardPlate"]')).not.toBeNull();
     expect(face.textContent).toBe("Guard Plate");
+    // Its two-word nameplate breaks onto two lines, to fit inside its hex.
+    expect([...face.querySelectorAll(".module-name tspan")].map((line) => line.textContent!.trim())).toEqual(["Guard", "Plate"]);
     expect(facing("0,0")).toBeUndefined();
   });
 
