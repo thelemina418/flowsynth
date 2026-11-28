@@ -151,6 +151,13 @@ export function guardsPressure(module: ModuleType): boolean {
   return MODULES[module].guards === true;
 }
 
+// An Arm's role, from its capabilities: guarding while it cancels
+// pressure, otherwise striking the wall it faces. The rates, the Hex
+// detail and the pace runner branch on the role, never on the type.
+export function armRole(module: ArmType): "strike" | "guard" {
+  return guardsPressure(module) ? "guard" : "strike";
+}
+
 // An Arm's damage per charge/s received, 0 for every other type.
 export function damagePerCharge(module: ModuleType): number {
   return MODULES[module].damagePerCharge ?? 0;

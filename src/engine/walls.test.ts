@@ -4,6 +4,7 @@ import { advanceIn, applyIn, fresh, giveHabit, giveProducer, ownCells } from "./
 import type { Cell } from "./hex";
 import { deserialize, serialize } from "./save";
 import { cloneState } from "./state";
+import type { Action } from "./apply";
 import type { GameState, ModuleType } from "./types";
 
 // Patching into walls (spec chunk 03, issue #34), through the GameState
@@ -87,6 +88,23 @@ describe("a wall's rate", () => {
     const basalt = wallRate(s, BASALT)!;
     expect(basalt.regen.toNumber()).toBe(1);
     expect(basalt.net.toNumber()).toBeCloseTo(0.15, 12);
+  });
+
+  it("carries its full HP, its pressure and the oscillators it presses (spec chunk 05)", () => {
+    // Basalt (8%) presses on the Sine and the Triangle beside it,
+    // not on the Flywheel patched into it.
+    const s = fresh();
+    place(s, "sine", O);
+    place(s, "triangle", NE);
+    place(s, "flywheel", { q: 0, r: 1 });
+    expect(patch(s, { q: 0, r: 1 }, BASALT).ok).toBe(true);
+    const basalt = wallRate(s, BASALT)!;
+    expect([basalt.full.toNumber(), basalt.pressure, basalt.pressed]).toEqual([6000, 0.08, 2]);
+    // Shale borders the Sine and the Flywheel.
+    expect(patch(s, { q: 0, r: 1 }, SHALE).ok).toBe(false);
+    must(s, { type: "repatchCable", source: { q: 0, r: 1 }, target: SHALE });
+    const shale = wallRate(s, SHALE)!;
+    expect([shale.full.toNumber(), shale.pressure, shale.pressed]).toEqual([600, 0.05, 1]);
   });
 
   it("reach onto a wall deals no damage", () => {
@@ -201,5 +219,61 @@ describe("a cable into a wall in the save", () => {
     const shale = wallRate(loaded, SHALE)!;
     expect(shale.damage.toNumber()).toBeCloseTo(1.4, 12);
     expect(shale.net.toNumber()).toBeCloseTo(1.3, 12);
+  });
+});
+
+// The spec's acceptance (chunk 05): no wall's HP changes in upgrade mode.
+// Two walls fought for 100 s, then the session ended; every upgrade-mode
+// action, each from that state, leaves `board.walls` as it was.
+describe("no upgrade-mode apply changes a wall's HP", () => {
+  function damaged(): GameState {
+    const s = fresh();
+    giveProducer(s, { modulators: 2, cables: 2 });
+    place(s, "flywheel", O);
+    place(s, "flywheel", { q: 1, r: 0 });
+    must(s, { type: "patchCable", cable: "patch", source: O, target: SHALE });
+    must(s, { type: "patchCable", cable: "patch", source: { q: 1, r: 0 }, target: BASALT });
+    giveHabit(s, "Piano", "engineer");
+    must(s, { type: "startSession", habitId: s.records.activeHabitId!, target: 1500, now: 0 });
+    advanceIn(s, 100, "flow");
+    must(s, { type: "endSession", now: 100_000 });
+    return s;
+  }
+
+  it("moves no wall for a layout, cable, habit, note, Intention, summary or Encyclopedia action", () => {
+    const start = damaged();
+    expect(start.game.mode).toBe("upgrade");
+    expect(start.game.board.walls).toHaveLength(2);
+    expect(start.game.encyclopedia.revealed.length).toBeGreaterThan(0);
+    const walls = cloneState(start).game.board.walls;
+    const habitId = start.records.activeHabitId!;
+    const NOW = 200_000;
+    const actions: Action[] = [
+      { type: "placeModule", module: "sine", cell: NE },
+      { type: "moveModule", from: O, to: NE },
+      { type: "rotateModule", cell: { q: 1, r: 0 }, turn: "clockwise" },
+      { type: "removeModule", cell: O },
+      { type: "unplugCable", source: O },
+      { type: "repatchCable", source: O, target: { q: 0, r: 1 } },
+      { type: "createHabit", name: "Cello", habitClass: "producer" },
+      { type: "renameHabit", id: habitId, name: "Organ" },
+      { type: "recolorHabit", id: habitId, color: "cyan" },
+      { type: "selectHabit", id: null },
+      { type: "reattuneHabit", habitId, habitClass: "producer" },
+      { type: "logPractice", habitId, minutes: 30, now: NOW },
+      { type: "reflect", text: "Steady.", slider: 4 },
+      { type: "dismissSummary" },
+      { type: "writeNote", text: "A note.", now: NOW },
+      { type: "createIntention", habitId, minutes: 30, schedule: "daily", now: NOW },
+      { type: "rollIntentions", now: NOW },
+      { type: "readEntry", id: start.game.encyclopedia.revealed[0]! },
+      { type: "archiveHabit", id: habitId },
+    ];
+    for (const action of actions) {
+      const s = cloneState(start);
+      const done = apply(s, action);
+      expect(done.ok, `${action.type}: ${done.reason}`).toBe(true);
+      expect(done.state.game.board.walls, action.type).toEqual(walls);
+    }
   });
 });

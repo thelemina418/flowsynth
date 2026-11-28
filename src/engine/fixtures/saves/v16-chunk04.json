@@ -1,0 +1,327 @@
+{
+  "app": "flowsynth",
+  "version": 16,
+  "savedAt": 1794075120000,
+  "state": {
+    "records": {
+      "habits": [
+        {
+          "id": "h1",
+          "name": "Habit A",
+          "seconds": 5700,
+          "archived": false,
+          "color": "vermillion",
+          "habitClass": "engineer"
+        },
+        {
+          "id": "h2",
+          "name": "Habit B",
+          "seconds": 5700,
+          "archived": false,
+          "color": "vermillion",
+          "habitClass": "producer"
+        }
+      ],
+      "activeHabitId": "h1",
+      "practiceLog": [
+        {
+          "id": "p5",
+          "habitId": "h1",
+          "seconds": 1500,
+          "source": "live",
+          "at": 1793633100000
+        },
+        {
+          "id": "p6",
+          "habitId": "h2",
+          "seconds": 2700,
+          "source": "live",
+          "at": 1793722200000
+        },
+        {
+          "id": "p7",
+          "habitId": "h1",
+          "seconds": 2400,
+          "source": "live",
+          "at": 1793811120000
+        },
+        {
+          "id": "p8",
+          "habitId": "h2",
+          "seconds": 3000,
+          "source": "live",
+          "at": 1793900520000
+        },
+        {
+          "id": "p9",
+          "habitId": "h1",
+          "seconds": 1800,
+          "source": "live",
+          "at": 1793988720000
+        }
+      ],
+      "sessionRecords": [
+        {
+          "sessionNumber": 1,
+          "startedAt": 1793631600000,
+          "endedAt": 1793633100000,
+          "habitId": "h1",
+          "mode": "planned",
+          "plannedTarget": 1500,
+          "creditedSeconds": 1500,
+          "honestyEvents": [],
+          "reflection": {
+            "text": "Placeholder reflection.",
+            "slider": 4
+          },
+          "goalsAdvanced": [
+            {
+              "goalId": "g3",
+              "seconds": 1500,
+              "goal": {
+                "id": "g3",
+                "condition": {
+                  "kind": "habit-minutes",
+                  "habitId": "h1",
+                  "minutes": 30
+                },
+                "schedule": {
+                  "kind": "daily"
+                },
+                "occurrenceKey": "2026-11-02",
+                "progressSeconds": 1500,
+                "completed": false,
+                "completedCount": 0,
+                "createdAt": 1793631600000
+              }
+            }
+          ]
+        },
+        {
+          "sessionNumber": 2,
+          "startedAt": 1793719500000,
+          "endedAt": 1793722200000,
+          "habitId": "h2",
+          "mode": "planned",
+          "plannedTarget": 2700,
+          "creditedSeconds": 2700,
+          "honestyEvents": [],
+          "reflection": null,
+          "goalsAdvanced": []
+        },
+        {
+          "sessionNumber": 3,
+          "startedAt": 1793808720000,
+          "endedAt": 1793811120000,
+          "habitId": "h1",
+          "mode": "planned",
+          "plannedTarget": 2400,
+          "creditedSeconds": 2400,
+          "honestyEvents": [],
+          "reflection": null,
+          "goalsAdvanced": [
+            {
+              "goalId": "g3",
+              "seconds": 1800,
+              "goal": {
+                "id": "g3",
+                "condition": {
+                  "kind": "habit-minutes",
+                  "habitId": "h1",
+                  "minutes": 30
+                },
+                "schedule": {
+                  "kind": "daily"
+                },
+                "occurrenceKey": "2026-11-04",
+                "progressSeconds": 0,
+                "completed": false,
+                "completedCount": 1,
+                "createdAt": 1793631600000
+              }
+            }
+          ]
+        },
+        {
+          "sessionNumber": 4,
+          "startedAt": 1793897520000,
+          "endedAt": 1793900520000,
+          "habitId": "h2",
+          "mode": "planned",
+          "plannedTarget": 3000,
+          "creditedSeconds": 3000,
+          "honestyEvents": [],
+          "reflection": {
+            "text": "Placeholder reflection.",
+            "slider": 4
+          },
+          "goalsAdvanced": []
+        },
+        {
+          "sessionNumber": 5,
+          "startedAt": 1793986920000,
+          "endedAt": 1793988720000,
+          "habitId": "h1",
+          "mode": "planned",
+          "plannedTarget": 1800,
+          "creditedSeconds": 1800,
+          "honestyEvents": [],
+          "reflection": null,
+          "goalsAdvanced": [
+            {
+              "goalId": "g3",
+              "seconds": 1800,
+              "goal": {
+                "id": "g3",
+                "condition": {
+                  "kind": "habit-minutes",
+                  "habitId": "h1",
+                  "minutes": 30
+                },
+                "schedule": {
+                  "kind": "daily"
+                },
+                "occurrenceKey": "2026-11-06",
+                "progressSeconds": 0,
+                "completed": false,
+                "completedCount": 2,
+                "createdAt": 1793631600000
+              }
+            }
+          ]
+        }
+      ],
+      "notes": [
+        {
+          "id": "n4",
+          "sessionId": 0,
+          "atElapsed": -1,
+          "text": "Placeholder note between sessions.",
+          "habitId": null,
+          "at": 1793631600000
+        }
+      ],
+      "intentions": [
+        {
+          "id": "g3",
+          "condition": {
+            "kind": "habit-minutes",
+            "habitId": "h1",
+            "minutes": 30
+          },
+          "schedule": {
+            "kind": "daily"
+          },
+          "occurrenceKey": "2026-11-06",
+          "progressSeconds": 0,
+          "completed": false,
+          "completedCount": 2,
+          "createdAt": 1793631600000
+        }
+      ],
+      "classCredit": {
+        "engineer": 5700,
+        "producer": 5700,
+        "mixer": 0,
+        "roadie": 0
+      },
+      "sessionIndex": 5,
+      "sessionsCompleted": 5,
+      "nextId": 10
+    },
+    "game": {
+      "nous": "11400",
+      "mode": "upgrade",
+      "session": null,
+      "summary": {
+        "sessionNumber": 5,
+        "seconds": 1800,
+        "nous": "1800",
+        "habitClass": "engineer",
+        "classSeconds": 1800,
+        "levelBefore": 1,
+        "levelAfter": 2,
+        "breather": 360,
+        "plannedTarget": 1800,
+        "honestyEvents": [],
+        "reflection": null,
+        "seen": true
+      },
+      "breather": {
+        "banked": {
+          "seconds": 360
+        },
+        "running": null,
+        "result": null
+      },
+      "encyclopedia": {
+        "revealed": [
+          "sine",
+          "triangle",
+          "walls",
+          "classes",
+          "breather",
+          "cables",
+          "square"
+        ],
+        "seen": []
+      },
+      "openClasses": [
+        "engineer",
+        "producer"
+      ],
+      "legacyLine": null,
+      "board": {
+        "open": [
+          {
+            "q": 0,
+            "r": 0
+          },
+          {
+            "q": 1,
+            "r": 0
+          },
+          {
+            "q": 0,
+            "r": 1
+          },
+          {
+            "q": 1,
+            "r": -1
+          }
+        ],
+        "arc": "sketch",
+        "placements": [
+          {
+            "cell": {
+              "q": 0,
+              "r": 0
+            },
+            "module": "sine"
+          },
+          {
+            "cell": {
+              "q": 0,
+              "r": 1
+            },
+            "module": "flywheel",
+            "facing": 0
+          }
+        ],
+        "cables": [
+          {
+            "type": "patch",
+            "source": {
+              "q": 0,
+              "r": 1
+            },
+            "target": {
+              "q": -1,
+              "r": 1
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -111,3 +111,105 @@ writeFileSync(process.argv[2]!, text + "\n");
 console.log("modules", s.modules.length, s.modules.map((m) => `${m.type}:${m.pos ? "placed" : "unplaced"}`).join(" "));
 console.log("habits", s.habits.length, "log", s.practiceLog.length, "records", s.sessionRecords.length, "notes", s.notes.length, "goals", s.goals.length, "nous", s.nous, "bytes", text.length);
 ```
+
+## `v16-chunk04.json`
+
+A genuine chunk-04 v16 save, written before wall HP existed, which
+`src/engine/save-walls.test.ts` loads to check chunk 05 reads it with every
+wall at full HP and nothing else changed.
+
+**Provenance.** Written by chunk 04's own engine and save code at commit
+`be8557e` (the merge of `integration/spec-04-cadence`, `SAVE_VERSION` 16),
+through `apply` and `advance` only, not hand-made. The script below ran in a
+`git worktree` of that commit (`npx vite-node
+tools/make-v16-chunk04-fixture.ts <out.json> <reread.json>`). That build read
+the save back and re-serialized it byte for byte (`<reread.json>` was
+identical), so the file is also chunk 04's own reading of itself. Its output
+is committed byte for byte and frozen.
+
+**Text.** Placeholder names, note and reflections only.
+
+**What it holds.** Two classed habits (Engineer, Producer), five sessions
+(two with reflections, one followed by a breather), a banked breather, a
+daily Intention, a Note, and a board with the opening Sine and a Flywheel
+patched into Shale.
+
+```ts
+import { writeFileSync } from "node:fs";
+import { advance } from "../src/engine/advance";
+import { apply, type Action } from "../src/engine/apply";
+import { deserialize, serialize } from "../src/engine/save";
+import { createInitialState } from "../src/engine/state";
+import type { GameState } from "../src/engine/types";
+
+let s: GameState = createInitialState();
+const DAY = 86_400_000;
+let now = Date.UTC(2026, 10, 2, 15, 0, 0); // 2026-11-02
+const must = (action: Action): string | undefined => {
+  const r = apply(s, action);
+  if (!r.ok) throw new Error(`${action.type}: ${r.reason}`);
+  s = r.state;
+  return r.id;
+};
+const flow = (seconds: number) => {
+  for (let done = 0; done < seconds; done += 60) {
+    s = advance(s, Math.min(60, seconds - done), "flow", "visible").state;
+    now += Math.min(60, seconds - done) * 1000;
+  }
+};
+
+const engineer = must({ type: "createHabit", name: "Habit A", habitClass: "engineer" })!;
+const producer = must({ type: "createHabit", name: "Habit B", habitClass: "producer" })!;
+must({ type: "createIntention", habitId: engineer, minutes: 30, schedule: "daily", now });
+must({ type: "writeNote", text: "Placeholder note between sessions.", now });
+
+function session(habitId: string, minutes: number, reflect: boolean, breather: boolean) {
+  must({ type: "startSession", habitId, target: minutes * 60, now });
+  flow(minutes * 60);
+  must({ type: "endSession", now });
+  if (reflect) must({ type: "reflect", text: "Placeholder reflection.", slider: 4 });
+  must({ type: "dismissSummary" });
+  if (breather) {
+    must({ type: "takeBreather", now });
+    s = advance(s, 120, "breather", "visible").state;
+    now += 120_000;
+    if (s.game.breather.running) must({ type: "endBreatherEarly" } as Action);
+    if (s.game.breather.result) must({ type: "dismissBreatherResult" } as Action);
+  }
+  now += DAY;
+}
+
+// The opening Sine, then sessions that grow both classes.
+must({ type: "placeModule", module: "sine", cell: { q: 0, r: 0 } });
+session(engineer, 25, true, false);
+session(producer, 45, false, true);
+session(engineer, 40, false, false);
+session(producer, 50, true, false);
+// The board: what the allowance grants, then a Patch into Shale.
+must({ type: "placeModule", module: "flywheel", cell: { q: 0, r: 1 } });
+must({ type: "patchCable", cable: "patch", source: { q: 0, r: 1 }, target: { q: -1, r: 1 } });
+session(engineer, 30, false, false);
+
+const text = serialize(s, now);
+writeFileSync(process.argv[2]!, text + "\n");
+// What this build reads back from it, re-serialized at the same instant.
+writeFileSync(process.argv[3]!, serialize(deserialize(text).state!, now) + "\n");
+console.log("habits", s.records.habits.length, "records", s.records.sessionRecords.length, "placements", s.game.board.placements.map((p) => p.module).join(","), "cables", s.game.board.cables.length, "bytes", text.length);
+```
+
+## `v15-migration.chunk04-load.json`
+
+Chunk 04's reading of `v15-migration.json`: the state `be8557e`'s
+`deserialize` made of it, re-serialized at the save's own `savedAt`. The
+wall-HP test compares chunk 05's reading against it. Made in the same
+worktree (`npx vite-node tools/read-v15.ts
+src/engine/fixtures/saves/v15-migration.json <out.json>`) and frozen.
+
+```ts
+import { readFileSync, writeFileSync } from "node:fs";
+import { deserialize, serialize } from "../src/engine/save";
+const text = readFileSync(process.argv[2]!, "utf8");
+const loaded = deserialize(text);
+if (loaded.error) throw new Error(loaded.error);
+writeFileSync(process.argv[3]!, serialize(loaded.state!, JSON.parse(text).savedAt) + "\n");
+```

@@ -2,10 +2,10 @@ import { advance } from "./advance";
 import { apply, type Action, type ApplyResult } from "./apply";
 import { createInitialState } from "./state";
 import { cableName } from "./cables";
-import { cellKind, isOpen } from "./board";
+import { cellKind, isOpen, wallHp } from "./board";
 import { addCell, cellKey, DIRECTIONS, distance, FACING_NAMES, lifetimeCells, neighbours, sameCell, type Cell } from "./hex";
 import { goalOf } from "./goal";
-import { BASALT_CELLS, FLINT_CELL, SCHIST_CELL, SHALE_CELL, wallAt, type WallKind } from "./map";
+import { BASALT_CELLS, FLINT_CELL, SCHIST_CELL, SHALE_CELL, wallAt, wallOf, type WallKind } from "./map";
 import { cableFrom, moduleAt } from "./placement";
 import { classLevel, grantsOf } from "./levels";
 import { hasFacing, isArm, isModulator, isOscillator, moduleName } from "./modules";
@@ -254,9 +254,7 @@ function soonestFall(state: GameState, targets: readonly Cell[]): { seconds: num
   for (const rate of state.game.rates.walls) {
     const rank = targets.findIndex((t) => sameCell(t, rate.cell));
     if (rank === -1 || !gt(rate.net, 0)) continue;
-    const entry = state.game.board.walls.find((w) => sameCell(w.cell, rate.cell));
-    const hp = entry ? entry.hp : wallAt(rate.cell)!.hp;
-    const seconds = hp.toNumber() / rate.net.toNumber();
+    const seconds = wallHp(state.game.board, rate.cell).toNumber() / rate.net.toNumber();
     if (seconds < best.seconds || (seconds === best.seconds && rank < best.rank)) best = { seconds, rank };
   }
   return best;
@@ -357,7 +355,7 @@ function fightLayout(state: GameState, now: number, targets: readonly Cell[]): P
     plan.applyAll(best!.actions);
   }
   for (const arm of plan.state.game.rates.arms) {
-    if (arm.module === "blade" && !gt(arm.chargeReceived, 0)) must(plan.apply({ type: "removeModule", cell: arm.cell }), "lifting an unfed Blade");
+    if (arm.role === "strike" && !gt(arm.chargeReceived, 0)) must(plan.apply({ type: "removeModule", cell: arm.cell }), "lifting an unfed Blade");
   }
   const fought = secondsToFall(plan.state, targets);
   placeAllowanceGreedily(plan, (s) => !(secondsToFall(s, targets) > fought));
@@ -606,7 +604,7 @@ export function runPace(script: PaceScript): PaceReport {
     cables: state.game.board.cables.map((c) => ({ type: c.type, source: { ...c.source }, target: { ...c.target } })),
     rate: state.game.rates.total,
     charge: state.game.rates.modulators.reduce((sum, m) => add(sum, m.output), D(0)),
-    walls: state.game.rates.walls.map((w) => ({ name: wallAt(w.cell)!.name, cell: { ...w.cell }, damage: w.damage })),
+    walls: state.game.rates.walls.map((w) => ({ name: wallOf(w.cell).name, cell: { ...w.cell }, damage: w.damage })),
     nous: state.game.nous,
     classLevels: CLASSES.filter((c) => state.game.openClasses.includes(c)).map((habitClass) => ({ habitClass, level: classLevel(state, habitClass).level })),
     breathersTaken,

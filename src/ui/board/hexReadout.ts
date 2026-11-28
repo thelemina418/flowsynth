@@ -1,11 +1,11 @@
-import { cellKind } from "../../engine/board";
-import { FACING_NAMES, neighbours, ring, sameCell, type Cell } from "../../engine/hex";
+import { cellKind, wallHp } from "../../engine/board";
+import { FACING_NAMES, ring, sameCell, type Cell } from "../../engine/hex";
 import { className } from "../../engine/habits";
-import { modifierName, wallAt } from "../../engine/map";
+import { modifierName, wallOf } from "../../engine/map";
 import { categoryName, categoryOf, moduleName, takesCharge } from "../../engine/modules";
 import { cableFrom, moduleAt } from "../../engine/placement";
-import { fmt, fmtPercent, fmtRate, gt } from "../../engine/num";
-import { wallPressure } from "../../engine/rates";
+import { fmtHp, fmtPercent, fmtRate, gt } from "../../engine/num";
+import { wallRateAt } from "../../engine/rates";
 import type { ArmRate, Board, BoardRates, ModulatorRate, ModuleType, OscillatorRate, OscillatorType, ReachHolds } from "../../engine/types";
 
 // The Hex detail's readout (issue #27; philosophy.md, Words rule 2): the
@@ -51,30 +51,26 @@ export function hexDetail(board: Board, rates: BoardRates, cell: Cell): DetailLi
 // opens; its HP and regen; its modifier by name; its pressure, doubled for
 // `Pressure ×2`, and the bordering oscillators it reduces (issue #52). Once
 // a Patch targets it, the damage it takes is its effect line (issue #34).
-// The HP is the board's, live in flow (issue #49): full unless the wall
-// has an entry below full.
+// The HP is the board's, live in flow (issue #49); the rest is the wall's
+// rate (spec chunk 05).
 function wallLines(board: Board, rates: BoardRates, cell: Cell): DetailLine[] {
-  const wall = wallAt(cell)!;
-  const hp = board.walls.find((w) => sameCell(w.cell, cell))?.hp ?? wall.hp;
+  const wall = wallOf(cell);
+  const rate = wallRateAt(rates, cell);
   const opens = wall.opens === null ? "" : ` · opens ${className(wall.opens)}`;
   const lines: DetailLine[] = [
     { text: `${wall.name} · Wall · ring ${ring(cell)}${opens}` },
-    { text: `${fmt(hp)} / ${fmt(wall.hp)} HP · regen ${fmtRate(wall.regen)}/s` },
+    { text: `${fmtHp(wallHp(board, cell))} / ${fmtHp(rate.full)} HP · regen ${fmtRate(rate.regen)}/s` },
   ];
   if (wall.modifier !== null) lines.push({ text: modifierName(wall.modifier) });
-  const pressed = pressedModules(rates, cell);
-  const on = pressed === 0 ? "" : ` on ${pressed} ${pressed === 1 ? "module" : "modules"}`;
-  lines.push({ text: `Pressure ${fmtPercent(wallPressure(cell))}%${on}` });
-  const patched = rates.walls.find((w) => sameCell(w.cell, cell));
-  if (patched) lines.push({ text: `Taking ${fmtRate(patched.damage)}/s`, effect: true });
+  const on = rate.pressed === 0 ? "" : ` on ${modules(rate.pressed)}`;
+  lines.push({ text: `Pressure ${fmtPercent(rate.pressure)}%${on}` });
+  if (gt(rate.damage, 0)) lines.push({ text: `Taking ${fmtRate(rate.damage)}/s`, effect: true });
   return lines;
 }
 
-// The oscillators bordering a wall that pressure reduces: a modulator
-// beside it isn't, and nor is an oscillator whose pressure is cancelled.
-function pressedModules(rates: BoardRates, wall: Cell): number {
-  const around = neighbours(wall);
-  return rates.oscillators.filter((o) => gt(o.pressure, 0) && around.some((n) => sameCell(n, o.cell))).length;
+// `1 module`, `2 modules`.
+function modules(count: number): string {
+  return `${count} ${count === 1 ? "module" : "modules"}`;
 }
 
 // A modulator names its facing in compass words (issue #31), then its
@@ -97,11 +93,11 @@ function modulatorLines(board: Board, m: ModulatorRate): DetailLine[] {
 // isn't a wall, it does nothing. A Guard Plate's effect is the modules it
 // shields from pressure, while it borders a wall (issue #54).
 function armLines(a: ArmRate): DetailLine[] {
-  if (a.module === "guardPlate") {
-    const effect = a.active ? `Cancels pressure on ${a.shields} ${a.shields === 1 ? "module" : "modules"}` : "No wall in reach";
+  if (a.role === "guard") {
+    const effect = a.active ? `Cancels pressure on ${modules(a.shields)}` : "No wall in reach";
     return [{ text: nameLine(a.module) }, { text: effect, effect: true }];
   }
-  const effect = a.facesWall ? `${fmtRate(a.damage)}/s to ${wallAt(a.faces)!.name}` : "No wall in reach";
+  const effect = a.facesWall ? `${fmtRate(a.damage)}/s to ${wallOf(a.faces).name}` : "No wall in reach";
   return [
     { text: `${nameLine(a.module)} · facing ${FACING_NAMES[a.facing]}` },
     { text: `${fmtRate(a.chargeReceived)} charge/s received` },
@@ -114,7 +110,7 @@ function armLines(a: ArmRate): DetailLine[] {
 function targetName(cell: Cell, holds: ReachHolds): string {
   switch (holds) {
     case "empty": return "Open cell";
-    case "wall": return wallAt(cell)!.name;
+    case "wall": return wallOf(cell).name;
     case "dark": throw new Error("a cable never targets a dark cell");
     default: return moduleName(holds);
   }

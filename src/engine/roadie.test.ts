@@ -9,7 +9,7 @@ import { entriesOf } from "./encyclopedia";
 import { goalOf } from "./goal";
 import { grantsOf } from "./levels";
 import type { Cell } from "./hex";
-import type { BladeRate, GameState, ModuleType } from "./types";
+import type { GameState, ModuleType, StrikeRate } from "./types";
 
 // Roadie opens, and the Blade (spec chunk 05, issue #53), through the
 // GameState seam: a conquest that leaves an open cell bordering the marked
@@ -126,9 +126,9 @@ const NW = 4;
 const N = 5;
 
 // The first placed Arm's rate, which these tests make a Blade.
-function bladeRate(s: GameState): BladeRate {
+function bladeRate(s: GameState): StrikeRate {
   const arm = s.game.rates.arms[0]!;
-  if (arm.module !== "blade") throw new Error("expected a Blade");
+  if (arm.module !== "blade" || arm.role !== "strike") throw new Error("expected a Blade");
   return arm;
 }
 

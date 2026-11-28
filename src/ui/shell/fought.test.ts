@@ -4,10 +4,12 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
 import { applyIn, begin, fresh, giveHabit, giveProducer } from "../../engine/fixtures";
 import type { Cell } from "../../engine/hex";
+import { D, gt, mul, sub, type Num } from "../../engine/num";
 import { serialize, STORAGE_KEY } from "../../engine/save";
 import type { GameState, ModuleType } from "../../engine/types";
 import { memorySaveStorage, type SaveStorage } from "../shared-save";
 import { App } from "./App";
+import { hpRow } from "./readouts";
 import { Shell } from "./shell";
 
 // The fought wall on the flow screen (spec chunk 05, issue #50): the HP
@@ -86,7 +88,7 @@ function tick(shell: Shell, seconds: number): void {
 }
 
 // fmt groups thousands with a thin space; read it as a space.
-function hpRow(): string | null {
+function shownHpRow(): string | null {
   const row = host.querySelector("[data-hp-row]");
   return row === null ? null : (row.textContent ?? "").replace(/\s/g, " ");
 }
@@ -104,7 +106,7 @@ describe("the flow screen's HP row", () => {
     // Equal damage on Shale and Basalt: Shale falls first (600 HP), though
     // Basalt comes first in authored order.
     mount(fighting([[SE, SHALE], [O, BASALT]]));
-    expect(hpRow()).toBe("Shale ▕██████████▏ 600 / 600 HP");
+    expect(shownHpRow()).toBe("Shale ▕██████████▏ 600 / 600 HP");
     const row = host.querySelector("[data-hp-row]")!;
     const ready = host.querySelector("[data-ready]")!;
     expect(row.parentElement).toBe(ready.parentElement);
@@ -113,7 +115,7 @@ describe("the flow screen's HP row", () => {
 
   it("with no wall losing HP, shows the wall taking the most damage, though it comes later in authored order", () => {
     mount(fighting([[E, FLINT_E], [NE, FLINT_E], [O, FLINT_NW]]));
-    expect(hpRow()).toBe("Flint ▕██████████▏ 60 000 / 60 000 HP");
+    expect(shownHpRow()).toBe("Flint ▕██████████▏ 60 000 / 60 000 HP");
     expect(foughtCell()).toEqual(FLINT_E);
   });
 
@@ -124,7 +126,7 @@ describe("the flow screen's HP row", () => {
 
   it("is absent with no wall taking damage, leaving Ready · N alone", () => {
     mount(fighting([]));
-    expect(hpRow()).toBeNull();
+    expect(shownHpRow()).toBeNull();
     expect(host.querySelector("[data-ready]")!.textContent).toMatch(/^Ready · \d+$/);
   });
 
@@ -134,10 +136,10 @@ describe("the flow screen's HP row", () => {
     const before = buttons();
     tick(shell, 300);
     // 600 − 1.05 × 300.
-    expect(hpRow()).toBe("Shale ▕█████░░░░░▏ 285 / 600 HP");
+    expect(shownHpRow()).toBe("Shale ▕█████░░░░░▏ 285 / 600 HP");
     tick(shell, 300);
     // Shale fell at 571 s; Basalt has lost 0.15 × 600.
-    expect(hpRow()).toBe("Basalt ▕██████████▏ 5 910 / 6 000 HP");
+    expect(shownHpRow()).toBe("Basalt ▕██████████▏ 5 910 / 6 000 HP");
     expect(shell.screen.value.kind).toBe("flow");
     expect(buttons()).toEqual(before);
   });
@@ -174,5 +176,39 @@ describe("the summary line's walls", () => {
     tick(shell, 300);
     end();
     expect(summaryLine()).toMatch(/^\+.+ ν · Engineer \+5 min$/);
+  });
+});
+
+// The HP row's text (issue #50, ADR-0031): the figures round up, as the
+// bar does, so a wall reads 0 only at the conquest; and the row reserves
+// the widest figures any HP of that wall can show, so it never resizes as
+// the HP falls, whatever the wall's size.
+describe("the HP row's figures", () => {
+  const wall = (hp: Num, full: Num) => hpRow({ cell: SHALE, name: "Shale", hp, full });
+
+  it("rounds up beside the bar: 0.4 HP reads 1 with one cell lit", () => {
+    expect(wall(D(0.4), D(600))).toMatchObject({ bar: "▕█░░░░░░░░░▏", figures: "1 / 600 HP" });
+    expect(wall(D(411.2), D(600)).figures).toBe("412 / 600 HP");
+  });
+
+  it("reserves the widest figures of each wall size: a Shale, a Gneiss and a Corundum", () => {
+    // 600 / 600 HP; 999 999 / 3e7 HP; 9.99e15 / 1e16 HP.
+    expect(wall(D(600), D(600)).width).toBe(12);
+    expect(wall(D(3e7), D(3e7)).width).toBe(16);
+    expect(wall(D(1e16), D(1e16)).width).toBe(17);
+  });
+
+  it("never shows figures wider than it reserves, as any wall's HP falls", () => {
+    for (const full of ["600", "6e3", "6e4", "3e5", "3e7", "1e9", "1e11", "1e13", "1e16"].map((f) => D(f))) {
+      const width = wall(full, full).width;
+      for (let hp = full; gt(hp, 0.01); hp = mul(hp, 0.97)) {
+        for (const shown of [hp, sub(hp, 0.5), mul(hp, 0.999)]) {
+          if (!gt(shown, 0)) continue;
+          const row = wall(shown, full);
+          expect(row.width, `${row.figures} of ${full}`).toBe(width);
+          expect(row.figures.length, `${row.figures} of ${full}`).toBeLessThanOrEqual(width);
+        }
+      }
+    }
   });
 });

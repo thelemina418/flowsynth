@@ -1,7 +1,7 @@
 import { formatClock } from "../../engine/clock";
 import { className } from "../../engine/habits";
-import { div, fmt, gt } from "../../engine/num";
-import { wallAt } from "../../engine/map";
+import { div, fmt, fmtHp, gt, widestHp } from "../../engine/num";
+import { wallOf } from "../../engine/map";
 import type { FoughtWall } from "../../engine/fought";
 import { classLevel, grantsOf } from "../../engine/levels";
 import { unplacedOf } from "../../engine/placement";
@@ -46,17 +46,18 @@ const HP_CELLS = 10;
 
 // The fought wall's HP row (issue #50), `Shale ▕███████░░░▏ 412 / 600 HP`:
 // a fixed 10-cell bar and the HP against full. A cell stays lit while any
-// HP is left, so the bar empties only at the conquest. `width` is the
-// figures' widest text for this wall, `<full> / <full> HP`, so the row
-// holds its size while the HP falls (ADR-0031).
+// HP is left, so the bar empties only at the conquest, and the HP figure
+// rounds up to agree with it. `width` is the figures' widest text for this
+// wall, the widest HP figure over `<full> HP`, so the row holds its size
+// while the HP falls, at every wall size (ADR-0031).
 export function hpRow(wall: FoughtWall): { name: string; bar: string; figures: string; width: number } {
   const lit = Math.max(0, Math.min(HP_CELLS, Math.ceil(div(wall.hp, wall.full).toNumber() * HP_CELLS - 1e-9)));
-  const full = fmt(wall.full);
+  const full = ` / ${fmtHp(wall.full)} HP`;
   return {
     name: wall.name,
     bar: `▕${"█".repeat(lit)}${"░".repeat(HP_CELLS - lit)}▏`,
-    figures: `${fmt(wall.hp)} / ${full} HP`,
-    width: `${full} / ${full} HP`.length,
+    figures: `${fmtHp(wall.hp)}${full}`,
+    width: widestHp(wall.full) + full.length,
   };
 }
 
@@ -90,7 +91,7 @@ export function summaryLine(summary: SessionSummary): string {
 }
 
 function wallsSegment(walls: readonly SummaryWall[]): string {
-  const name = (wall: SummaryWall) => wallAt(wall.cell)?.name ?? "";
+  const name = (wall: SummaryWall) => wallOf(wall.cell).name;
   const conquered = walls.filter((w) => w.conquered).map((w) => ` · ${name(w)} conquered`);
   const fought = walls.find((w) => w.fought && !w.conquered && gt(w.lost, 0));
   const lost = fought && fmt(fought.lost) !== "0" ? [` · ${name(fought)} −${fmt(fought.lost)} HP`] : [];
