@@ -143,19 +143,19 @@ function withLevels(type: "sine" | "flywheel", count: number): GameState {
 }
 
 describe("channel levels in the rates", () => {
-  it("a Sine with channel level 2 reads faders ×1.25² in its flow and breather rate", () => {
+  it("a Sine with channel level 2 reads faders ×1.1² in its flow and breather rate", () => {
     const s = withLevels("sine", 2);
     applyIn(s, { type: "placeModule", module: "sine", cell: { q: 0, r: 0 } });
     const sine = s.game.rates.oscillators[0]!;
-    expect(sine.faders.toNumber()).toBeCloseTo(1.5625, 12);
+    expect(sine.faders.toNumber()).toBeCloseTo(1.21, 12);
     const bare = fresh();
     applyIn(bare, { type: "placeModule", module: "sine", cell: { q: 0, r: 0 } });
     const plain = bare.game.rates.oscillators[0]!;
-    expect(sine.rate.toNumber()).toBeCloseTo(plain.rate.toNumber() * 1.5625, 12);
-    expect(sine.breatherRate.toNumber()).toBeCloseTo(plain.breatherRate.toNumber() * 1.5625, 12);
+    expect(sine.rate.toNumber()).toBeCloseTo(plain.rate.toNumber() * 1.21, 12);
+    expect(sine.breatherRate.toNumber()).toBeCloseTo(plain.breatherRate.toNumber() * 1.21, 12);
   });
 
-  it("a Flywheel with level 1 delivers 1.25 × its output, and its target's charge factor reads 1 + ln(1 + 1.25 × output)", () => {
+  it("a Flywheel with level 1 delivers 1.1 × its output, and its target's charge factor reads 1 + ln(1 + 1.1 × output)", () => {
     const s = withLevels("flywheel", 1);
     applyIn(s, { type: "placeModule", module: "sine", cell: { q: 0, r: 0 } });
     applyIn(s, { type: "placeModule", module: "flywheel", cell: { q: 0, r: 1 } });
@@ -163,17 +163,17 @@ describe("channel levels in the rates", () => {
     applyIn(s, { type: "rotateModule", cell: { q: 0, r: 1 }, turn: "counterclockwise" });
     const flywheel = s.game.rates.modulators[0]!;
     // A fresh Flywheel's output is 1 charge/s.
-    expect(flywheel.output.toNumber()).toBeCloseTo(1.25, 12);
+    expect(flywheel.output.toNumber()).toBeCloseTo(1.1, 12);
     expect(flywheel.deliveries[0]!.holds).toBe("sine");
     const sine = s.game.rates.oscillators[0]!;
-    expect(sine.chargeReceived.toNumber()).toBeCloseTo(1.25, 12);
-    expect(sine.charge.toNumber()).toBeCloseTo(1 + Math.log(1 + 1.25), 12);
+    expect(sine.chargeReceived.toNumber()).toBeCloseTo(1.1, 12);
+    expect(sine.charge.toNumber()).toBeCloseTo(1 + Math.log(1 + 1.1), 12);
   });
 
-  it("a Patch into Shale from a Flywheel with level 1 deals 1.25 × its output", () => {
+  it("a Patch into Shale from a Flywheel with level 1 deals 1.1 × its output", () => {
     const s = withLevels("flywheel", 1);
     applyIn(s, { type: "placeModule", module: "flywheel", cell: { q: 0, r: 0 } });
     applyIn(s, { type: "patchCable", cable: "patch", source: { q: 0, r: 0 }, target: { q: -1, r: 1 } });
-    expect(s.game.rates.walls[0]!.damage.toNumber()).toBeCloseTo(1.25, 12);
+    expect(s.game.rates.walls[0]!.damage.toNumber()).toBeCloseTo(1.1, 12);
   });
 });

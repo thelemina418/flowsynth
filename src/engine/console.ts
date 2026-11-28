@@ -15,8 +15,8 @@ export type FaderId = { kind: "channel"; type: ModuleType } | { kind: "bus"; cat
 
 // Each level multiplies by its step, and each costs a growth times the
 // last.
-const CHANNEL_STEP = 1.25;
-const BUS_STEP = 1.1;
+const CHANNEL_STEP = 1.1;
+const BUS_STEP = 1.05;
 // The growth, in hundredths so a tapered growth is exact: 1.60 less 0.03 a
 // taper level.
 const GROWTH_HUNDREDTHS = 160;
@@ -193,12 +193,12 @@ export function discloseConsole(state: GameState): void {
   if (!shown.buses && busesShown(state)) shown.buses = true;
 }
 
-// The multiplier a type's channel level gives its output: ×1.25 a level.
+// The multiplier a type's channel level gives its output: ×1.1 a level.
 export function channelMultiplier(console: ConsoleState, type: ModuleType): Num {
   return pow(CHANNEL_STEP, console.channels[type] ?? 0);
 }
 
-// The multiplier a category's bus level gives every module in it: ×1.1 a
+// The multiplier a category's bus level gives every module in it: ×1.05 a
 // level (issue #60).
 export function busMultiplier(console: ConsoleState, category: ModuleCategory): Num {
   return pow(BUS_STEP, console.buses[category] ?? 0);

@@ -9,7 +9,7 @@ import type { GameState } from "./types";
 
 // Bus faders (spec chunk 06, issue #60): one per category the player has,
 // appearing the first time a bus fader is affordable (5 000 ν) and staying
-// from then on. Each level multiplies its whole category by ×1.1.
+// from then on. Each level multiplies its whole category by ×1.05.
 
 const OSCILLATORS = { kind: "bus", category: "oscillator" } as const;
 const MODULATORS = { kind: "bus", category: "modulator" } as const;
@@ -89,7 +89,7 @@ describe("buying a bus fader", () => {
 });
 
 describe("bus levels in the rates", () => {
-  it("a Sine with channel 2 and oscillator bus 1 reads faders ×1.25² × 1.1", () => {
+  it("a Sine with channel 2 and oscillator bus 1 reads faders ×1.1² × 1.05", () => {
     const s = fresh();
     s.game.nous = D(1e6);
     applyIn(s, { type: "buyFader", fader: SINE });
@@ -98,8 +98,8 @@ describe("bus levels in the rates", () => {
     applyIn(s, { type: "placeModule", module: "sine", cell: { q: 0, r: 0 } });
     applyIn(s, { type: "placeModule", module: "triangle", cell: { q: 1, r: 0 } });
     const [sine, triangle] = s.game.rates.oscillators;
-    expect(sine!.faders.toNumber()).toBeCloseTo(1.5625 * 1.1, 12);
-    expect(triangle!.faders.toNumber()).toBeCloseTo(1.1, 12);
+    expect(sine!.faders.toNumber()).toBeCloseTo(1.21 * 1.05, 12);
+    expect(triangle!.faders.toNumber()).toBeCloseTo(1.05, 12);
   });
 
   it("a modulator bus level multiplies every modulator's output", () => {
@@ -112,10 +112,10 @@ describe("bus levels in the rates", () => {
     const outputs = s.game.rates.modulators.map((m) => m.output.toNumber());
     expect(outputs).toHaveLength(2);
     const plain = computeBoardRates(s.game.board, s.records.classCredit.producer).modulators.map((m) => m.output.toNumber());
-    for (const [i, output] of outputs.entries()) expect(output).toBeCloseTo(plain[i]! * 1.1, 12);
+    for (const [i, output] of outputs.entries()) expect(output).toBeCloseTo(plain[i]! * 1.05, 12);
   });
 
-  it("an Arms bus level multiplies every Blade's damage: 14/s becomes 15.4/s", () => {
+  it("an Arms bus level multiplies every Blade's damage: 14/s becomes 14.7/s", () => {
     const s = fresh();
     openRoadie(s);
     s.records.classCredit.producer = 4 * 3600;
@@ -130,7 +130,7 @@ describe("bus levels in the rates", () => {
     const blade = s.game.rates.arms[0]!;
     if (blade.role !== "strike") throw new Error("expected a Blade");
     expect(blade.chargeReceived.toNumber()).toBeCloseTo(1.4, 9);
-    expect(blade.damage.toNumber()).toBeCloseTo(15.4, 9);
+    expect(blade.damage.toNumber()).toBeCloseTo(14.7, 9);
   });
 });
 
@@ -159,7 +159,7 @@ describe("bus levels in a v16 save", () => {
     expect(loaded).toEqual(s);
     expect(loaded.game.console.shown.buses).toBe(true);
     expect(busesShown(loaded)).toBe(true);
-    expect(loaded.game.rates.oscillators[0]!.faders.toNumber()).toBeCloseTo(1.21, 12);
+    expect(loaded.game.rates.oscillators[0]!.faders.toNumber()).toBeCloseTo(1.05 ** 2, 12);
   });
 
   it("keeps only `true` for the bus flag, recomputing it otherwise", () => {

@@ -44,7 +44,7 @@ describe("the console in a v16 save", () => {
     const s = bought();
     applyIn(s, { type: "placeModule", module: "sine", cell: { q: 0, r: 0 } });
     const loaded = deserialize(serialize(s, 1_000)).state!;
-    expect(loaded.game.rates.oscillators[0]!.faders.toNumber()).toBeCloseTo(1.25 ** 3, 12);
+    expect(loaded.game.rates.oscillators[0]!.faders.toNumber()).toBeCloseTo(1.1 ** 3, 12);
   });
 
   it("loads a chunk-05 save with every fader at 0, the console shown from its ν, and nothing else changed", () => {

@@ -92,12 +92,12 @@ function bladeAt(s: GameState, facing: number): StrikeRate {
 }
 
 describe("the Blade's channel fader", () => {
-  it("at level 1, a Blade receiving 1 charge/s deals 12.5/s to the wall it faces", () => {
+  it("at level 1, a Blade receiving 1 charge/s deals 11/s to the wall it faces", () => {
     const s = roadieWith({ blade: 1 });
     const blade = bladeAt(s, 4);
     expect(blade.chargeReceived.toNumber()).toBeCloseTo(1, 12);
-    expect(blade.damage.toNumber()).toBeCloseTo(12.5, 12);
-    expect(s.game.rates.walls.find((w) => sameCell(w.cell, BASALT_W))!.damage.toNumber()).toBeCloseTo(12.5, 12);
+    expect(blade.damage.toNumber()).toBeCloseTo(11, 12);
+    expect(s.game.rates.walls.find((w) => sameCell(w.cell, BASALT_W))!.damage.toNumber()).toBeCloseTo(11, 12);
   });
 
   it("at level 1, facing an open cell, it deals nothing", () => {
@@ -125,15 +125,15 @@ describe("the Guard Plate's channel fader", () => {
   // Shale (−1,1), owned, borders ring-2 walls, so a Plate there is active
   // and shields the Sine on (0,1), which borders Schist and Flint. The
   // Sine on (1,−1) isn't beside it.
-  it("at level 1, raises the shielded oscillator's ν by ×1.25 and no other's", () => {
+  it("at level 1, raises the shielded oscillator's ν by ×1.1 and no other's", () => {
     const s = platedWith({ guardPlate: 1 });
     place(s, "guardPlate", SHALE);
     place(s, "sine", SE);
     place(s, "sine", NE);
     const shielded = oscillatorAt(s, SE);
     expect(shielded.pressure.toNumber()).toBe(0);
-    expect(shielded.faders.toNumber()).toBeCloseTo(1.25, 12);
-    expect(shielded.rate.toNumber()).toBeCloseTo(1.25, 12);
+    expect(shielded.faders.toNumber()).toBeCloseTo(1.1, 12);
+    expect(shielded.rate.toNumber()).toBeCloseTo(1.1, 12);
     const other = oscillatorAt(s, NE);
     expect(other.faders.toNumber()).toBe(1);
     expect(other.pressure.toNumber()).toBeGreaterThan(0);
@@ -144,8 +144,8 @@ describe("the Guard Plate's channel fader", () => {
     place(s, "guardPlate", SHALE);
     place(s, "guardPlate", O);
     place(s, "sine", SE);
-    expect(oscillatorAt(s, SE).faders.toNumber()).toBeCloseTo(1.25, 12);
-    expect(oscillatorAt(s, SE).rate.toNumber()).toBeCloseTo(1.25, 12);
+    expect(oscillatorAt(s, SE).faders.toNumber()).toBeCloseTo(1.1, 12);
+    expect(oscillatorAt(s, SE).rate.toNumber()).toBeCloseTo(1.1, 12);
   });
 
   it("an oscillator beside an active Plate that no wall presses on gains nothing", () => {
@@ -159,7 +159,7 @@ describe("the Guard Plate's channel fader", () => {
 });
 
 describe("the Release's channel fader", () => {
-  it("at level 1, raises its breather rate to 6 × 1.25 and leaves its flow rate 0", () => {
+  it("at level 1, raises its breather rate to 6 × 1.1 and leaves its flow rate 0", () => {
     const s = credited({ engineer: 12 });
     s.game.console.channels = { release: 1 };
     place(s, "release", NE);
@@ -167,19 +167,19 @@ describe("the Release's channel fader", () => {
     // (1,−1) borders three ring-2 walls: its pressure is the cap's share.
     const left = 1 - release.pressure.toNumber();
     expect(release.rate.toNumber()).toBe(0);
-    expect(release.breatherRate.toNumber()).toBeCloseTo(6 * 1.25 * left, 12);
+    expect(release.breatherRate.toNumber()).toBeCloseTo(6 * 1.1 * left, 12);
   });
 });
 
 describe("the Pulsewell's channel fader", () => {
-  it("at level 1, delivers 0.5 × 1.25 charge/s to each target", () => {
+  it("at level 1, delivers 0.5 × 1.1 charge/s to each target", () => {
     const s = credited({ producer: 3 });
     s.game.console.channels = { pulsewell: 1 };
     place(s, "pulsewell", O);
     place(s, "sine", NE);
     place(s, "sine", SE);
-    expect(s.game.rates.modulators[0]!.output.toNumber()).toBeCloseTo(0.625, 12);
-    for (const cell of [NE, SE]) expect(oscillatorAt(s, cell).chargeReceived.toNumber()).toBeCloseTo(0.625, 12);
+    expect(s.game.rates.modulators[0]!.output.toNumber()).toBeCloseTo(0.55, 12);
+    for (const cell of [NE, SE]) expect(oscillatorAt(s, cell).chargeReceived.toNumber()).toBeCloseTo(0.55, 12);
   });
 });
 
@@ -188,10 +188,10 @@ describe("the Pulsewell's channel fader", () => {
 // Guard Plate's shielding boost, and the Oscillators bus a Release's
 // breather ν — each on top of the type's own channel.
 describe("channel and bus faders together", () => {
-  it("a Blade at channel 1 under Arms bus 1 deals 10 × 1.25 × 1.1 per charge", () => {
+  it("a Blade at channel 1 under Arms bus 1 deals 10 × 1.1 × 1.05 per charge", () => {
     const s = roadieWith({ blade: 1 });
     s.game.console.buses = { arm: 1 };
-    expect(bladeAt(s, 4).damage.toNumber()).toBeCloseTo(13.75, 12);
+    expect(bladeAt(s, 4).damage.toNumber()).toBeCloseTo(11.55, 12);
   });
 
   it("a shielded oscillator takes the Guard Plate's channel × Arms bus", () => {
@@ -200,19 +200,19 @@ describe("channel and bus faders together", () => {
     place(s, "guardPlate", SHALE);
     place(s, "sine", SE);
     place(s, "sine", NE);
-    expect(oscillatorAt(s, SE).faders.toNumber()).toBeCloseTo(1.25 * 1.1, 12);
+    expect(oscillatorAt(s, SE).faders.toNumber()).toBeCloseTo(1.1 * 1.05, 12);
     expect(oscillatorAt(s, NE).faders.toNumber()).toBe(1);
   });
 
-  it("the Arms bus alone lifts an active Plate's shielded oscillator by ×1.1", () => {
+  it("the Arms bus alone lifts an active Plate's shielded oscillator by ×1.05", () => {
     const s = platedWith({});
     s.game.console.buses = { arm: 1 };
     place(s, "guardPlate", SHALE);
     place(s, "sine", SE);
-    expect(oscillatorAt(s, SE).faders.toNumber()).toBeCloseTo(1.1, 12);
+    expect(oscillatorAt(s, SE).faders.toNumber()).toBeCloseTo(1.05, 12);
   });
 
-  it("a Release at channel 1 under Oscillators bus 1 earns 6 × 1.25 × 1.1 in a breather, 0 in flow", () => {
+  it("a Release at channel 1 under Oscillators bus 1 earns 6 × 1.1 × 1.05 in a breather, 0 in flow", () => {
     const s = credited({ engineer: 12 });
     s.game.console.channels = { release: 1 };
     s.game.console.buses = { oscillator: 1 };
@@ -220,6 +220,6 @@ describe("channel and bus faders together", () => {
     const release = oscillatorAt(s, NE);
     const left = 1 - release.pressure.toNumber();
     expect(release.rate.toNumber()).toBe(0);
-    expect(release.breatherRate.toNumber()).toBeCloseTo(6 * 1.25 * 1.1 * left, 12);
+    expect(release.breatherRate.toNumber()).toBeCloseTo(6 * 1.1 * 1.05 * left, 12);
   });
 });

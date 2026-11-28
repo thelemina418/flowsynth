@@ -28,7 +28,7 @@ const KINDS: Record<WallKind, WallKindStats> = {
   shale: { name: "Shale", hp: "600", regen: "0.1", pressure: 0.05 },
   basalt: { name: "Basalt", hp: "6e3", regen: "1", pressure: 0.08 },
   flint: { name: "Flint", hp: "6e4", regen: "10", pressure: 0.1 },
-  schist: { name: "Schist", hp: "3e5", regen: "15", pressure: 0.12 },
+  schist: { name: "Schist", hp: "3e6", regen: "15", pressure: 0.12 },
   gneiss: { name: "Gneiss", hp: "3e7", regen: "2e3", pressure: 0.15 },
   obsidian: { name: "Obsidian", hp: "1e9", regen: "5e4", pressure: 0.2 },
   granite: { name: "Granite", hp: "1e11", regen: "3e6", pressure: 0.25 },

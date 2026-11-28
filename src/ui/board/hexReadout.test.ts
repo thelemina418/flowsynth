@@ -57,29 +57,30 @@ describe("the Hex detail readout", () => {
     s.game.nous = D(26);
     for (const max of [false, false]) s = apply(s, { type: "buyFader", fader: { kind: "channel", type: "sine" }, max }).state;
     expect(s.game.console.channels.sine).toBe(2);
-    // 0.71 × 1.25² = 1.109…
+    // 0.71 × 1.1² = 0.859…
     expect(texts(s, { q: 0, r: 0 })).toEqual([
       "Sine · Oscillator",
       "Not resonating · needs Triangles on opposite sides",
       "1.0 ν/s base · −29% pressure",
-      "Faders ×1.56",
-      "1.1 ν/s",
+      "Faders ×1.21",
+      "0.85 ν/s",
     ]);
     // A Triangle with no channel level shows none.
     expect(texts(s, { q: 1, r: 0 }).some((t) => t.startsWith("Faders"))).toBe(false);
   });
 
-  it("folds the Oscillators bus into the Faders line: channel 2 and bus 1 read ×1.25² × 1.1 (issue #60)", () => {
+  it("folds the Oscillators bus into the Faders line: channel 2 and bus 1 read ×1.1² × 1.05 (issue #60)", () => {
     let s = laid(ACCEPTANCE);
     s.game.nous = D(5026);
     for (const fader of [{ kind: "channel", type: "sine" }, { kind: "channel", type: "sine" }, { kind: "bus", category: "oscillator" }] as const) {
       s = apply(s, { type: "buyFader", fader }).state;
     }
     expect(s.game.console.buses.oscillator).toBe(1);
-    // 1.25² × 1.1 = 1.71875, shown to 3 figures rounded down.
-    expect(texts(s, { q: 0, r: 0 }).slice(3)).toEqual(["Faders ×1.71", "1.22 ν/s"]);
+    // 1.1² × 1.05 = 1.2705, shown to 3 figures rounded down; 0.71 × that
+    // is 0.902….
+    expect(texts(s, { q: 0, r: 0 }).slice(3)).toEqual(["Faders ×1.27", "0.9 ν/s"]);
     // The Triangle has the bus alone.
-    expect(texts(s, { q: 1, r: 0 })).toContain("Faders ×1.1");
+    expect(texts(s, { q: 1, r: 0 })).toContain("Faders ×1.05");
   });
 
   it("leaves the pressure leg out of an oscillator no wall presses on", () => {
@@ -122,7 +123,7 @@ describe("the Hex detail readout", () => {
 
   it("names the class a marked wall opens", () => {
     expect(texts(laid([]), { q: 0, r: -2 })).toEqual(["Flint · Wall · ring 2 · opens Roadie", `60${T}000 / 60${T}000 HP · regen 10.0/s`, "Only Arm damage", "Pressure 10%"]);
-    expect(texts(laid([]), { q: -2, r: 1 })).toEqual(["Schist · Wall · ring 2 · opens Mixer", `300${T}000 / 300${T}000 HP · regen 15.0/s`, "Pressure 12%"]);
+    expect(texts(laid([]), { q: -2, r: 1 })).toEqual(["Schist · Wall · ring 2 · opens Mixer", "3e6 / 3e6 HP · regen 15.0/s", "Pressure 12%"]);
   });
 
   it("adds the damage a patched wall takes as its effect line", () => {
@@ -230,13 +231,13 @@ describe("the multiplied figures in the Hex detail (issue #59)", () => {
     return s;
   }
 
-  it("a Blade at channel level 1 reads 1.4 × 10 × 1.25 = 17.5/s to Basalt", () => {
-    expect(texts(fedBlade({ blade: 1 }), { q: 0, r: 0 })).toEqual(["Blade · Arm · facing NW", "1.4 charge/s received", "17.5/s to Basalt"]);
+  it("a Blade at channel level 1 reads 1.4 × 10 × 1.1 = 15.4/s to Basalt", () => {
+    expect(texts(fedBlade({ blade: 1 }), { q: 0, r: 0 })).toEqual(["Blade · Arm · facing NW", "1.4 charge/s received", "15.4/s to Basalt"]);
   });
 
-  it("a Flywheel at channel level 1 reads 1.4 × 1.25 = 1.75 charge/s, and the Blade receives it", () => {
+  it("a Flywheel at channel level 1 reads 1.4 × 1.1 = 1.54 charge/s, and the Blade receives it", () => {
     const s = fedBlade({ flywheel: 1 });
-    expect(texts(s, { q: 0, r: 1 })).toEqual(["Flywheel · Modulator · facing NE", "1.75 charge/s · patched → Blade"]);
-    expect(texts(s, { q: 0, r: 0 })).toEqual(["Blade · Arm · facing NW", "1.75 charge/s received", "17.5/s to Basalt"]);
+    expect(texts(s, { q: 0, r: 1 })).toEqual(["Flywheel · Modulator · facing NE", "1.54 charge/s · patched → Blade"]);
+    expect(texts(s, { q: 0, r: 0 })).toEqual(["Blade · Arm · facing NW", "1.54 charge/s received", "15.4/s to Basalt"]);
   });
 });
