@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { apply } from "../../engine/apply";
-import { giveOscillators } from "../../engine/fixtures";
+import { giveOscillators, openRoadie } from "../../engine/fixtures";
 import { lifetimeCells, type Cell } from "../../engine/hex";
 import { D } from "../../engine/num";
 import { createInitialState } from "../../engine/state";
@@ -189,5 +189,41 @@ describe("a patched modulator's readout (issue #33)", () => {
 
   it("names an empty target as an open cell", () => {
     expect(texts(patched({ q: 1, r: 0 }), { q: 0, r: 0 })).toEqual(["Flywheel · Modulator · facing NE", "1.0 charge/s · patched → Open cell"]);
+  });
+});
+
+// Channel levels in the Arm and modulator lines (issue #59): the Hex
+// detail reads the multiplied figures from the cached rates.
+describe("the multiplied figures in the Hex detail (issue #59)", () => {
+  // A Blade on the centre turned to NW (Basalt (−1,0)), fed through a
+  // Patch by a Flywheel on (0,1) at 1.4 charge/s (4 credited Producer
+  // hours), with these channel levels.
+  function fedBlade(levels: Partial<Record<ModuleType, number>>): GameState {
+    let s = createInitialState();
+    openRoadie(s);
+    s.game.console.channels = { ...levels };
+    s.records.classCredit.producer = 4 * 3600;
+    const steps: Parameters<typeof apply>[1][] = [
+      { type: "placeModule", module: "blade", cell: { q: 0, r: 0 } },
+      ...Array.from({ length: 4 }, () => ({ type: "rotateModule", cell: { q: 0, r: 0 }, turn: "clockwise" }) as const),
+      { type: "placeModule", module: "flywheel", cell: { q: 0, r: 1 } },
+      { type: "patchCable", cable: "patch", source: { q: 0, r: 1 }, target: { q: 0, r: 0 } },
+    ];
+    for (const step of steps) {
+      const result = apply(s, step);
+      expect(result.ok, result.reason).toBe(true);
+      s = result.state;
+    }
+    return s;
+  }
+
+  it("a Blade at channel level 1 reads 1.4 × 10 × 1.25 = 17.5/s to Basalt", () => {
+    expect(texts(fedBlade({ blade: 1 }), { q: 0, r: 0 })).toEqual(["Blade · Arm · facing NW", "1.4 charge/s received", "17.5/s to Basalt"]);
+  });
+
+  it("a Flywheel at channel level 1 reads 1.4 × 1.25 = 1.75 charge/s, and the Blade receives it", () => {
+    const s = fedBlade({ flywheel: 1 });
+    expect(texts(s, { q: 0, r: 1 })).toEqual(["Flywheel · Modulator · facing NE", "1.75 charge/s · patched → Blade"]);
+    expect(texts(s, { q: 0, r: 0 })).toEqual(["Blade · Arm · facing NW", "1.75 charge/s received", "17.5/s to Basalt"]);
   });
 });
