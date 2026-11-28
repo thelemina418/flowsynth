@@ -89,8 +89,8 @@ describe("resonance outlines", () => {
     act(() => {
       shell.state.value = s;
     });
-    // 4.5 ν/s for a minute.
-    expect(host.querySelector(".nous-readout")!.textContent).toBe("ν 270");
+    // 2.9325 ν/s under the opening's pressure (issue #52) for a minute.
+    expect(host.querySelector(".nous-readout")!.textContent).toBe("ν 175");
   });
 
   it("update the moment the layout changes", () => {

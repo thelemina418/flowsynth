@@ -1,5 +1,6 @@
 import type { ActionResult } from "./actions";
 import { grantsOf } from "./levels";
+import { modifierName } from "./map";
 import { gt } from "./num";
 import type { EncyclopediaState, EntryId, GameState, OscillatorType } from "./types";
 
@@ -20,7 +21,7 @@ export interface Entry {
 }
 
 const arrived = (module: OscillatorType) => (s: GameState) => grantsOf(s).arrived.includes(module);
-// Declared now; chunks 05 (pressure) and 06 (prestige) wire the predicates.
+// Declared now; chunk 06 (prestige) wires the predicate.
 const later = () => false;
 
 export const ENTRIES: readonly Entry[] = [
@@ -85,14 +86,21 @@ export const ENTRIES: readonly Entry[] = [
   {
     id: "walls",
     title: "Walls",
-    lines: ["A wall holds a cell", "HP · regen · pressure", "Conquered · the cell is yours for good", "Shale first, outward to Corundum"],
+    lines: [
+      "A wall holds a cell",
+      "HP · regen · pressure",
+      "Conquered · the cell is yours for good",
+      "Shale first, outward to Corundum",
+      `Some walls carry a rule · ${modifierName("pressureDouble")} · ${modifierName("armOnly")}`,
+    ],
     revealed: () => true,
   },
   {
     id: "pressure",
     title: "Pressure",
-    lines: ["A wall's reduction of ν", "Applies to the modules bordering it"],
-    revealed: later,
+    lines: ["A wall's reduction of ν", "Applies to the modules bordering it", "Several walls add up · 60% at most"],
+    // The first time any oscillator's rate carries pressure (issue #52).
+    revealed: (s) => s.game.rates.oscillators.some((o) => gt(o.pressure, 0)),
   },
   {
     id: "classes",

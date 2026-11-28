@@ -167,6 +167,7 @@ describe("recomputing the board's rates", () => {
     const loaded = deserialize(text).state!;
     expect(counted).toHaveBeenCalledTimes(1);
     expect(loaded.game.rates).toEqual(cloneState(s.game.rates));
-    expect(loaded.game.rates.total.toNumber()).toBe(4.5);
+    // 1.75 × 0.66 + 1.75 × 0.61 + 0.71 under the opening's pressure (issue #52).
+    expect(loaded.game.rates.total.toNumber()).toBeCloseTo(2.9325, 12);
   });
 });
