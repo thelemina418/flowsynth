@@ -33,7 +33,7 @@ export function FlowScreen({ shell, error }: { shell: Shell; error: string | nul
         flowing={game.mode === "flow"}
         arrived={grants.arrived}
         arrivedCables={grants.arrivedCables}
-        unplaced={{ oscillator: 0, modulator: 0 }}
+        unplaced={{ oscillator: 0, modulator: 0, arm: 0 }}
         chips={false}
         placing={shell.placing}
         inspected={shell.inspected}

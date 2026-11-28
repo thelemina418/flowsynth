@@ -30,7 +30,7 @@ describe("class levels", () => {
     const s = fresh();
     for (const habitClass of ["engineer", "producer", "mixer", "roadie"] as const) expect(classLevel(s, habitClass).level).toBe(0);
     expect(grantsOf(s)).toEqual({
-      allowance: { oscillator: 2, modulator: 1 },
+      allowance: { oscillator: 2, modulator: 1, arm: 0 },
       cableAllowance: 1,
       arrived: ["sine", "triangle", "flywheel"],
       arrivedCables: ["patch"],

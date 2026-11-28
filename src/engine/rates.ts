@@ -1,11 +1,11 @@
 import { cellKind } from "./board";
 import { addCell, cellKey, DIRECTIONS, type Cell } from "./hex";
-import { add, D, div, ln, min, mul, pow, sub, type Num } from "./num";
-import { baseRate, breatherBaseRate, hasFacing, isOscillator, outputOf, patternOf, reachOf, takesCharge } from "./modules";
+import { add, D, div, gt, ln, min, mul, pow, sub, type Num } from "./num";
+import { baseRate, breatherBaseRate, damagePerCharge, hasFacing, isArm, isModulator, isOscillator, outputOf, patternOf, reachOf, takesCharge } from "./modules";
 import { wallAt } from "./map";
 import { cableFrom, moduleAt } from "./placement";
 import { instancesOf } from "./resonance";
-import type { Board, BoardRates, ChargeDelivery, ModulatorRate, ModulatorType, OscillatorRate, Placement, ReachHolds, WallRate } from "./types";
+import type { ArmRate, Board, BoardRates, ChargeDelivery, ModulatorRate, ModulatorType, OscillatorRate, Placement, ReachHolds, WallRate } from "./types";
 
 // The board's rates (spec chunk 02, issue #26; mechanics-sketch.md,
 // Rates). One pure function of the layout and the credited Producer time
@@ -49,27 +49,30 @@ function holdsAt(board: Board, cell: Cell): ReachHolds {
 
 // A board with no module placed.
 export function noRates(): BoardRates {
-  return { oscillators: [], modulators: [], walls: [], total: D(0), breatherTotal: D(0) };
+  return { oscillators: [], modulators: [], arms: [], walls: [], total: D(0), breatherTotal: D(0) };
 }
 
 export function computeBoardRates(board: Board, producerSeconds: number): BoardRates {
-  // Every module in a reach (or at a Patch's target) receives the full output; only an oscillator
-  // takes anything from it, and several deliveries sum before the log.
+  // Every module in a reach (or at a Patch's target) receives the full
+  // output; only an oscillator or a Blade takes anything from it, and
+  // several deliveries sum (before the log, for an oscillator).
   const modulators: ModulatorRate[] = [];
   const received = new Map<string, Num>();
-  // Damage per wall cell, from Patches only (issue #34): reach onto a wall
-  // does nothing.
+  // Damage per wall cell, from Patches (issue #34) and Blades (issue #53):
+  // reach onto a wall does nothing.
   const damage = new Map<string, { cell: Cell; damage: Num }>();
   for (const placement of board.placements) {
     const module = placement.module;
-    if (isOscillator(module)) continue;
+    if (!isModulator(module)) continue;
     const output = modulatorOutput(module, producerSeconds);
     // A patched modulator delivers to its cable's target alone, in place
     // of its reach (issue #33).
     const cable = cableFrom(board, placement.cell);
     const cells = cable ? [{ q: cable.target.q, r: cable.target.r }] : reachCells(placement);
     const deliveries: ChargeDelivery[] = cells.map((cell) => ({ cell, holds: holdsAt(board, cell) }));
-    if (cable && deliveries[0]!.holds === "wall") {
+    // A Patch into an `Only Arm damage` wall deals nothing (the route
+    // rule refuses one, issue #48).
+    if (cable && deliveries[0]!.holds === "wall" && wallAt(cable.target)!.modifier !== "armOnly") {
       const key = cellKey(cable.target);
       const wall = damage.get(key) ?? { cell: { q: cable.target.q, r: cable.target.r }, damage: D(0) };
       damage.set(key, { ...wall, damage: add(wall.damage, output) });
@@ -86,6 +89,24 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
       output,
       deliveries,
     });
+  }
+  // Arms (issue #53): a Blade deals 10 × the charge it receives to the
+  // cell it faces, when that cell is a wall; otherwise it does nothing.
+  const arms: ArmRate[] = [];
+  for (const placement of board.placements) {
+    const module = placement.module;
+    if (!isArm(module)) continue;
+    const facing = placement.facing ?? 0;
+    const faces = addCell(placement.cell, DIRECTIONS[facing]!);
+    const facesWall = cellKind(board, faces) === "wall";
+    const chargeReceived = received.get(cellKey(placement.cell)) ?? D(0);
+    const dealt = facesWall ? mul(damagePerCharge(module), chargeReceived) : D(0);
+    if (facesWall && gt(dealt, 0)) {
+      const key = cellKey(faces);
+      const wall = damage.get(key) ?? { cell: faces, damage: D(0) };
+      damage.set(key, { ...wall, damage: add(wall.damage, dealt) });
+    }
+    arms.push({ cell: { q: placement.cell.q, r: placement.cell.r }, module, facing, chargeReceived, faces, facesWall, damage: dealt });
   }
   const oscillators: OscillatorRate[] = [];
   let total = D(0);
@@ -128,5 +149,5 @@ export function computeBoardRates(board: Board, producerSeconds: number): BoardR
     return { cell, damage, regen, net: sub(damage, regen) };
   });
   // The board runs ×2 in a breather (issue #41).
-  return { oscillators, modulators, walls, total, breatherTotal: mul(2, breatherSum) };
+  return { oscillators, modulators, arms, walls, total, breatherTotal: mul(2, breatherSum) };
 }

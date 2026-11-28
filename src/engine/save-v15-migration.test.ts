@@ -80,7 +80,7 @@ describe("the v15 → v16 migration (issue #19)", () => {
   it("arrives with the Flywheel unplaced and one Modulator allowance (issue #31), derived from its class credit (issue #38)", () => {
     const state = migrated();
     expect(grantsOf(state)).toEqual({
-      allowance: { oscillator: 2, modulator: 1 },
+      allowance: { oscillator: 2, modulator: 1, arm: 0 },
       cableAllowance: 1,
       arrived: ["sine", "triangle", "flywheel"],
       arrivedCables: ["patch"],

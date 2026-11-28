@@ -150,6 +150,10 @@
    face toward its facing, and a small jack where a cable plugs in. */
 .module[data-category="modulator"] .module-face { stroke: var(--hue-modulator); }
 
+/* An Arm (issue #53): the Arm hue. A Blade carries the same facing
+   pointer as a Flywheel, and no jack. */
+.module[data-category="arm"] .module-face { stroke: var(--hue-arm); }
+
 .module-pointer {
   fill: var(--ink);
   stroke: var(--panel-deep);
